@@ -424,6 +424,158 @@
       gap: 10px;
       margin-top: 20px;
     }
+
+    .modal-error {
+      font-size: 12px;
+      color: #ef4444;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 6px;
+      padding: 8px 12px;
+      margin-top: 12px;
+      display: none;
+    }
+    .modal-error.show { display: block; }
+
+    .btn-save.loading {
+      opacity: 0.7;
+      cursor: not-allowed;
+    }
+
+    /* CRIADOR DE USUÁRIOS */
+    .usuario-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .usuario-row input[type="text"] {
+      flex: 1;
+    }
+
+    .role-toggle {
+      display: flex;
+      border: 1.5px solid #e5e7eb;
+      border-radius: 7px;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    .role-toggle input[type="radio"] { display: none; }
+
+    .role-toggle label {
+      padding: 7px 11px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #6b7280;
+      cursor: pointer;
+      background: #fafafa;
+      transition: all 0.15s;
+      letter-spacing: 0.1px;
+    }
+
+    .role-toggle input[type="radio"]:checked + label {
+      background: #6c63ff;
+      color: #fff;
+    }
+
+    .btn-remove-row {
+      background: none;
+      border: none;
+      color: #d1d5db;
+      font-size: 18px;
+      cursor: pointer;
+      padding: 0 4px;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+    .btn-remove-row:hover { color: #ef4444; }
+
+    .btn-add-email {
+      width: 100%;
+      padding: 8px;
+      border: 1.5px dashed #c5c2e8;
+      border-radius: 7px;
+      background: transparent;
+      color: #6c63ff;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      margin-top: 4px;
+      transition: all 0.15s;
+    }
+    .btn-add-email:hover { background: #eeecff; }
+
+    .resultado-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 10px;
+      border-radius: 7px;
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+    .resultado-item.criado { background: #f0fdf4; color: #166534; }
+    .resultado-item.vinculado { background: #eff6ff; color: #1e40af; }
+    .resultado-item.erro { background: #fef2f2; color: #991b1b; }
+
+    .resultado-senha {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .resultado-senha code {
+      background: rgba(0,0,0,0.08);
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 12px;
+      letter-spacing: 0.5px;
+    }
+
+    .btn-copy-mini {
+      border: none;
+      background: rgba(0,0,0,0.1);
+      border-radius: 4px;
+      padding: 2px 7px;
+      font-size:10px;
+      cursor: pointer;
+      color: inherit;
+    }
+    .btn-copy-mini:hover { background: rgba(0,0,0,0.18); }
+
+    .btn-delete {
+      margin-left: 8px;
+      background: none;
+      border: 1.5px solid #fecaca;
+      border-radius: 8px;
+      color: #ef4444;
+      padding: 8px 12px;
+      font-size: 15px;
+      cursor: pointer;
+      transition: all 0.15s;
+      line-height: 1;
+    }
+    .btn-delete:hover { background: #fef2f2; border-color: #ef4444; }
+
+    .modal-confirm { text-align: center; }
+    .modal-confirm .warn-icon { font-size: 36px; margin-bottom: 12px; }
+    .modal-confirm p { font-size: 13px; color: #6b7280; margin-bottom: 6px; }
+    .modal-confirm strong { color: #1a1a2e; }
+    .btn-danger {
+      padding: 10px 22px;
+      border-radius: 8px;
+      border: none;
+      background: #ef4444;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn-danger:hover { background: #dc2626; }
   </style>
 </head>
 <body>
@@ -440,7 +592,8 @@
   </div>
 
   <div class="sidebar-footer">
-    <button class="btn-new" onclick="abrirModalNovo()">+ Nova Conta</button>
+    <button class="btn-new" onclick="abrirModalChatwoot()" style="margin-bottom:8px;">+ Criar no Chatwoot</button>
+    <button class="btn-new" onclick="abrirModalUsuarios()">+ Criador de Usuários</button>
   </div>
 </div>
 
@@ -458,6 +611,98 @@
         <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
       </svg>
       <p>Selecione uma conta para ver as configurações</p>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CONFIRMAR EXCLUSÃO -->
+<div class="modal-overlay" id="modal-deletar">
+  <div class="modal modal-confirm" style="width:360px;">
+    <div class="warn-icon">🗑️</div>
+    <h3 style="margin-bottom:8px;">Remover conta?</h3>
+    <p>Isso vai excluir <strong id="deletar-nome"></strong> do Chatwoot</p>
+    <p style="color:#ef4444;font-size:11px;margin-top:4px;">Esta ação não pode ser desfeita.</p>
+    <div class="modal-actions" style="justify-content:center;margin-top:20px;">
+      <button class="btn-danger" id="btn-confirmar-delete" onclick="confirmarDeletar()">Sim, remover</button>
+      <button class="btn-cancel" onclick="document.getElementById('modal-deletar').classList.remove('open')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CRIADOR DE USUÁRIOS -->
+<div class="modal-overlay" id="modal-usuarios">
+  <div class="modal" style="width:500px;max-height:90vh;overflow-y:auto;">
+    <h3>Criador de Usuários</h3>
+    <p style="font-size:12px;color:#8b8fa8;margin-bottom:18px;">Adicione quantos emails quiser. A senha será gerada automaticamente. Se o email já existir na plataforma, ele será vinculado à conta selecionada.</p>
+
+    <div id="uu-form">
+      <div class="field-group" style="margin-bottom:16px;">
+        <label>Conta</label>
+        <select id="uu-account" style="padding:10px 13px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:13px;color:#1a1a2e;background:#fafafa;width:100%;outline:none;">
+          <option value="">Selecione uma conta...</option>
+        </select>
+      </div>
+
+      <label style="margin-bottom:8px;display:block;">Usuários</label>
+      <div id="uu-lista"></div>
+      <button class="btn-add-email" onclick="adicionarLinhaUsuario()">+ Adicionar email</button>
+
+      <div class="modal-error" id="uu-error" style="margin-top:12px;"></div>
+      <div class="modal-actions" style="margin-top:16px;">
+        <button class="btn-save" id="btn-uu-criar" onclick="criarUsuarios()">Criar / Vincular</button>
+        <button class="btn-cancel" onclick="fecharModalUsuarios()">Cancelar</button>
+      </div>
+    </div>
+
+    <div id="uu-resultados" style="display:none;">
+      <div id="uu-resultados-lista"></div>
+      <div style="margin-top:16px;display:flex;gap:10px;">
+        <button class="btn-save" onclick="reiniciarModalUsuarios()">+ Adicionar mais</button>
+        <button class="btn-cancel" onclick="fecharModalUsuarios()">Fechar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL CRIAR NO CHATWOOT -->
+<div class="modal-overlay" id="modal-chatwoot">
+  <div class="modal" style="width:420px;">
+    <h3>Criar Conta no Chatwoot</h3>
+    <p style="font-size:12px;color:#8b8fa8;margin-bottom:18px;">Conta criada em <strong>app.advbrasil.ai</strong> via Super Admin. A senha do admin será gerada automaticamente.</p>
+
+    <div id="cw-form">
+      <div class="fields-grid" style="gap:14px;">
+        <div class="field-group" style="grid-column:1/-1;">
+          <label>Nome da Conta</label>
+          <input type="text" id="cw-account-name" placeholder="Ex: Empresa XPTO" />
+        </div>
+        <div class="field-group" style="grid-column:1/-1;">
+          <label>Nome do Admin</label>
+          <input type="text" id="cw-admin-name" placeholder="Ex: João Silva" />
+        </div>
+        <div class="field-group" style="grid-column:1/-1;">
+          <label>Email do Admin</label>
+          <input type="text" id="cw-admin-email" placeholder="admin@empresa.com" />
+        </div>
+      </div>
+      <div class="modal-error" id="cw-error"></div>
+      <div class="modal-actions">
+        <button class="btn-save" id="btn-cw-criar" onclick="criarContaChatwoot()">Criar Conta</button>
+        <button class="btn-cancel" onclick="fecharModalChatwoot()">Cancelar</button>
+      </div>
+    </div>
+
+    <div id="cw-sucesso" style="display:none;">
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px;margin-bottom:16px;">
+        <div style="font-size:12px;font-weight:600;color:#166534;margin-bottom:10px;">Conta criada com sucesso!</div>
+        <div style="font-size:12px;color:#374151;margin-bottom:6px;"><strong>Email:</strong> <span id="cw-sucesso-email"></span></div>
+        <div style="font-size:12px;color:#374151;display:flex;align-items:center;gap:8px;">
+          <strong>Senha:</strong>
+          <code id="cw-sucesso-senha" style="background:#e5e7eb;padding:3px 8px;border-radius:5px;font-size:13px;letter-spacing:1px;"></code>
+          <button onclick="copiarSenha()" style="border:none;background:#6c63ff;color:#fff;border-radius:5px;padding:3px 10px;font-size:11px;cursor:pointer;">📋 Copiar</button>
+        </div>
+      </div>
+      <button class="btn-cancel" onclick="fecharModalChatwoot()">Fechar</button>
     </div>
   </div>
 </div>
@@ -528,6 +773,7 @@
               <input type="checkbox" id="f-ativo" ${config.ativo ? 'checked' : ''} />
               <span class="toggle-slider"></span>
             </label>
+            <button class="btn-delete" onclick="abrirModalDeletar(${config.account_id}, '${config.nome}')" title="Remover conta">🗑</button>
           </div>
         </div>
 
@@ -625,6 +871,258 @@
   document.getElementById('modal-novo').addEventListener('click', (e) => {
     if (e.target === e.currentTarget) fecharModal();
   });
+
+  // ── DELETAR CONTA ──────────────────────────────────────────
+
+  let _deletarId = null;
+
+  function abrirModalDeletar(id, nome) {
+    _deletarId = id;
+    document.getElementById('deletar-nome').textContent = nome;
+    document.getElementById('modal-deletar').classList.add('open');
+  }
+
+  async function confirmarDeletar() {
+    if (!_deletarId) return;
+    const btn = document.getElementById('btn-confirmar-delete');
+    btn.textContent = 'Removendo...';
+    btn.disabled = true;
+
+    await fetch(`/api/clientes/${_deletarId}`, { method: 'DELETE' });
+
+    document.getElementById('modal-deletar').classList.remove('open');
+    clienteAtivo = null;
+    document.getElementById('page-title').textContent = 'Selecione uma conta';
+    document.getElementById('page-sub').textContent = 'Clique em uma conta na barra lateral para editar';
+    document.getElementById('content').innerHTML = `<div class="empty-state"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg><p>Selecione uma conta para ver as configurações</p></div>`;
+    btn.textContent = 'Sim, remover';
+    btn.disabled = false;
+    await carregarClientes();
+  }
+
+  // ── CRIADOR DE USUÁRIOS ────────────────────────────────────
+
+  let uu_row_id = 0;
+
+  function abrirModalUsuarios() {
+    reiniciarModalUsuarios();
+    // Preencher select de contas
+    const sel = document.getElementById('uu-account');
+    sel.innerHTML = '<option value="">Selecione uma conta...</option>';
+    clientes.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.account_id;
+      opt.textContent = `#${c.account_id} — ${c.nome}`;
+      sel.appendChild(opt);
+    });
+    document.getElementById('modal-usuarios').classList.add('open');
+  }
+
+  function fecharModalUsuarios() {
+    document.getElementById('modal-usuarios').classList.remove('open');
+  }
+
+  function reiniciarModalUsuarios() {
+    document.getElementById('uu-form').style.display = '';
+    document.getElementById('uu-resultados').style.display = 'none';
+    document.getElementById('uu-error').classList.remove('show');
+    document.getElementById('uu-lista').innerHTML = '';
+    uu_row_id = 0;
+    adicionarLinhaUsuario();
+  }
+
+  document.getElementById('modal-usuarios').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) fecharModalUsuarios();
+  });
+
+  function adicionarLinhaUsuario() {
+    const id = ++uu_row_id;
+    const div = document.createElement('div');
+    div.className = 'usuario-row';
+    div.id = `uu-row-${id}`;
+    div.innerHTML = `
+      <input type="text" placeholder="email@empresa.com" id="uu-email-${id}" />
+      <div class="role-toggle">
+        <input type="radio" name="role-${id}" id="role-agent-${id}" value="agent" checked />
+        <label for="role-agent-${id}">Agente</label>
+        <input type="radio" name="role-${id}" id="role-admin-${id}" value="administrator" />
+        <label for="role-admin-${id}">Admin</label>
+      </div>
+      <button class="btn-remove-row" onclick="removerLinhaUsuario(${id})" title="Remover">×</button>
+    `;
+    document.getElementById('uu-lista').appendChild(div);
+    document.getElementById(`uu-email-${id}`).focus();
+  }
+
+  function removerLinhaUsuario(id) {
+    const el = document.getElementById(`uu-row-${id}`);
+    if (el) el.remove();
+  }
+
+  async function criarUsuarios() {
+    const account_id = document.getElementById('uu-account').value;
+    const errEl = document.getElementById('uu-error');
+    errEl.classList.remove('show');
+
+    if (!account_id) {
+      errEl.textContent = 'Selecione uma conta.';
+      errEl.classList.add('show');
+      return;
+    }
+
+    const rows = document.getElementById('uu-lista').querySelectorAll('.usuario-row');
+    const usuarios = [];
+    rows.forEach(row => {
+      const idMatch = row.id.match(/uu-row-(\d+)/);
+      if (!idMatch) return;
+      const rid = idMatch[1];
+      const email = document.getElementById(`uu-email-${rid}`).value.trim();
+      const role = document.querySelector(`input[name="role-${rid}"]:checked`)?.value || 'agent';
+      if (email) usuarios.push({ email, role });
+    });
+
+    if (!usuarios.length) {
+      errEl.textContent = 'Adicione pelo menos um email.';
+      errEl.classList.add('show');
+      return;
+    }
+
+    const btn = document.getElementById('btn-uu-criar');
+    btn.textContent = 'Processando...';
+    btn.classList.add('loading');
+    btn.disabled = true;
+
+    try {
+      const res = await fetch('/api/criar-usuarios-chatwoot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ account_id: parseInt(account_id), usuarios }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        const msg = typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail);
+        errEl.textContent = `Erro: ${msg}`;
+        errEl.classList.add('show');
+        return;
+      }
+
+      // Mostrar resultados
+      document.getElementById('uu-form').style.display = 'none';
+      const lista = document.getElementById('uu-resultados-lista');
+      lista.innerHTML = data.resultados.map(r => {
+        const icone = r.status === 'criado' ? '✓ Criado' : r.status === 'vinculado' ? '↗ Vinculado' : '✗ Erro';
+        const roleLabel = r.role === 'administrator' ? 'Admin' : 'Agente';
+        const textoParaCopiar = `Email: ${r.email}\nSenha: ${r.senha}`;
+        const senhaHtml = r.senha
+          ? `<span class="resultado-senha"><code>${r.senha}</code><button class="btn-copy-mini" onclick="copiarCredencial(this, \`${textoParaCopiar.replace(/`/g, '\\`')}\`)">📋 Copiar</button></span>`
+          : r.status === 'vinculado' ? '<span style="margin-left:auto;font-size:11px;opacity:0.7">já existia</span>' : '';
+        return `<div class="resultado-item ${r.status === 'erro' || r.status === 'erro_vinculo' ? 'erro' : r.status}">
+          <strong>${icone}</strong> ${r.email} <span style="opacity:0.6;font-size:11px;">(${roleLabel})</span>
+          ${senhaHtml}
+        </div>`;
+      }).join('');
+      document.getElementById('uu-resultados').style.display = '';
+
+    } catch (e) {
+      errEl.textContent = `Erro inesperado: ${e.message}`;
+      errEl.classList.add('show');
+    } finally {
+      btn.textContent = 'Criar / Vincular';
+      btn.classList.remove('loading');
+      btn.disabled = false;
+    }
+  }
+
+  // ── CRIAR NO CHATWOOT ──────────────────────────────────────
+
+  function abrirModalChatwoot() {
+    document.getElementById('cw-error').classList.remove('show');
+    document.getElementById('cw-error').textContent = '';
+    document.getElementById('cw-form').style.display = '';
+    document.getElementById('cw-sucesso').style.display = 'none';
+    document.getElementById('cw-account-name').value = '';
+    document.getElementById('cw-admin-name').value = '';
+    document.getElementById('cw-admin-email').value = '';
+    document.getElementById('modal-chatwoot').classList.add('open');
+  }
+
+  function fecharModalChatwoot() {
+    document.getElementById('modal-chatwoot').classList.remove('open');
+  }
+
+  document.getElementById('modal-chatwoot').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) fecharModalChatwoot();
+  });
+
+  async function criarContaChatwoot() {
+    const accountName = document.getElementById('cw-account-name').value.trim();
+    const adminName = document.getElementById('cw-admin-name').value.trim();
+    const adminEmail = document.getElementById('cw-admin-email').value.trim();
+    const errEl = document.getElementById('cw-error');
+    errEl.classList.remove('show');
+
+    if (!accountName || !adminEmail) {
+      errEl.textContent = 'Preencha o nome da conta e o email do admin.';
+      errEl.classList.add('show');
+      return;
+    }
+
+    const btn = document.getElementById('btn-cw-criar');
+    btn.textContent = 'Criando...';
+    btn.classList.add('loading');
+    btn.disabled = true;
+
+    try {
+      const res = await fetch('/api/criar-conta-chatwoot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ account_name: accountName, admin_email: adminEmail, admin_name: adminName }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        const msg = typeof data.detail === 'string'
+          ? data.detail
+          : JSON.stringify(data.detail);
+        errEl.textContent = `Erro: ${msg}`;
+        errEl.classList.add('show');
+        return;
+      }
+
+      await carregarClientes();
+      selecionarCliente(data.account_id);
+
+      // Mostrar tela de sucesso com a senha
+      document.getElementById('cw-form').style.display = 'none';
+      document.getElementById('cw-sucesso-email').textContent = data.admin_email;
+      document.getElementById('cw-sucesso-senha').textContent = data.senha || '(verifique o email de convite)';
+      document.getElementById('cw-sucesso').style.display = '';
+    } catch (e) {
+      errEl.textContent = `Erro inesperado: ${e.message}`;
+      errEl.classList.add('show');
+    } finally {
+      btn.textContent = 'Criar Conta';
+      btn.classList.remove('loading');
+      btn.disabled = false;
+    }
+  }
+
+  function copiarSenha() {
+    const email = document.getElementById('cw-sucesso-email').textContent;
+    const senha = document.getElementById('cw-sucesso-senha').textContent;
+    const btn = document.querySelector('#cw-sucesso button');
+    navigator.clipboard.writeText(`Email: ${email}\nSenha: ${senha}`);
+    if (btn) { btn.textContent = '✓ Copiado'; setTimeout(() => btn.textContent = '📋 Copiar', 2000); }
+  }
+
+  function copiarCredencial(btn, texto) {
+    navigator.clipboard.writeText(texto);
+    btn.textContent = '✓ Copiado';
+    setTimeout(() => btn.textContent = '📋 Copiar', 2000);
+  }
 
   carregarClientes();
 </script>
