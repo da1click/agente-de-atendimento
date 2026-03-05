@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Da1Click — Painel de Clientes</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: #f5f6fa;
+      color: #1a1a2e;
+      min-height: 100vh;
+    }
+
+    /* SIDEBAR */
+    .sidebar {
+      position: fixed;
+      top: 0; left: 0;
+      width: 240px;
+      height: 100vh;
+      background: #ffffff;
+      border-right: 1px solid #e8eaf0;
+      display: flex;
+      flex-direction: column;
+      padding: 0;
+      z-index: 100;
+    }
+
+    .sidebar-header {
+      padding: 24px 20px 20px;
+      border-bottom: 1px solid #e8eaf0;
+    }
+
+    .sidebar-logo {
+      font-size: 15px;
+      font-weight: 700;
+      color: #1a1a2e;
+      letter-spacing: -0.3px;
+    }
+
+    .sidebar-logo span {
+      color: #6c63ff;
+    }
+
+    .sidebar-subtitle {
+      font-size: 11px;
+      color: #8b8fa8;
+      margin-top: 3px;
+    }
+
+    .sidebar-section {
+      padding: 16px 12px 8px;
+    }
+
+    .sidebar-section-label {
+      font-size: 10px;
+      font-weight: 600;
+      color: #b0b3c6;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      padding: 0 8px;
+      margin-bottom: 6px;
+    }
+
+    .client-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.15s;
+      margin-bottom: 2px;
+    }
+
+    .client-item:hover { background: #f5f6fa; }
+    .client-item.active { background: #eeecff; }
+    .client-item.active .client-name { color: #6c63ff; font-weight: 600; }
+
+    .client-badge {
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
+      background: #e8e6ff;
+      color: #6c63ff;
+      font-size: 11px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .client-item.active .client-badge {
+      background: #6c63ff;
+      color: #fff;
+    }
+
+    .client-name {
+      font-size: 13px;
+      color: #3d3d5c;
+      font-weight: 500;
+    }
+
+    .status-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      margin-left: auto;
+      flex-shrink: 0;
+    }
+    .status-dot.on { background: #22c55e; }
+    .status-dot.off { background: #d1d5db; }
+
+    .sidebar-footer {
+      margin-top: auto;
+      padding: 16px 12px;
+      border-top: 1px solid #e8eaf0;
+    }
+
+    .btn-new {
+      width: 100%;
+      padding: 9px;
+      border-radius: 8px;
+      border: 1.5px dashed #c5c2e8;
+      background: transparent;
+      color: #6c63ff;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-new:hover { background: #eeecff; border-style: solid; }
+
+    /* MAIN */
+    .main {
+      margin-left: 240px;
+      padding: 32px 36px;
+      min-height: 100vh;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 28px;
+    }
+
+    .page-title {
+      font-size: 20px;
+      font-weight: 700;
+      color: #1a1a2e;
+    }
+
+    .page-sub {
+      font-size: 13px;
+      color: #8b8fa8;
+      margin-top: 2px;
+    }
+
+    /* EMPTY STATE */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 60vh;
+      color: #b0b3c6;
+      text-align: center;
+    }
+    .empty-state svg { margin-bottom: 16px; opacity: 0.4; }
+    .empty-state p { font-size: 14px; }
+
+    /* FORM CARD */
+    .card {
+      background: #fff;
+      border: 1px solid #e8eaf0;
+      border-radius: 14px;
+      padding: 28px;
+      max-width: 680px;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 24px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid #f0f0f5;
+    }
+
+    .card-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: #eeecff;
+      color: #6c63ff;
+      font-size: 18px;
+      font-weight: 800;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .card-title {
+      font-size: 17px;
+      font-weight: 700;
+      color: #1a1a2e;
+    }
+
+    .card-id {
+      font-size: 12px;
+      color: #8b8fa8;
+      margin-top: 2px;
+    }
+
+    .toggle-wrapper {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .toggle-label {
+      font-size: 12px;
+      color: #8b8fa8;
+    }
+
+    .toggle {
+      position: relative;
+      width: 40px;
+      height: 22px;
+    }
+
+    .toggle input { opacity: 0; width: 0; height: 0; }
+
+    .toggle-slider {
+      position: absolute;
+      inset: 0;
+      background: #d1d5db;
+      border-radius: 22px;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+
+    .toggle-slider::before {
+      content: '';
+      position: absolute;
+      width: 16px; height: 16px;
+      left: 3px; bottom: 3px;
+      background: white;
+      border-radius: 50%;
+      transition: 0.2s;
+    }
+
+    .toggle input:checked + .toggle-slider { background: #6c63ff; }
+    .toggle input:checked + .toggle-slider::before { transform: translateX(18px); }
+
+    /* FIELDS */
+    .fields-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .field-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .field-group.full { grid-column: 1 / -1; }
+
+    label {
+      font-size: 12px;
+      font-weight: 600;
+      color: #6b7280;
+      letter-spacing: 0.2px;
+    }
+
+    input[type="text"],
+    input[type="password"],
+    input[type="number"] {
+      padding: 10px 13px;
+      border: 1.5px solid #e5e7eb;
+      border-radius: 8px;
+      font-size: 13px;
+      color: #1a1a2e;
+      background: #fafafa;
+      outline: none;
+      transition: border-color 0.15s, background 0.15s;
+      width: 100%;
+    }
+
+    input:focus {
+      border-color: #6c63ff;
+      background: #fff;
+    }
+
+    .field-hint {
+      font-size: 11px;
+      color: #b0b3c6;
+    }
+
+    .secret-wrapper {
+      position: relative;
+    }
+
+    .secret-wrapper input {
+      padding-right: 40px;
+    }
+
+    .eye-btn {
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #b0b3c6;
+      font-size: 15px;
+      padding: 2px;
+    }
+    .eye-btn:hover { color: #6c63ff; }
+
+    /* DIVIDER */
+    .section-divider {
+      margin: 20px 0 16px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #b0b3c6;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .section-divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: #f0f0f5;
+    }
+
+    /* ACTIONS */
+    .card-actions {
+      margin-top: 24px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .btn-save {
+      padding: 10px 22px;
+      border-radius: 8px;
+      border: none;
+      background: #6c63ff;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+    }
+    .btn-save:hover { background: #5a52e0; }
+    .btn-save:active { transform: scale(0.98); }
+
+    .btn-cancel {
+      padding: 10px 18px;
+      border-radius: 8px;
+      border: 1.5px solid #e5e7eb;
+      background: transparent;
+      color: #6b7280;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-cancel:hover { border-color: #d1d5db; background: #f9fafb; }
+
+    .save-msg {
+      font-size: 12px;
+      color: #22c55e;
+      font-weight: 500;
+      margin-left: 4px;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    .save-msg.show { opacity: 1; }
+
+    /* MODAL */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.35);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+
+    .modal {
+      background: #fff;
+      border-radius: 14px;
+      padding: 28px;
+      width: 380px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.12);
+    }
+
+    .modal h3 {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 20px;
+      color: #1a1a2e;
+    }
+
+    .modal .fields-grid { grid-template-columns: 1fr; }
+
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="sidebar">
+  <div class="sidebar-header">
+    <div class="sidebar-logo">Da1<span>Click</span></div>
+    <div class="sidebar-subtitle">Painel de Clientes</div>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="sidebar-section-label">Contas</div>
+    <div id="client-list"></div>
+  </div>
+
+  <div class="sidebar-footer">
+    <button class="btn-new" onclick="abrirModalNovo()">+ Nova Conta</button>
+  </div>
+</div>
+
+<div class="main">
+  <div class="topbar">
+    <div>
+      <div class="page-title" id="page-title">Selecione uma conta</div>
+      <div class="page-sub" id="page-sub">Clique em uma conta na barra lateral para editar</div>
+    </div>
+  </div>
+
+  <div id="content">
+    <div class="empty-state">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+        <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
+      </svg>
+      <p>Selecione uma conta para ver as configurações</p>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL NOVO CLIENTE -->
+<div class="modal-overlay" id="modal-novo">
+  <div class="modal">
+    <h3>Nova Conta</h3>
+    <div class="fields-grid">
+      <div class="field-group">
+        <label>ID da Conta (account_id)</label>
+        <input type="number" id="novo-id" placeholder="Ex: 10" />
+      </div>
+      <div class="field-group">
+        <label>Nome</label>
+        <input type="text" id="novo-nome" placeholder="Ex: Oramatec" />
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-save" onclick="criarConta()">Criar</button>
+      <button class="btn-cancel" onclick="fecharModal()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  let clienteAtivo = null;
+  let clientes = [];
+
+  async function carregarClientes() {
+    const res = await fetch('/api/clientes');
+    clientes = await res.json();
+    renderizarLista();
+  }
+
+  function renderizarLista() {
+    const list = document.getElementById('client-list');
+    list.innerHTML = clientes.map(c => `
+      <div class="client-item ${clienteAtivo === c.account_id ? 'active' : ''}" onclick="selecionarCliente(${c.account_id})">
+        <div class="client-badge">${c.account_id}</div>
+        <div class="client-name">${c.nome}</div>
+        <div class="status-dot ${c.ativo ? 'on' : 'off'}"></div>
+      </div>
+    `).join('');
+  }
+
+  async function selecionarCliente(id) {
+    clienteAtivo = id;
+    renderizarLista();
+
+    const res = await fetch(`/api/clientes/${id}`);
+    const config = await res.json();
+
+    document.getElementById('page-title').textContent = config.nome;
+    document.getElementById('page-sub').textContent = `Conta #${config.account_id}`;
+
+    document.getElementById('content').innerHTML = `
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon">${config.account_id}</div>
+          <div>
+            <div class="card-title">${config.nome}</div>
+            <div class="card-id">account_id: ${config.account_id}</div>
+          </div>
+          <div class="toggle-wrapper">
+            <span class="toggle-label">Ativo</span>
+            <label class="toggle">
+              <input type="checkbox" id="f-ativo" ${config.ativo ? 'checked' : ''} />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <div class="section-divider">Chatwoot</div>
+        <div class="fields-grid">
+          <div class="field-group full">
+            <label>URL do Chatwoot</label>
+            <input type="text" id="f-chatwoot-url" value="${config.chatwoot_url || ''}" placeholder="https://app.chatwoot.com" />
+          </div>
+          <div class="field-group full">
+            <label>Token de API do Chatwoot</label>
+            <div class="secret-wrapper">
+              <input type="password" id="f-chatwoot-token" value="${config.chatwoot_token || ''}" placeholder="Token de acesso" />
+              <button class="eye-btn" onclick="toggleSecret('f-chatwoot-token')">👁</button>
+            </div>
+          </div>
+          <div class="field-group">
+            <label>ID do Agente IA</label>
+            <input type="number" id="f-ia-agent-id" value="${config.ia_agent_id || ''}" placeholder="Ex: 42" />
+            <span class="field-hint">Quando a conversa estiver atribuída a este agente, a IA responde. Caso contrário, só transcreve áudio.</span>
+          </div>
+        </div>
+
+        <div class="section-divider">OpenAI</div>
+        <div class="fields-grid">
+          <div class="field-group full">
+            <label>OpenAI API Key</label>
+            <div class="secret-wrapper">
+              <input type="password" id="f-openai-key" value="${config.openai_api_key || ''}" placeholder="sk-..." />
+              <button class="eye-btn" onclick="toggleSecret('f-openai-key')">👁</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card-actions">
+          <button class="btn-save" onclick="salvarCliente(${config.account_id})">Salvar</button>
+          <span class="save-msg" id="save-msg">Salvo com sucesso</span>
+        </div>
+      </div>
+    `;
+
+  }
+
+  function toggleSecret(id) {
+    const input = document.getElementById(id);
+    input.type = input.type === 'password' ? 'text' : 'password';
+  }
+
+  async function salvarCliente(id) {
+    const iaAgentRaw = document.getElementById('f-ia-agent-id').value.trim();
+    const body = {
+      ativo: document.getElementById('f-ativo').checked,
+      chatwoot_url: document.getElementById('f-chatwoot-url').value.trim(),
+      chatwoot_token: document.getElementById('f-chatwoot-token').value.trim(),
+      openai_api_key: document.getElementById('f-openai-key').value.trim(),
+      ia_agent_id: iaAgentRaw ? parseInt(iaAgentRaw) : null,
+    };
+
+    await fetch(`/api/clientes/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    const msg = document.getElementById('save-msg');
+    msg.classList.add('show');
+    setTimeout(() => msg.classList.remove('show'), 2500);
+    carregarClientes();
+  }
+
+  function abrirModalNovo() {
+    document.getElementById('modal-novo').classList.add('open');
+  }
+
+  function fecharModal() {
+    document.getElementById('modal-novo').classList.remove('open');
+  }
+
+  async function criarConta() {
+    const id = parseInt(document.getElementById('novo-id').value);
+    const nome = document.getElementById('novo-nome').value.trim();
+    if (!id || !nome) return;
+
+    await fetch('/api/clientes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ account_id: id, nome }),
+    });
+
+    fecharModal();
+    await carregarClientes();
+    selecionarCliente(id);
+  }
+
+  document.getElementById('modal-novo').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) fecharModal();
+  });
+
+  carregarClientes();
+</script>
+</body>
+</html>
