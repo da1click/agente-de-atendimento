@@ -1,6 +1,6 @@
 services:
   agente:
-    image: SEU_USUARIO_DOCKERHUB/agente-de-atendimento:latest
+    image: da1click/agente-de-atendimento:latest
     container_name: agente-de-atendimento
     restart: unless-stopped
     ports:
