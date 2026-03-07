@@ -27,6 +27,12 @@ jobs:
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/agente-de-atendimento:latest
 
       - name: Disparar webhook do Portainer
-        if: ${{ secrets.PORTAINER_WEBHOOK_URL != '' }}
         continue-on-error: true
-        run: curl -f -X POST "${{ secrets.PORTAINER_WEBHOOK_URL }}"
+        env:
+          WEBHOOK_URL: ${{ secrets.PORTAINER_WEBHOOK_URL }}
+        run: |
+          if [ -n "$WEBHOOK_URL" ]; then
+            curl -f -X POST "$WEBHOOK_URL"
+          else
+            echo "PORTAINER_WEBHOOK_URL nao configurado, pulando."
+          fi
