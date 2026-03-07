@@ -78,8 +78,15 @@
       display: flex; align-items: center; gap: 12px;
     }
     .topbar-title { font-size: 14px; font-weight: 600; color: var(--text); }
-    .topbar-sub { font-size: 12px; color: var(--text-muted); }
+    .topbar-sub { font-size: 12px; color: var(--text-muted); margin-left: auto; }
     .topbar-sep { color: var(--border); }
+    .topbar-account-sel {
+      padding: 5px 10px; border: 1.5px solid var(--border); border-radius: 7px;
+      font-size: 13px; color: var(--text); background: var(--bg);
+      outline: none; cursor: pointer; min-width: 180px; font-family: inherit;
+      transition: border-color 0.15s;
+    }
+    .topbar-account-sel:focus { border-color: var(--purple); }
 
     .page { padding: 24px 28px; }
 
@@ -369,7 +376,10 @@
   <div class="topbar">
     <span class="topbar-title" id="topbar-title">Painel Da1Click</span>
     <span class="topbar-sep">·</span>
-    <span class="topbar-sub" id="topbar-sub">Selecione uma conta</span>
+    <select id="topbar-conta-sel" class="topbar-account-sel" onchange="trocarContaTopbar(this.value)">
+      <option value="">Selecione uma conta</option>
+    </select>
+    <span class="topbar-sub" id="topbar-sub"></span>
   </div>
   <div class="page" id="page-content"></div>
 </main>
@@ -733,6 +743,7 @@ function renderSidebarAccounts() {
   const el = document.getElementById('sidebar-accounts');
   if (!clientes.length) {
     el.innerHTML = '<div style="font-size:11px;color:var(--text-muted);padding:6px 8px;">Nenhuma conta</div>';
+    document.getElementById('topbar-conta-sel').innerHTML = '<option value="">Nenhuma conta</option>';
     return;
   }
   el.innerHTML = clientes.map(c => `
@@ -743,6 +754,19 @@ function renderSidebarAccounts() {
       <div class="acl-dot ${c.ativo ? 'on' : 'off'}"></div>
     </div>
   `).join('');
+  const sel = document.getElementById('topbar-conta-sel');
+  sel.innerHTML = '<option value="">Selecione uma conta</option>' +
+    clientes.map(c => `<option value="${c.account_id}" ${clienteAtivo === c.account_id ? 'selected' : ''}>${c.nome} (#${c.account_id})</option>`).join('');
+}
+
+function trocarContaTopbar(id) {
+  if (!id) return;
+  clienteAtivo = parseInt(id);
+  renderSidebarAccounts();
+  const pages = { contas: renderPageContas, templates: renderPageTemplates,
+    inatividade: renderPageInatividade, agentes: renderPageAgentes,
+    relatorios: renderPageRelatorios, audiencias: renderPageAvisoAudiencia, config: renderPageConfig };
+  (pages[secaoAtiva] || renderPageContas)();
 }
 
 // ══════════════════════════════════════════════
