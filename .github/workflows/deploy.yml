@@ -26,13 +26,15 @@ jobs:
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/agente-de-atendimento:latest
 
-      - name: Disparar webhook do Portainer
+      - name: Disparar atualizacao no Watchtower
         continue-on-error: true
         env:
-          WEBHOOK_URL: ${{ secrets.PORTAINER_WEBHOOK_URL }}
+          WATCHTOWER_URL: ${{ secrets.WATCHTOWER_URL }}
+          WATCHTOWER_TOKEN: ${{ secrets.WATCHTOWER_TOKEN }}
         run: |
-          if [ -n "$WEBHOOK_URL" ]; then
-            curl -f -X POST "$WEBHOOK_URL"
+          if [ -n "$WATCHTOWER_URL" ]; then
+            curl -f -X POST "$WATCHTOWER_URL/v1/update" \
+              -H "Authorization: Bearer $WATCHTOWER_TOKEN"
           else
-            echo "PORTAINER_WEBHOOK_URL nao configurado, pulando."
+            echo "WATCHTOWER_URL nao configurado, pulando."
           fi

@@ -7,3 +7,17 @@ services:
       - "8000:8000"
     volumes:
       - ./clientes:/app/clientes
+
+  watchtower:
+    image: containrrr/watchtower
+    container_name: watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - WATCHTOWER_HTTP_API_UPDATE=true
+      - WATCHTOWER_HTTP_API_TOKEN=da1click-watchtower
+      - WATCHTOWER_CLEANUP=true
+    ports:
+      - "8080:8080"
+    command: --http-api-update agente-de-atendimento
