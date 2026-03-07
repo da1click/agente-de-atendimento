@@ -25,16 +25,3 @@ jobs:
           context: .
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/agente-de-atendimento:latest
-
-      - name: Disparar atualizacao no Watchtower
-        continue-on-error: true
-        env:
-          WATCHTOWER_URL: ${{ secrets.WATCHTOWER_URL }}
-          WATCHTOWER_TOKEN: ${{ secrets.WATCHTOWER_TOKEN }}
-        run: |
-          if [ -n "$WATCHTOWER_URL" ]; then
-            curl -f -X POST "$WATCHTOWER_URL/v1/update" \
-              -H "Authorization: Bearer $WATCHTOWER_TOKEN"
-          else
-            echo "WATCHTOWER_URL nao configurado, pulando."
-          fi
