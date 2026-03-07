@@ -13,6 +13,11 @@ jobs:
       - name: Checkout do código
         uses: actions/checkout@v4
 
+      - name: Injetar config.json dos clientes
+        run: |
+          mkdir -p clientes/5-AdvBrasil
+          echo "${{ secrets.CLIENT_CONFIG_ADVBRASIL }}" | base64 -d > clientes/5-AdvBrasil/config.json
+
       - name: Login no Docker Hub
         uses: docker/login-action@v3
         with:
