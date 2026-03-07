@@ -81,9 +81,9 @@
     .topbar-sub { font-size: 12px; color: var(--text-muted); margin-left: auto; }
     .topbar-sep { color: var(--border); }
     .topbar-account-sel {
-      padding: 5px 10px; border: 1.5px solid var(--border); border-radius: 7px;
-      font-size: 13px; color: var(--text); background: var(--bg);
-      outline: none; cursor: pointer; min-width: 180px; font-family: inherit;
+      width: 100%; padding: 7px 10px; border: 1.5px solid var(--border); border-radius: 7px;
+      font-size: 12px; color: var(--text); background: var(--bg);
+      outline: none; cursor: pointer; font-family: inherit;
       transition: border-color 0.15s;
     }
     .topbar-account-sel:focus { border-color: var(--purple); }
@@ -324,6 +324,11 @@
   <div class="sidebar-logo">
     <div class="sidebar-logo-text">Da1<span>Click</span></div>
     <div class="sidebar-logo-sub">Painel Admin</div>
+    <div style="margin-top:10px;">
+      <select id="topbar-conta-sel" class="topbar-account-sel" onchange="trocarContaTopbar(this.value)">
+        <option value="">Selecione uma conta</option>
+      </select>
+    </div>
   </div>
 
   <!-- Accounts list inside sidebar -->
@@ -375,11 +380,7 @@
 <main class="main">
   <div class="topbar">
     <span class="topbar-title" id="topbar-title">Painel Da1Click</span>
-    <span class="topbar-sep">·</span>
-    <select id="topbar-conta-sel" class="topbar-account-sel" onchange="trocarContaTopbar(this.value)">
-      <option value="">Selecione uma conta</option>
-    </select>
-    <span class="topbar-sub" id="topbar-sub"></span>
+    <span class="topbar-sub" id="topbar-sub" style="margin-left:auto;"></span>
   </div>
   <div class="page" id="page-content"></div>
 </main>
