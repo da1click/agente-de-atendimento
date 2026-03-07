@@ -1,20 +1,30 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from openai import OpenAI
 from ia import agendar_processamento, processar_mensagem, transcrever_audio, enviar_nota_privada
-from db import upsert_lead, salvar_transcricao
+from db import upsert_lead, salvar_transcricao, deletar_dados_conta
+from inatividade import registrar_atividade, iniciar_monitoramento
 import httpx
 import json
 import logging
 import os
+import random
 import secrets
 import string
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Agente de Atendimento - Da1Click")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    iniciar_monitoramento()
+    yield
+
+
+app = FastAPI(title="Agente de Atendimento - Da1Click", lifespan=lifespan)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CLIENTES_DIR = os.path.join(BASE_DIR, "clientes")
@@ -55,6 +65,49 @@ def gerar_senha(tamanho: int = 12) -> str:
                 and any(c.isdigit() for c in senha)
                 and any(c in especiais for c in senha)):
             return "".join(senha)
+
+
+def _carregar_labels() -> list:
+    path = os.path.join(BASE_DIR, "config", "labels.json")
+    if os.path.exists(path):
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    return []
+
+LABELS_PADRAO = _carregar_labels()
+
+_CORES_LABELS = [
+    "#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6",
+    "#EC4899", "#14B8A6", "#F97316", "#6366F1", "#84CC16",
+]
+
+
+async def criar_labels_padrao(chatwoot_url: str, token: str, account_id: int):
+    """Cria as labels padrão Da1Click na conta recém-criada."""
+    labels = _carregar_labels()
+    if not labels:
+        logger.warning("config/labels.json vazio ou não encontrado — nenhuma label criada")
+        return
+    cores = _CORES_LABELS.copy()
+    random.shuffle(cores)
+    headers = {"api_access_token": token, "Content-Type": "application/json"}
+    url = f"{chatwoot_url}/api/v1/accounts/{account_id}/labels"
+    async with httpx.AsyncClient(timeout=30) as client:
+        for i, label in enumerate(labels):
+            cor = cores[i % len(cores)]
+            try:
+                r = await client.post(url, headers=headers, json={
+                    "title": label["title"],
+                    "description": label["description"],
+                    "color": cor,
+                    "show_on_sidebar": True,
+                })
+                if r.status_code in (200, 201):
+                    logger.info(f"Label criada: {label['title']} ({cor})")
+                else:
+                    logger.warning(f"Falha ao criar label '{label['title']}': {r.status_code} {r.text}")
+            except Exception as e:
+                logger.warning(f"Erro ao criar label '{label['title']}': {e}")
 
 
 def pasta_cliente(account_id: int) -> str | None:
@@ -118,6 +171,12 @@ async def deletar_cliente(account_id: int):
             except Exception as e:
                 logger.warning(f"Erro ao deletar conta {account_id} no Chatwoot: {e}")
 
+    # Remover dados do Supabase
+    try:
+        deletar_dados_conta(account_id)
+    except Exception as e:
+        logger.warning(f"Erro ao limpar Supabase para conta {account_id}: {e}")
+
     # Remover pasta local
     pasta = pasta_cliente(account_id)
     if pasta and os.path.exists(pasta):
@@ -135,7 +194,13 @@ async def atualizar_cliente(account_id: int, request: Request):
     if not config:
         raise HTTPException(status_code=404, detail="Cliente não encontrado")
     dados = await request.json()
-    campos_editaveis = ["ativo", "chatwoot_url", "chatwoot_token", "openai_api_key", "ia_agent_id"]
+    campos_editaveis = [
+        "ativo", "inatividade_ativa", "chatwoot_url", "chatwoot_token", "openai_api_key", "ia_agent_id",
+        "team_id", "inbox_id", "email_agenda", "horas_inicial_busca",
+        "quantidade_dias_a_buscar", "duracao_agendamento", "disponibilidade",
+        "especialidade", "id_notificacao_convertido", "id_notificacao_cliente",
+        "meta_waba_id", "meta_access_token", "template_audiencia",
+    ]
     for campo in campos_editaveis:
         if campo in dados:
             config[campo] = dados[campo]
@@ -211,6 +276,7 @@ async def criar_conta_chatwoot(request: Request):
         # 2. Criar o usuário admin do cliente com senha gerada
         senha_gerada = gerar_senha()
         user_id = None
+        user_access_token = None
         try:
             r = await client.post(
                 f"{chatwoot_url}/platform/api/v1/users",
@@ -218,7 +284,9 @@ async def criar_conta_chatwoot(request: Request):
                 headers=headers_platform,
             )
             if r.status_code in (200, 201):
-                user_id = r.json().get("id")
+                user_data = r.json()
+                user_id = user_data.get("id")
+                user_access_token = user_data.get("access_token")
                 logger.info(f"Usuário criado: {admin_email} (id={user_id})")
             else:
                 logger.warning(f"Falha ao criar usuário {admin_email}: {r.status_code} {r.text}")
@@ -242,7 +310,13 @@ async def criar_conta_chatwoot(request: Request):
             except Exception as e:
                 logger.warning(f"Erro ao vincular usuário à conta: {e}")
 
-        # 4. Adicionar admins padrão Da1Click via Platform API
+        # 4. Criar labels padrão (usa token do admin vinculado à conta)
+        if user_access_token:
+            await criar_labels_padrao(chatwoot_url, user_access_token, account_id)
+        else:
+            logger.warning("Sem access_token do admin — labels não criadas")
+
+        # 5. Adicionar admins padrão Da1Click via Platform API
         default_admins = [e.strip() for e in os.getenv("CHATWOOT_DEFAULT_ADMINS", "").split(",") if e.strip()]
         for email in default_admins:
             nome_admin = email.split("@")[0].replace(".", " ").title()
@@ -267,7 +341,7 @@ async def criar_conta_chatwoot(request: Request):
             except Exception as e:
                 logger.warning(f"Erro ao adicionar admin padrão {email}: {e}")
 
-    # 5. Salvar config local
+    # 6. Salvar config local
     nome_pasta = account_name.replace(" ", "_")
     pasta = os.path.join(CLIENTES_DIR, f"{account_id}-{nome_pasta}")
     os.makedirs(os.path.join(pasta, "prompt"), exist_ok=True)
@@ -394,6 +468,13 @@ async def chatwoot_webhook(request: Request):
         except Exception as e:
             logger.warning(f"Erro ao registrar lead no Supabase: {e}")
 
+        # Resetar inatividade (cliente respondeu)
+        if config.get("inatividade_ativa", True):
+            try:
+                registrar_atividade(account_id, conversation_id, inbox_id)
+            except Exception as e:
+                logger.warning(f"Erro ao registrar atividade: {e}")
+
         ia_ativa = ia_agent_id is not None and assignee_id == ia_agent_id
 
         # Verificar se é áudio
@@ -441,3 +522,741 @@ async def chatwoot_webhook(request: Request):
             logger.info(f"[{account_id}] IA inativa (assignee={assignee_id}, ia_agent_id={ia_agent_id}) — apenas transcrição")
 
     return {"status": "ok"}
+
+
+# ── META TEMPLATES ─────────────────────────────────────────────
+
+META_GRAPH = "https://graph.facebook.com/v19.0"
+META_TEMPLATE_FIELDS = "id,name,status,category,language,components,rejected_reason,quality_score"
+
+
+def _meta_headers(token: str) -> dict:
+    return {"Authorization": f"Bearer {token}"}
+
+
+def _get_meta_config(account_id: int) -> tuple[str, str]:
+    config = carregar_config_cliente(account_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    waba_id = config.get("meta_waba_id", "").strip()
+    token = config.get("meta_access_token", "").strip()
+    if not waba_id or not token:
+        raise HTTPException(status_code=400, detail="meta_waba_id e meta_access_token não configurados para esta conta")
+    return waba_id, token
+
+
+@app.get("/api/clientes/{account_id}/templates")
+async def listar_templates(account_id: int, status: str = ""):
+    waba_id, token = _get_meta_config(account_id)
+    params = {"fields": META_TEMPLATE_FIELDS, "limit": 100}
+    if status:
+        params["status"] = status.upper()
+    async with httpx.AsyncClient(timeout=30) as client:
+        r = await client.get(f"{META_GRAPH}/{waba_id}/message_templates", headers=_meta_headers(token), params=params)
+    if r.status_code != 200:
+        raise HTTPException(status_code=r.status_code, detail=r.json())
+    return r.json()
+
+
+@app.post("/api/clientes/{account_id}/templates")
+async def criar_template(account_id: int, request: Request):
+    waba_id, token = _get_meta_config(account_id)
+    payload = await request.json()
+    async with httpx.AsyncClient(timeout=30) as client:
+        r = await client.post(
+            f"{META_GRAPH}/{waba_id}/message_templates",
+            headers={**_meta_headers(token), "Content-Type": "application/json"},
+            json=payload,
+        )
+    if r.status_code not in (200, 201):
+        raise HTTPException(status_code=r.status_code, detail=r.json())
+    return r.json()
+
+
+@app.delete("/api/clientes/{account_id}/templates/{template_name}")
+async def deletar_template(account_id: int, template_name: str):
+    waba_id, token = _get_meta_config(account_id)
+    async with httpx.AsyncClient(timeout=30) as client:
+        r = await client.delete(
+            f"{META_GRAPH}/{waba_id}/message_templates",
+            headers=_meta_headers(token),
+            params={"name": template_name},
+        )
+    if r.status_code not in (200, 204):
+        raise HTTPException(status_code=r.status_code, detail=r.json())
+    return {"status": "deletado", "template": template_name}
+
+
+# ── CONFIG INATIVIDADE ────────────────────────────────────────
+
+@app.get("/api/config/inatividade")
+def get_inatividade_config():
+    path = os.path.join(BASE_DIR, "config", "inatividade.json")
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+@app.put("/api/config/inatividade")
+async def put_inatividade_config(request: Request):
+    dados = await request.json()
+    path = os.path.join(BASE_DIR, "config", "inatividade.json")
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(dados, f, indent=2, ensure_ascii=False)
+    return {"status": "ok"}
+
+
+# ── AUDIÊNCIAS ────────────────────────────────────────────────
+
+AUDIENCIAS_PATH = os.path.join(BASE_DIR, "config", "audiencias.json")
+TIPOS_AUDIENCIA_PATH = os.path.join(BASE_DIR, "config", "tipos_audiencia.json")
+
+_TIPOS_AUDIENCIA_DEFAULT = [
+    {"id": 1, "nome": "Audiência de Conciliação Presencial", "descricao": "Audiência de Conciliação Presencial", "ativo": True, "mensagens": []},
+    {"id": 2, "nome": "Audiência de Conciliação Tele", "descricao": "Audiência de Conciliação Tele", "ativo": True, "mensagens": []},
+    {"id": 3, "nome": "Audiência de Instrução Presencial", "descricao": "Audiência de Instrução Presencial", "ativo": True, "mensagens": []},
+    {"id": 4, "nome": "Audiência de Instrução Tele", "descricao": "Audiência de Instrução Tele", "ativo": True, "mensagens": []},
+    {"id": 5, "nome": "Pericia Medica", "descricao": "Pericia Tecnica", "ativo": True, "mensagens": []},
+    {"id": 6, "nome": "Pericia Tecnica", "descricao": "Pericia Tecnica", "ativo": True, "mensagens": []},
+]
+
+
+def _load_audiencias() -> list:
+    if os.path.exists(AUDIENCIAS_PATH):
+        with open(AUDIENCIAS_PATH, encoding="utf-8") as f:
+            return json.load(f)
+    return []
+
+
+def _save_audiencias(data: list):
+    os.makedirs(os.path.dirname(AUDIENCIAS_PATH), exist_ok=True)
+    with open(AUDIENCIAS_PATH, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+
+
+def _load_tipos_audiencia() -> list:
+    if os.path.exists(TIPOS_AUDIENCIA_PATH):
+        with open(TIPOS_AUDIENCIA_PATH, encoding="utf-8") as f:
+            return json.load(f)
+    return [t.copy() for t in _TIPOS_AUDIENCIA_DEFAULT]
+
+
+def _save_tipos_audiencia(data: list):
+    os.makedirs(os.path.dirname(TIPOS_AUDIENCIA_PATH), exist_ok=True)
+    with open(TIPOS_AUDIENCIA_PATH, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+
+
+@app.get("/api/audiencias/tipos")
+def listar_tipos_audiencia():
+    return _load_tipos_audiencia()
+
+
+@app.post("/api/audiencias/tipos")
+async def criar_tipo_audiencia(request: Request):
+    dados = await request.json()
+    tipos = _load_tipos_audiencia()
+    novo_id = max((t["id"] for t in tipos), default=0) + 1
+    novo = {
+        "id": novo_id,
+        "nome": dados.get("nome", ""),
+        "descricao": dados.get("descricao", dados.get("nome", "")),
+        "ativo": dados.get("ativo", True),
+        "mensagens": [],
+    }
+    tipos.append(novo)
+    _save_tipos_audiencia(tipos)
+    return novo
+
+
+@app.put("/api/audiencias/tipos/{tipo_id}")
+async def atualizar_tipo_audiencia(tipo_id: int, request: Request):
+    dados = await request.json()
+    tipos = _load_tipos_audiencia()
+    for i, t in enumerate(tipos):
+        if t["id"] == tipo_id:
+            for campo in ["nome", "descricao", "ativo"]:
+                if campo in dados:
+                    tipos[i][campo] = dados[campo]
+            _save_tipos_audiencia(tipos)
+            return tipos[i]
+    raise HTTPException(status_code=404, detail="Tipo não encontrado")
+
+
+@app.delete("/api/audiencias/tipos/{tipo_id}")
+def deletar_tipo_audiencia(tipo_id: int):
+    tipos = _load_tipos_audiencia()
+    nova_lista = [t for t in tipos if t["id"] != tipo_id]
+    if len(nova_lista) == len(tipos):
+        raise HTTPException(status_code=404, detail="Tipo não encontrado")
+    _save_tipos_audiencia(nova_lista)
+    return {"status": "deletado"}
+
+
+# ── MENSAGENS DE TIPO DE AUDIÊNCIA ────────────────────────────
+
+@app.get("/api/audiencias/tipos/{tipo_id}/mensagens")
+def listar_mensagens_tipo(tipo_id: int):
+    tipos = _load_tipos_audiencia()
+    tipo = next((t for t in tipos if t["id"] == tipo_id), None)
+    if not tipo:
+        raise HTTPException(status_code=404, detail="Tipo não encontrado")
+    return tipo.get("mensagens", [])
+
+
+@app.post("/api/audiencias/tipos/{tipo_id}/mensagens")
+async def criar_mensagem_tipo(tipo_id: int, request: Request):
+    dados = await request.json()
+    tipos = _load_tipos_audiencia()
+    for i, t in enumerate(tipos):
+        if t["id"] == tipo_id:
+            mensagens = t.get("mensagens", [])
+            novo_idx = max((m.get("idx", 0) for m in mensagens), default=0) + 1
+            nova = {
+                "id": secrets.token_hex(16),
+                "idx": novo_idx,
+                "conteudo": dados.get("conteudo", ""),
+                "tempo_antes": dados.get("tempo_antes", 5),
+                "unidade_tempo": dados.get("unidade_tempo", "dias"),
+                "template_whatsapp": dados.get("template_whatsapp", ""),
+                "media_url": dados.get("media_url"),
+                "media_type": dados.get("media_type"),
+                "media_caption": dados.get("media_caption"),
+            }
+            mensagens.append(nova)
+            tipos[i]["mensagens"] = mensagens
+            _save_tipos_audiencia(tipos)
+            return nova
+    raise HTTPException(status_code=404, detail="Tipo não encontrado")
+
+
+@app.put("/api/audiencias/tipos/{tipo_id}/mensagens/{msg_id}")
+async def atualizar_mensagem_tipo(tipo_id: int, msg_id: str, request: Request):
+    dados = await request.json()
+    tipos = _load_tipos_audiencia()
+    for i, t in enumerate(tipos):
+        if t["id"] == tipo_id:
+            mensagens = t.get("mensagens", [])
+            for j, m in enumerate(mensagens):
+                if m["id"] == msg_id:
+                    for campo in ["conteudo", "tempo_antes", "unidade_tempo", "template_whatsapp",
+                                  "media_url", "media_type", "media_caption", "idx"]:
+                        if campo in dados:
+                            mensagens[j][campo] = dados[campo]
+                    tipos[i]["mensagens"] = mensagens
+                    _save_tipos_audiencia(tipos)
+                    return mensagens[j]
+            raise HTTPException(status_code=404, detail="Mensagem não encontrada")
+    raise HTTPException(status_code=404, detail="Tipo não encontrado")
+
+
+@app.delete("/api/audiencias/tipos/{tipo_id}/mensagens/{msg_id}")
+def deletar_mensagem_tipo(tipo_id: int, msg_id: str):
+    tipos = _load_tipos_audiencia()
+    for i, t in enumerate(tipos):
+        if t["id"] == tipo_id:
+            mensagens = t.get("mensagens", [])
+            nova_lista = [m for m in mensagens if m["id"] != msg_id]
+            if len(nova_lista) == len(mensagens):
+                raise HTTPException(status_code=404, detail="Mensagem não encontrada")
+            tipos[i]["mensagens"] = nova_lista
+            _save_tipos_audiencia(tipos)
+            return {"status": "deletado"}
+    raise HTTPException(status_code=404, detail="Tipo não encontrado")
+
+
+@app.get("/api/audiencias")
+def listar_audiencias(account_id: int = None):
+    audiencias = _load_audiencias()
+    if account_id is not None:
+        audiencias = [a for a in audiencias if a.get("account_id") == account_id]
+    return audiencias
+
+
+@app.post("/api/audiencias")
+async def criar_audiencia(request: Request):
+    dados = await request.json()
+    audiencias = _load_audiencias()
+    nova = {
+        "id": secrets.token_hex(16),
+        "account_id": dados.get("account_id"),
+        "conversation_id": dados.get("conversation_id"),
+        "inbox_id": dados.get("inbox_id"),
+        "nome_cliente": dados.get("nome_cliente", ""),
+        "tem_processo": dados.get("tem_processo", False),
+        "telefone": dados.get("telefone", ""),
+        "data": dados.get("data", ""),
+        "horario": dados.get("horario", ""),
+        "tipo_audiencia": dados.get("tipo_audiencia", ""),
+        "endereco": dados.get("endereco", ""),
+        "link_zoom": dados.get("link_zoom", ""),
+        "testemunhas": dados.get("testemunhas", []),
+    }
+    audiencias.append(nova)
+    _save_audiencias(audiencias)
+    return nova
+
+
+@app.put("/api/audiencias/{audiencia_id}")
+async def atualizar_audiencia(audiencia_id: str, request: Request):
+    dados = await request.json()
+    audiencias = _load_audiencias()
+    campos = ["nome_cliente", "tem_processo", "telefone", "conversation_id", "inbox_id",
+              "data", "horario", "tipo_audiencia", "endereco", "link_zoom", "testemunhas", "account_id"]
+    for i, a in enumerate(audiencias):
+        if a["id"] == audiencia_id:
+            for campo in campos:
+                if campo in dados:
+                    audiencias[i][campo] = dados[campo]
+            _save_audiencias(audiencias)
+            return audiencias[i]
+    raise HTTPException(status_code=404, detail="Audiência não encontrada")
+
+
+@app.delete("/api/audiencias/{audiencia_id}")
+def deletar_audiencia(audiencia_id: str):
+    audiencias = _load_audiencias()
+    nova_lista = [a for a in audiencias if a["id"] != audiencia_id]
+    if len(nova_lista) == len(audiencias):
+        raise HTTPException(status_code=404, detail="Audiência não encontrada")
+    _save_audiencias(nova_lista)
+    return {"status": "deletado"}
+
+
+# ── CHATWOOT PROXY ────────────────────────────────────────────
+
+@app.get("/api/clientes/{account_id}/chatwoot/contatos/buscar")
+async def buscar_contato_chatwoot(account_id: int, q: str = ""):
+    """Busca contato no Chatwoot por telefone/nome e retorna dados + conversa mais recente."""
+    if not q.strip():
+        return []
+    config = carregar_config_cliente(account_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+
+    chatwoot_url = config["chatwoot_url"].rstrip("/")
+    token = config["chatwoot_token"]
+    headers = {"api_access_token": token}
+
+    async with httpx.AsyncClient(timeout=15) as client:
+        # Buscar contatos
+        r = await client.get(
+            f"{chatwoot_url}/api/v1/accounts/{account_id}/contacts/search",
+            params={"q": q.strip()}, headers=headers,
+        )
+        if not r.is_success:
+            raise HTTPException(status_code=r.status_code, detail=r.text)
+
+        contatos = r.json().get("payload", [])
+        resultado = []
+
+        for c in contatos[:10]:
+            item = {
+                "contact_id": c.get("id"),
+                "nome": c.get("name", ""),
+                "telefone": c.get("phone_number", ""),
+                "email": c.get("email", ""),
+                "conversation_id": None,
+                "inbox_id": None,
+            }
+
+            # Buscar conversas desse contato para pegar a mais recente
+            try:
+                rc = await client.get(
+                    f"{chatwoot_url}/api/v1/accounts/{account_id}/contacts/{c['id']}/conversations",
+                    headers=headers,
+                )
+                if rc.is_success:
+                    conversas = rc.json().get("payload", [])
+                    if conversas:
+                        # Pegar a conversa mais recente
+                        mais_recente = max(conversas, key=lambda x: x.get("last_activity_at", 0))
+                        item["conversation_id"] = mais_recente.get("id")
+                        item["inbox_id"] = mais_recente.get("inbox_id")
+            except Exception:
+                pass
+
+            resultado.append(item)
+
+        return resultado
+
+
+@app.get("/api/clientes/{account_id}/chatwoot/agents")
+async def proxy_chatwoot_agents(account_id: int):
+    config = carregar_config_cliente(account_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    url = f"{config['chatwoot_url'].rstrip('/')}/api/v1/accounts/{account_id}/agents"
+    async with httpx.AsyncClient(timeout=10) as client:
+        r = await client.get(url, headers={"api_access_token": config["chatwoot_token"]})
+    if not r.is_success:
+        raise HTTPException(status_code=r.status_code, detail=r.text)
+    return r.json()
+
+
+@app.get("/api/clientes/{account_id}/chatwoot/teams")
+async def proxy_chatwoot_teams(account_id: int):
+    config = carregar_config_cliente(account_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    url = f"{config['chatwoot_url'].rstrip('/')}/api/v1/accounts/{account_id}/teams"
+    async with httpx.AsyncClient(timeout=10) as client:
+        r = await client.get(url, headers={"api_access_token": config["chatwoot_token"]})
+    if not r.is_success:
+        raise HTTPException(status_code=r.status_code, detail=r.text)
+    return r.json()
+
+
+@app.get("/api/clientes/{account_id}/chatwoot/inboxes")
+async def proxy_chatwoot_inboxes(account_id: int):
+    config = carregar_config_cliente(account_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    url = f"{config['chatwoot_url'].rstrip('/')}/api/v1/accounts/{account_id}/inboxes"
+    async with httpx.AsyncClient(timeout=10) as client:
+        r = await client.get(url, headers={"api_access_token": config["chatwoot_token"]})
+    if not r.is_success:
+        raise HTTPException(status_code=r.status_code, detail=r.text)
+    data = r.json()
+    return data.get("payload", data)
+
+
+# ── WEBHOOK AUDIÊNCIA ─────────────────────────────────────────
+
+@app.post("/webhook/envia-audiencia")
+async def webhook_envia_audiencia(request: Request):
+    """Recebe webhook de macro do Chatwoot (via n8n) e salva audiência pendente."""
+    payload = await request.json()
+
+    # O n8n envia como array — pega o primeiro elemento
+    if isinstance(payload, list):
+        if not payload:
+            raise HTTPException(status_code=400, detail="Payload vazio")
+        payload = payload[0]
+
+    body = payload.get("body", payload)
+
+    # Extrair dados do contato e conversa
+    messages = body.get("messages", [])
+    first_msg = messages[0] if messages else {}
+    sender = body.get("meta", {}).get("sender", first_msg.get("sender", {}))
+    contact_inbox = body.get("contact_inbox", {})
+
+    account_id = first_msg.get("account_id") or body.get("account_id")
+    conversation_id = body.get("id")
+    nome_cliente = sender.get("name", "")
+    telefone = sender.get("phone_number", "") or contact_inbox.get("source_id", "")
+
+    if not account_id or not conversation_id:
+        raise HTTPException(status_code=400, detail="account_id e conversation_id são obrigatórios")
+
+    inbox_id = body.get("inbox_id")
+
+    # Salvar como audiência pendente
+    audiencias = _load_audiencias()
+    nova = {
+        "id": secrets.token_hex(16),
+        "account_id": account_id,
+        "conversation_id": conversation_id,
+        "inbox_id": inbox_id,
+        "nome_cliente": nome_cliente,
+        "telefone": telefone,
+        "tem_processo": False,
+        "data": "",
+        "horario": "",
+        "tipo_audiencia": "",
+        "endereco": "",
+        "link_zoom": "",
+        "testemunhas": [],
+        "status": "pendente",
+    }
+    audiencias.append(nova)
+    _save_audiencias(audiencias)
+
+    logger.info(f"[webhook-audiencia] Audiência pendente criada: {nome_cliente} ({telefone}) — conversa {conversation_id}")
+    return {"status": "ok", "audiencia_id": nova["id"]}
+
+
+@app.post("/api/audiencias/{audiencia_id}/enviar")
+async def enviar_aviso_audiencia(audiencia_id: str, request: Request):
+    """Envia aviso de audiência ao cliente + testemunhas, tratando WhatsApp oficial vs API."""
+    from inatividade import _get_inbox_channel_type, _ultima_msg_cliente
+    from datetime import datetime, timezone
+
+    dados = await request.json()
+    msg_id = dados.get("mensagem_id")
+
+    audiencias = _load_audiencias()
+    audiencia = next((a for a in audiencias if a["id"] == audiencia_id), None)
+    if not audiencia:
+        raise HTTPException(status_code=404, detail="Audiência não encontrada")
+
+    account_id = audiencia["account_id"]
+    conversation_id = audiencia["conversation_id"]
+    inbox_id = audiencia.get("inbox_id")
+
+    config = carregar_config_cliente(account_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+
+    # Buscar a mensagem do tipo de audiência
+    tipos = _load_tipos_audiencia()
+    tipo = next((t for t in tipos if t["nome"] == audiencia.get("tipo_audiencia")), None)
+    if not tipo:
+        raise HTTPException(status_code=400, detail="Tipo de audiência não encontrado")
+
+    mensagens_tipo = tipo.get("mensagens", [])
+    if not mensagens_tipo:
+        raise HTTPException(status_code=400, detail="Nenhuma mensagem configurada para este tipo")
+
+    # Se msg_id específico, envia essa; senão, envia todas
+    if msg_id:
+        msg = next((m for m in mensagens_tipo if m["id"] == msg_id), None)
+        if not msg:
+            raise HTTPException(status_code=404, detail="Mensagem não encontrada no tipo")
+        msgs_para_enviar = [msg]
+    else:
+        msgs_para_enviar = sorted(mensagens_tipo, key=lambda m: m.get("idx", 0))
+
+    chatwoot_url = config["chatwoot_url"].rstrip("/")
+    token = config["chatwoot_token"]
+
+    # Verificar tipo de inbox e janela de 24h (para o cliente principal)
+    channel_type = await _get_inbox_channel_type(config, inbox_id)
+    is_whatsapp_oficial = "whatsapp" in channel_type.lower()
+
+    # ── Montar lista de destinatários: cliente + testemunhas ──
+    destinatarios = [
+        {"nome": audiencia["nome_cliente"], "telefone": audiencia.get("telefone", ""),
+         "conversation_id": conversation_id, "tipo": "cliente"},
+    ]
+    for t in audiencia.get("testemunhas", []):
+        if isinstance(t, dict) and (t.get("whatsapp") or "").strip():
+            destinatarios.append({
+                "nome": t.get("nome", "Testemunha"),
+                "telefone": t["whatsapp"].strip(),
+                "conversation_id": None,  # será buscado/criado
+                "tipo": "testemunha",
+            })
+
+    resultados = []
+
+    async with httpx.AsyncClient(timeout=20) as http:
+        headers = {"api_access_token": token, "Content-Type": "application/json"}
+
+        for dest in destinatarios:
+            conv_id = dest["conversation_id"]
+
+            # Para testemunhas: buscar ou criar contato e conversa no Chatwoot
+            if conv_id is None and inbox_id:
+                try:
+                    conv_id = await _buscar_ou_criar_conversa(
+                        http, chatwoot_url, token, account_id, inbox_id,
+                        dest["nome"], dest["telefone"]
+                    )
+                except Exception as e:
+                    resultados.append({
+                        "destinatario": dest["nome"], "telefone": dest["telefone"],
+                        "tipo": dest["tipo"], "status": "erro",
+                        "detalhe": f"Erro ao criar conversa: {e}",
+                    })
+                    continue
+
+            if not conv_id:
+                resultados.append({
+                    "destinatario": dest["nome"], "tipo": dest["tipo"],
+                    "status": "erro", "detalhe": "Sem conversation_id e sem inbox_id",
+                })
+                continue
+
+            # Checar janela 24h para este destinatário
+            dest_janela_expirada = False
+            if is_whatsapp_oficial:
+                try:
+                    url_msgs = f"{chatwoot_url}/api/v1/accounts/{account_id}/conversations/{conv_id}/messages"
+                    resp = await http.get(url_msgs, headers={"api_access_token": token})
+                    historico = resp.json().get("payload", []) if resp.is_success else []
+                    historico = sorted(historico, key=lambda m: m.get("created_at", 0))
+                    ultima_msg = _ultima_msg_cliente(historico)
+                    dest_janela_expirada = (
+                        ultima_msg is None or
+                        (datetime.now(timezone.utc) - ultima_msg).total_seconds() > 86400
+                    )
+                except Exception:
+                    dest_janela_expirada = True  # assume expirada por segurança
+
+            # Enviar cada mensagem para este destinatário
+            for msg in msgs_para_enviar:
+                # Substituir [NOME] pelo nome do destinatário (não do cliente)
+                audiencia_copy = {**audiencia, "nome_cliente": dest["nome"]}
+                conteudo = _substituir_placeholders(msg.get("conteudo", ""), audiencia_copy)
+                template_name = (msg.get("template_whatsapp") or "").strip()
+
+                try:
+                    if is_whatsapp_oficial and dest_janela_expirada:
+                        if template_name:
+                            await _enviar_template_audiencia_http(
+                                http, chatwoot_url, token, account_id, conv_id, template_name
+                            )
+                            await _enviar_nota_privada_http(
+                                http, chatwoot_url, token, account_id, conv_id,
+                                f"[Aviso de Audiência] Template enviado: *{template_name}*\nDestinatário: {dest['nome']} ({dest['tipo']})"
+                            )
+                            resultados.append({
+                                "destinatario": dest["nome"], "tipo": dest["tipo"],
+                                "msg_id": msg["id"], "metodo": "template", "status": "enviado",
+                            })
+                        else:
+                            resultados.append({
+                                "destinatario": dest["nome"], "tipo": dest["tipo"],
+                                "msg_id": msg["id"], "metodo": "template", "status": "erro",
+                                "detalhe": "Fora da janela 24h e sem template configurado",
+                            })
+                    else:
+                        await _enviar_texto_audiencia_http(
+                            http, chatwoot_url, token, account_id, conv_id, conteudo
+                        )
+                        resultados.append({
+                            "destinatario": dest["nome"], "tipo": dest["tipo"],
+                            "msg_id": msg["id"], "metodo": "texto", "status": "enviado",
+                        })
+                except Exception as e:
+                    resultados.append({
+                        "destinatario": dest["nome"], "tipo": dest["tipo"],
+                        "msg_id": msg["id"], "status": "erro", "detalhe": str(e),
+                    })
+
+    # Registrar envios na audiência
+    enviados = audiencia.get("mensagens_enviadas", [])
+    now_iso = datetime.now(timezone.utc).isoformat()
+    for r in resultados:
+        if r["status"] == "enviado":
+            enviados.append({
+                "mensagem_id": r.get("msg_id"), "destinatario": r["destinatario"],
+                "tipo": r["tipo"], "metodo": r["metodo"], "enviado_em": now_iso,
+            })
+    for i, a in enumerate(audiencias):
+        if a["id"] == audiencia_id:
+            audiencias[i]["mensagens_enviadas"] = enviados
+            break
+    _save_audiencias(audiencias)
+
+    logger.info(f"[audiencia] Envio concluído — {audiencia['nome_cliente']} | {len(resultados)} resultado(s)")
+    return {"status": "ok", "resultados": resultados}
+
+
+# ── HELPERS DE ENVIO AUDIÊNCIA ────────────────────────────────
+
+def _substituir_placeholders(texto: str, audiencia: dict) -> str:
+    """Substitui placeholders [NOME], [DATA], [ZOOM], etc. no texto da mensagem."""
+    data_raw = audiencia.get("data", "")
+    data_fmt = data_raw
+    if data_raw and "-" in data_raw:
+        try:
+            data_fmt = data_raw.split("-")[2] + "/" + data_raw.split("-")[1] + "/" + data_raw.split("-")[0]
+        except IndexError:
+            pass
+
+    texto = texto.replace("[NOME]", audiencia.get("nome_cliente", ""))
+    texto = texto.replace("[DATA]", data_fmt)
+    texto = texto.replace("[HORARIO]", audiencia.get("horario", ""))
+    texto = texto.replace("[ENDERECO]", audiencia.get("endereco", ""))
+    texto = texto.replace("[ZOOM]", audiencia.get("link_zoom", ""))
+    texto = texto.replace("[TELEFONE]", audiencia.get("telefone", ""))
+    texto = texto.replace("[TIPO]", audiencia.get("tipo_audiencia", ""))
+    return texto
+
+
+async def _buscar_ou_criar_conversa(http: httpx.AsyncClient, chatwoot_url: str, token: str,
+                                     account_id: int, inbox_id: int,
+                                     nome: str, telefone: str) -> int:
+    """Busca contato por telefone no Chatwoot. Se não existe, cria. Depois busca/cria conversa."""
+    headers = {"api_access_token": token, "Content-Type": "application/json"}
+
+    # 1. Buscar contato pelo telefone
+    search_url = f"{chatwoot_url}/api/v1/accounts/{account_id}/contacts/search"
+    resp = await http.get(search_url, params={"q": telefone}, headers={"api_access_token": token})
+    contact_id = None
+    if resp.is_success:
+        contatos = resp.json().get("payload", [])
+        for c in contatos:
+            if c.get("phone_number", "").replace("+", "").replace(" ", "") == telefone.replace("+", "").replace(" ", ""):
+                contact_id = c["id"]
+                break
+
+    # 2. Se não encontrou, criar contato
+    if not contact_id:
+        resp = await http.post(
+            f"{chatwoot_url}/api/v1/accounts/{account_id}/contacts",
+            headers=headers,
+            json={"name": nome, "phone_number": telefone, "inbox_id": inbox_id},
+        )
+        if resp.is_success:
+            contact_id = resp.json().get("id") or resp.json().get("payload", {}).get("contact", {}).get("id")
+        if not contact_id:
+            raise Exception(f"Falha ao criar contato: {resp.status_code} {resp.text}")
+
+    # 3. Buscar conversa existente do contato neste inbox
+    resp = await http.get(
+        f"{chatwoot_url}/api/v1/accounts/{account_id}/contacts/{contact_id}/conversations",
+        headers={"api_access_token": token},
+    )
+    if resp.is_success:
+        conversas = resp.json().get("payload", [])
+        for conv in conversas:
+            if conv.get("inbox_id") == inbox_id:
+                return conv["id"]
+
+    # 4. Criar nova conversa
+    resp = await http.post(
+        f"{chatwoot_url}/api/v1/accounts/{account_id}/conversations",
+        headers=headers,
+        json={"contact_id": contact_id, "inbox_id": inbox_id},
+    )
+    if resp.is_success:
+        return resp.json().get("id")
+
+    raise Exception(f"Falha ao criar conversa: {resp.status_code} {resp.text}")
+
+
+async def _enviar_template_audiencia_http(http: httpx.AsyncClient, chatwoot_url: str, token: str,
+                                           account_id: int, conversation_id: int, template_name: str):
+    """Envia template WhatsApp via Chatwoot (reutiliza httpx client)."""
+    url = f"{chatwoot_url}/api/v1/accounts/{account_id}/conversations/{conversation_id}/messages"
+    headers = {"api_access_token": token, "Content-Type": "application/json"}
+    r = await http.post(url, headers=headers, json={
+        "message_type": "outgoing",
+        "private": False,
+        "template_params": {
+            "name": template_name,
+            "language": "pt_BR",
+            "processed_params": {},
+        },
+    })
+    if not r.is_success:
+        raise Exception(f"Erro ao enviar template: {r.status_code} {r.text}")
+
+
+async def _enviar_texto_audiencia_http(http: httpx.AsyncClient, chatwoot_url: str, token: str,
+                                        account_id: int, conversation_id: int, texto: str):
+    """Envia mensagem de texto livre (reutiliza httpx client)."""
+    url = f"{chatwoot_url}/api/v1/accounts/{account_id}/conversations/{conversation_id}/messages"
+    headers = {"api_access_token": token, "Content-Type": "application/json"}
+    r = await http.post(url, headers=headers, json={
+        "content": texto,
+        "message_type": "outgoing",
+        "private": False,
+    })
+    if not r.is_success:
+        raise Exception(f"Erro ao enviar mensagem: {r.status_code} {r.text}")
+
+
+async def _enviar_nota_privada_http(http: httpx.AsyncClient, chatwoot_url: str, token: str,
+                                     account_id: int, conversation_id: int, texto: str):
+    """Envia nota privada na conversa do Chatwoot."""
+    url = f"{chatwoot_url}/api/v1/accounts/{account_id}/conversations/{conversation_id}/messages"
+    headers = {"api_access_token": token, "Content-Type": "application/json"}
+    await http.post(url, headers=headers, json={
+        "content": texto,
+        "message_type": "outgoing",
+        "private": True,
+    })

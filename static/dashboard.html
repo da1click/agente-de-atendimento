@@ -3,1128 +3,2486 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Da1Click — Painel de Clientes</title>
+  <title>Da1Click — Painel Admin</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-    body {
-      font-family: 'Inter', system-ui, sans-serif;
-      background: #f5f6fa;
-      color: #1a1a2e;
-      min-height: 100vh;
+    :root {
+      --purple: #6c63ff;
+      --purple-light: #eeecff;
+      --purple-dark: #5a52e0;
+      --bg: #f5f6fa;
+      --surface: #ffffff;
+      --border: #e8eaf0;
+      --text: #1a1a2e;
+      --text-secondary: #6b7280;
+      --text-muted: #b0b3c6;
+      --green: #22c55e;
+      --red: #ef4444;
+      --yellow: #f59e0b;
+      --sidebar-w: 220px;
     }
 
-    /* SIDEBAR */
+    body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; }
+
+    /* ── SIDEBAR ── */
     .sidebar {
-      position: fixed;
-      top: 0; left: 0;
-      width: 240px;
-      height: 100vh;
-      background: #ffffff;
-      border-right: 1px solid #e8eaf0;
-      display: flex;
-      flex-direction: column;
-      padding: 0;
-      z-index: 100;
-    }
-
-    .sidebar-header {
-      padding: 24px 20px 20px;
-      border-bottom: 1px solid #e8eaf0;
+      position: fixed; top: 0; left: 0;
+      width: var(--sidebar-w); height: 100vh;
+      background: var(--surface); border-right: 1px solid var(--border);
+      display: flex; flex-direction: column; z-index: 100; overflow-y: auto;
     }
 
     .sidebar-logo {
-      font-size: 15px;
-      font-weight: 700;
-      color: #1a1a2e;
-      letter-spacing: -0.3px;
+      padding: 20px 16px 16px;
+      border-bottom: 1px solid var(--border);
     }
+    .sidebar-logo-text { font-size: 15px; font-weight: 800; color: var(--text); letter-spacing: -0.3px; }
+    .sidebar-logo-text span { color: var(--purple); }
+    .sidebar-logo-sub { font-size: 10px; color: var(--text-muted); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.6px; }
 
-    .sidebar-logo span {
-      color: #6c63ff;
+    .nav-section { padding: 16px 8px 4px; }
+    .nav-section-label { font-size: 9px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.9px; padding: 0 8px; margin-bottom: 4px; }
+
+    .nav-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 10px; border-radius: 8px; cursor: pointer;
+      transition: background 0.15s; margin-bottom: 1px; user-select: none;
     }
+    .nav-item:hover { background: var(--bg); }
+    .nav-item.active { background: var(--purple-light); }
+    .nav-item.active .nav-label { color: var(--purple); font-weight: 600; }
+    .nav-item.active .nav-icon { color: var(--purple); }
+    .nav-icon { width: 16px; height: 16px; flex-shrink: 0; color: var(--text-muted); }
+    .nav-item.active .nav-icon svg { stroke: var(--purple); }
+    .nav-icon svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .nav-label { font-size: 13px; color: var(--text-secondary); font-weight: 500; }
+    .nav-badge { margin-left: auto; background: var(--purple); color: #fff; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 20px; }
 
-    .sidebar-subtitle {
-      font-size: 11px;
-      color: #8b8fa8;
-      margin-top: 3px;
+    .sidebar-footer { margin-top: auto; padding: 12px 8px; border-top: 1px solid var(--border); }
+    .btn-new-account {
+      width: 100%; padding: 8px; border-radius: 8px;
+      border: 1.5px dashed var(--border); background: transparent;
+      color: var(--purple); font-size: 12px; font-weight: 500;
+      cursor: pointer; transition: all 0.15s; margin-bottom: 6px;
     }
+    .btn-new-account:hover { background: var(--purple-light); border-style: solid; }
 
-    .sidebar-section {
-      padding: 16px 12px 8px;
-    }
-
-    .sidebar-section-label {
-      font-size: 10px;
-      font-weight: 600;
-      color: #b0b3c6;
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-      padding: 0 8px;
-      margin-bottom: 6px;
-    }
-
-    .client-item {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 9px 12px;
-      border-radius: 8px;
-      cursor: pointer;
-      transition: background 0.15s;
-      margin-bottom: 2px;
-    }
-
-    .client-item:hover { background: #f5f6fa; }
-    .client-item.active { background: #eeecff; }
-    .client-item.active .client-name { color: #6c63ff; font-weight: 600; }
-
-    .client-badge {
-      width: 30px;
-      height: 30px;
-      border-radius: 8px;
-      background: #e8e6ff;
-      color: #6c63ff;
-      font-size: 11px;
-      font-weight: 700;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-    }
-
-    .client-item.active .client-badge {
-      background: #6c63ff;
-      color: #fff;
-    }
-
-    .client-name {
-      font-size: 13px;
-      color: #3d3d5c;
-      font-weight: 500;
-    }
-
-    .status-dot {
-      width: 6px;
-      height: 6px;
-      border-radius: 50%;
-      margin-left: auto;
-      flex-shrink: 0;
-    }
-    .status-dot.on { background: #22c55e; }
-    .status-dot.off { background: #d1d5db; }
-
-    .sidebar-footer {
-      margin-top: auto;
-      padding: 16px 12px;
-      border-top: 1px solid #e8eaf0;
-    }
-
-    .btn-new {
-      width: 100%;
-      padding: 9px;
-      border-radius: 8px;
-      border: 1.5px dashed #c5c2e8;
-      background: transparent;
-      color: #6c63ff;
-      font-size: 13px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.15s;
-    }
-    .btn-new:hover { background: #eeecff; border-style: solid; }
-
-    /* MAIN */
-    .main {
-      margin-left: 240px;
-      padding: 32px 36px;
-      min-height: 100vh;
-    }
+    /* ── MAIN ── */
+    .main { margin-left: var(--sidebar-w); flex: 1; min-height: 100vh; }
 
     .topbar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 28px;
+      position: sticky; top: 0; z-index: 50;
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      padding: 0 28px; height: 52px;
+      display: flex; align-items: center; gap: 12px;
     }
+    .topbar-title { font-size: 14px; font-weight: 600; color: var(--text); }
+    .topbar-sub { font-size: 12px; color: var(--text-muted); }
+    .topbar-sep { color: var(--border); }
 
-    .page-title {
-      font-size: 20px;
-      font-weight: 700;
-      color: #1a1a2e;
-    }
+    .page { padding: 24px 28px; }
 
-    .page-sub {
-      font-size: 13px;
-      color: #8b8fa8;
-      margin-top: 2px;
-    }
-
-    /* EMPTY STATE */
-    .empty-state {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 60vh;
-      color: #b0b3c6;
-      text-align: center;
-    }
-    .empty-state svg { margin-bottom: 16px; opacity: 0.4; }
-    .empty-state p { font-size: 14px; }
-
-    /* FORM CARD */
+    /* ── CARDS ── */
     .card {
-      background: #fff;
-      border: 1px solid #e8eaf0;
-      border-radius: 14px;
-      padding: 28px;
-      max-width: 680px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 24px;
     }
+    .card + .card { margin-top: 16px; }
 
     .card-header {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      margin-bottom: 24px;
-      padding-bottom: 20px;
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 20px; padding-bottom: 16px;
       border-bottom: 1px solid #f0f0f5;
     }
-
     .card-icon {
-      width: 44px;
-      height: 44px;
-      border-radius: 12px;
-      background: #eeecff;
-      color: #6c63ff;
-      font-size: 18px;
-      font-weight: 800;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      width: 38px; height: 38px; border-radius: 10px;
+      background: var(--purple-light); color: var(--purple);
+      font-size: 14px; font-weight: 800;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
     }
+    .card-title { font-size: 15px; font-weight: 700; }
+    .card-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
 
-    .card-title {
-      font-size: 17px;
-      font-weight: 700;
-      color: #1a1a2e;
-    }
-
-    .card-id {
-      font-size: 12px;
-      color: #8b8fa8;
-      margin-top: 2px;
-    }
-
-    .toggle-wrapper {
-      margin-left: auto;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .toggle-label {
-      font-size: 12px;
-      color: #8b8fa8;
-    }
-
-    .toggle {
-      position: relative;
-      width: 40px;
-      height: 22px;
-    }
-
-    .toggle input { opacity: 0; width: 0; height: 0; }
-
-    .toggle-slider {
-      position: absolute;
-      inset: 0;
-      background: #d1d5db;
-      border-radius: 22px;
-      cursor: pointer;
-      transition: 0.2s;
-    }
-
-    .toggle-slider::before {
-      content: '';
-      position: absolute;
-      width: 16px; height: 16px;
-      left: 3px; bottom: 3px;
-      background: white;
-      border-radius: 50%;
-      transition: 0.2s;
-    }
-
-    .toggle input:checked + .toggle-slider { background: #6c63ff; }
-    .toggle input:checked + .toggle-slider::before { transform: translateX(18px); }
-
-    /* FIELDS */
-    .fields-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px;
-    }
-
-    .field-group {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-
+    /* ── GRID FIELDS ── */
+    .fields-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .field-group { display: flex; flex-direction: column; gap: 5px; }
     .field-group.full { grid-column: 1 / -1; }
-
-    label {
-      font-size: 12px;
-      font-weight: 600;
-      color: #6b7280;
-      letter-spacing: 0.2px;
+    label { font-size: 11px; font-weight: 600; color: var(--text-secondary); letter-spacing: 0.2px; }
+    input[type="text"], input[type="password"], input[type="number"], select, textarea {
+      padding: 9px 11px; border: 1.5px solid var(--border); border-radius: 8px;
+      font-size: 13px; color: var(--text); background: #fafafa;
+      outline: none; transition: border-color 0.15s, background 0.15s; width: 100%;
+      font-family: inherit;
     }
+    textarea { resize: vertical; min-height: 80px; }
+    input:focus, select:focus, textarea:focus { border-color: var(--purple); background: #fff; }
+    .field-hint { font-size: 11px; color: var(--text-muted); }
+    .secret-wrapper { position: relative; }
+    .secret-wrapper input { padding-right: 38px; }
+    .eye-btn { position: absolute; right: 9px; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 14px; padding: 2px; }
+    .eye-btn:hover { color: var(--purple); }
 
-    input[type="text"],
-    input[type="password"],
-    input[type="number"] {
-      padding: 10px 13px;
-      border: 1.5px solid #e5e7eb;
-      border-radius: 8px;
-      font-size: 13px;
-      color: #1a1a2e;
-      background: #fafafa;
-      outline: none;
-      transition: border-color 0.15s, background 0.15s;
-      width: 100%;
-    }
+    /* ── TOGGLE ── */
+    .toggle-wrapper { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+    .toggle-label { font-size: 12px; color: var(--text-muted); }
+    .toggle { position: relative; width: 36px; height: 20px; }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider { position: absolute; inset: 0; background: #d1d5db; border-radius: 20px; cursor: pointer; transition: 0.2s; }
+    .toggle-slider::before { content: ''; position: absolute; width: 14px; height: 14px; left: 3px; bottom: 3px; background: white; border-radius: 50%; transition: 0.2s; }
+    .toggle input:checked + .toggle-slider { background: var(--purple); }
+    .toggle input:checked + .toggle-slider::before { transform: translateX(16px); }
 
-    input:focus {
-      border-color: #6c63ff;
-      background: #fff;
-    }
-
-    .field-hint {
-      font-size: 11px;
-      color: #b0b3c6;
-    }
-
-    .secret-wrapper {
-      position: relative;
-    }
-
-    .secret-wrapper input {
-      padding-right: 40px;
-    }
-
-    .eye-btn {
-      position: absolute;
-      right: 10px;
-      top: 50%;
-      transform: translateY(-50%);
-      background: none;
-      border: none;
-      cursor: pointer;
-      color: #b0b3c6;
-      font-size: 15px;
-      padding: 2px;
-    }
-    .eye-btn:hover { color: #6c63ff; }
-
-    /* DIVIDER */
+    /* ── SECTION DIVIDER ── */
     .section-divider {
-      margin: 20px 0 16px;
-      font-size: 11px;
-      font-weight: 700;
-      color: #b0b3c6;
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
+      margin: 18px 0 14px; font-size: 10px; font-weight: 700;
+      color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.8px;
+      display: flex; align-items: center; gap: 8px;
     }
-    .section-divider::after {
-      content: '';
-      flex: 1;
-      height: 1px;
-      background: #f0f0f5;
-    }
+    .section-divider::after { content: ''; flex: 1; height: 1px; background: #f0f0f5; }
 
-    /* ACTIONS */
-    .card-actions {
-      margin-top: 24px;
-      display: flex;
-      gap: 10px;
-      align-items: center;
-    }
+    /* ── BUTTONS ── */
+    .btn { padding: 9px 18px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; transition: all 0.15s; font-family: inherit; }
+    .btn-primary { background: var(--purple); color: #fff; }
+    .btn-primary:hover { background: var(--purple-dark); }
+    .btn-primary:active { transform: scale(0.98); }
+    .btn-secondary { background: transparent; border: 1.5px solid var(--border); color: var(--text-secondary); }
+    .btn-secondary:hover { border-color: #d1d5db; background: #f9fafb; }
+    .btn-danger { background: var(--red); color: #fff; }
+    .btn-danger:hover { background: #dc2626; }
+    .btn-ghost { background: transparent; border: none; color: var(--text-muted); padding: 6px 10px; }
+    .btn-ghost:hover { color: var(--text); background: var(--bg); }
+    .btn.loading { opacity: 0.65; cursor: not-allowed; pointer-events: none; }
 
-    .btn-save {
-      padding: 10px 22px;
-      border-radius: 8px;
-      border: none;
-      background: #6c63ff;
-      color: #fff;
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.15s, transform 0.1s;
-    }
-    .btn-save:hover { background: #5a52e0; }
-    .btn-save:active { transform: scale(0.98); }
-
-    .btn-cancel {
-      padding: 10px 18px;
-      border-radius: 8px;
-      border: 1.5px solid #e5e7eb;
-      background: transparent;
-      color: #6b7280;
-      font-size: 13px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: all 0.15s;
-    }
-    .btn-cancel:hover { border-color: #d1d5db; background: #f9fafb; }
-
-    .save-msg {
-      font-size: 12px;
-      color: #22c55e;
-      font-weight: 500;
-      margin-left: 4px;
-      opacity: 0;
-      transition: opacity 0.3s;
-    }
+    .card-actions { margin-top: 20px; display: flex; gap: 10px; align-items: center; }
+    .save-msg { font-size: 12px; color: var(--green); font-weight: 500; opacity: 0; transition: opacity 0.3s; }
     .save-msg.show { opacity: 1; }
 
-    /* MODAL */
-    .modal-overlay {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.35);
-      z-index: 200;
-      align-items: center;
-      justify-content: center;
-    }
+    /* ── STATUS BADGES ── */
+    .badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+    .badge-green { background: #f0fdf4; color: #166534; }
+    .badge-yellow { background: #fffbeb; color: #92400e; }
+    .badge-red { background: #fef2f2; color: #991b1b; }
+    .badge-gray { background: #f3f4f6; color: #374151; }
+    .badge-purple { background: var(--purple-light); color: var(--purple); }
+
+    /* ── TABLE ── */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { text-align: left; padding: 10px 12px; font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border); }
+    td { padding: 11px 12px; border-bottom: 1px solid #f5f6fa; vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #fafbff; }
+    .td-name { font-weight: 500; color: var(--text); }
+    .td-actions { display: flex; gap: 6px; justify-content: flex-end; }
+    .btn-icon { background: none; border: none; cursor: pointer; padding: 5px; border-radius: 6px; color: var(--text-muted); transition: all 0.15s; }
+    .btn-icon:hover { background: var(--bg); color: var(--text); }
+    .btn-icon.danger:hover { color: var(--red); background: #fef2f2; }
+    .btn-icon svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; display: block; }
+
+    /* ── MODAL ── */
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 300; align-items: center; justify-content: center; }
     .modal-overlay.open { display: flex; }
-
-    .modal {
-      background: #fff;
-      border-radius: 14px;
-      padding: 28px;
-      width: 380px;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.12);
-    }
-
-    .modal h3 {
-      font-size: 16px;
-      font-weight: 700;
-      margin-bottom: 20px;
-      color: #1a1a2e;
-    }
-
-    .modal .fields-grid { grid-template-columns: 1fr; }
-
-    .modal-actions {
-      display: flex;
-      gap: 10px;
-      margin-top: 20px;
-    }
-
-    .modal-error {
-      font-size: 12px;
-      color: #ef4444;
-      background: #fef2f2;
-      border: 1px solid #fecaca;
-      border-radius: 6px;
-      padding: 8px 12px;
-      margin-top: 12px;
-      display: none;
-    }
+    .modal { background: var(--surface); border-radius: 14px; padding: 24px; box-shadow: 0 20px 60px rgba(0,0,0,0.12); max-height: 90vh; overflow-y: auto; }
+    .modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+    .modal-header h3 { font-size: 16px; font-weight: 700; }
+    .modal-close { background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 20px; line-height: 1; padding: 2px 6px; border-radius: 6px; }
+    .modal-close:hover { background: var(--bg); color: var(--text); }
+    .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+    .modal-error { font-size: 12px; color: var(--red); background: #fef2f2; border: 1px solid #fecaca; border-radius: 6px; padding: 8px 12px; margin-top: 12px; display: none; }
     .modal-error.show { display: block; }
 
-    .btn-save.loading {
-      opacity: 0.7;
-      cursor: not-allowed;
-    }
+    /* ── EMPTY STATE ── */
+    .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 20px; color: var(--text-muted); text-align: center; }
+    .empty-state svg { margin-bottom: 14px; opacity: 0.35; }
+    .empty-state p { font-size: 14px; }
+    .empty-state .empty-sub { font-size: 12px; margin-top: 4px; }
 
-    /* CRIADOR DE USUÁRIOS */
-    .usuario-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 8px;
-    }
+    /* ── COMING SOON ── */
+    .coming-soon { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 60vh; }
+    .coming-soon-icon { font-size: 42px; margin-bottom: 16px; }
+    .coming-soon h2 { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+    .coming-soon p { font-size: 13px; color: var(--text-muted); }
 
-    .usuario-row input[type="text"] {
-      flex: 1;
+    /* ── TEMPLATE PREVIEW ── */
+    .template-preview {
+      background: #f0f4f8; border-radius: 10px; padding: 14px;
+      max-width: 320px; font-size: 13px; line-height: 1.5;
     }
+    .tpl-header-preview { font-weight: 700; margin-bottom: 6px; }
+    .tpl-body-preview { color: #374151; white-space: pre-wrap; }
+    .tpl-footer-preview { color: var(--text-muted); font-size: 11px; margin-top: 6px; }
+    .tpl-buttons-preview { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; border-top: 1px solid #d1d5db; padding-top: 8px; }
+    .tpl-btn-preview { text-align: center; color: var(--purple); font-size: 12px; font-weight: 500; padding: 4px; border-radius: 4px; background: #fff; }
 
-    .role-toggle {
-      display: flex;
-      border: 1.5px solid #e5e7eb;
-      border-radius: 7px;
-      overflow: hidden;
-      flex-shrink: 0;
+    /* ── BUTTON ROWS (template form) ── */
+    .btn-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .btn-row-type { flex-shrink: 0; }
+    .btn-row select { min-width: 120px; }
+    .btn-row input { flex: 1; }
+    .btn-remove-row { background: none; border: none; color: var(--text-muted); font-size: 18px; cursor: pointer; padding: 0 4px; line-height: 1; flex-shrink: 0; }
+    .btn-remove-row:hover { color: var(--red); }
+    .btn-add-row { background: transparent; border: 1.5px dashed var(--border); border-radius: 7px; color: var(--purple); font-size: 12px; font-weight: 500; padding: 7px; cursor: pointer; width: 100%; margin-top: 4px; transition: all 0.15s; }
+    .btn-add-row:hover { background: var(--purple-light); }
+
+    /* ── ACCOUNT LIST (sidebar) ── */
+    .account-list-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 8px; border-radius: 7px; cursor: pointer;
+      transition: background 0.15s; margin-bottom: 1px;
     }
+    .account-list-item:hover { background: var(--bg); }
+    .account-list-item.active { background: var(--purple-light); }
+    .account-list-item.active .acl-name { color: var(--purple); font-weight: 600; }
+    .acl-badge { width: 24px; height: 24px; border-radius: 6px; background: #e8e6ff; color: var(--purple); font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .account-list-item.active .acl-badge { background: var(--purple); color: #fff; }
+    .acl-name { font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .acl-dot { width: 5px; height: 5px; border-radius: 50%; margin-left: auto; flex-shrink: 0; }
+    .acl-dot.on { background: var(--green); }
+    .acl-dot.off { background: var(--text-muted); }
 
-    .role-toggle input[type="radio"] { display: none; }
+    .template-search { display: flex; gap: 10px; margin-bottom: 16px; }
+    .template-search input { flex: 1; }
+    .template-count { font-size: 12px; color: var(--text-muted); margin-bottom: 12px; }
 
-    .role-toggle label {
-      padding: 7px 11px;
-      font-size: 11px;
-      font-weight: 600;
-      color: #6b7280;
-      cursor: pointer;
-      background: #fafafa;
-      transition: all 0.15s;
-      letter-spacing: 0.1px;
+    /* ── TEMPLATE VIEW MODAL ── */
+    .mvt-badges { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+    .mvt-field  { font-size: 11px; color: var(--text-muted); }
+
+    .wapp-bg {
+      background: #e5ddd5 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400'%3E%3C/svg%3E");
+      border-radius: 10px; padding: 16px; display: flex; flex-direction: column; align-items: flex-start;
     }
-
-    .role-toggle input[type="radio"]:checked + label {
-      background: #6c63ff;
-      color: #fff;
+    .wapp-bubble {
+      background: #fff; border-radius: 0 10px 10px 10px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.15); max-width: 300px; overflow: hidden;
+      font-size: 13px; line-height: 1.5; position: relative;
     }
-
-    .btn-remove-row {
-      background: none;
-      border: none;
-      color: #d1d5db;
-      font-size: 18px;
-      cursor: pointer;
-      padding: 0 4px;
-      line-height: 1;
-      flex-shrink: 0;
+    .wapp-bubble::before {
+      content: ''; position: absolute; top: 0; left: -8px;
+      border: 8px solid transparent; border-right-color: #fff; border-top-color: #fff;
     }
-    .btn-remove-row:hover { color: #ef4444; }
-
-    .btn-add-email {
-      width: 100%;
-      padding: 8px;
-      border: 1.5px dashed #c5c2e8;
-      border-radius: 7px;
-      background: transparent;
-      color: #6c63ff;
-      font-size: 12px;
-      font-weight: 500;
-      cursor: pointer;
-      margin-top: 4px;
-      transition: all 0.15s;
+    .wapp-img { width: 100%; max-height: 160px; object-fit: cover; display: block; background: #d1d5db; }
+    .wapp-img-placeholder {
+      width: 100%; height: 120px; background: #d1d5db;
+      display: flex; align-items: center; justify-content: center;
+      flex-direction: column; gap: 6px; color: #6b7280; font-size: 12px;
     }
-    .btn-add-email:hover { background: #eeecff; }
-
-    .resultado-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 7px 10px;
-      border-radius: 7px;
-      font-size: 12px;
-      margin-bottom: 6px;
+    .wapp-body  { padding: 8px 10px; white-space: pre-wrap; word-break: break-word; }
+    .wapp-header-text { padding: 8px 10px 4px; font-weight: 700; color: #111; }
+    .wapp-footer { padding: 2px 10px 6px; font-size: 11px; color: #6b7280; }
+    .wapp-buttons { border-top: 1px solid #e5e7eb; }
+    .wapp-btn {
+      display: flex; align-items: center; justify-content: center; gap: 5px;
+      padding: 8px 10px; font-size: 13px; color: #00a5f4; font-weight: 500;
+      border-bottom: 1px solid #f3f4f6; cursor: default;
     }
-    .resultado-item.criado { background: #f0fdf4; color: #166534; }
-    .resultado-item.vinculado { background: #eff6ff; color: #1e40af; }
-    .resultado-item.erro { background: #fef2f2; color: #991b1b; }
+    .wapp-btn:last-child { border-bottom: none; }
+    .wapp-time { text-align: right; padding: 0 8px 5px; font-size: 10px; color: #aaa; }
 
-    .resultado-senha {
-      margin-left: auto;
-      display: flex;
-      align-items: center;
-      gap: 6px;
+    /* ── SCHEDULE GRID ── */
+    .schedule-grid { display: flex; flex-direction: column; gap: 5px; }
+    .schedule-row {
+      display: flex; align-items: center; gap: 10px;
+      padding: 7px 12px; border-radius: 8px;
+      background: #fafafa; border: 1.5px solid var(--border);
+      transition: border-color 0.15s;
     }
+    .schedule-row.day-on { border-color: #c4b5fd; background: #faf9ff; }
+    .schedule-day { width: 36px; font-size: 12px; font-weight: 700; color: var(--text-secondary); flex-shrink: 0; }
+    .schedule-times { display: flex; align-items: center; gap: 6px; flex: 1; }
+    .schedule-times input[type="time"] { width: 108px; padding: 5px 8px; font-size: 13px; border: 1.5px solid var(--border); border-radius: 7px; background: #fff; outline: none; font-family: inherit; }
+    .schedule-times input[type="time"]:focus { border-color: var(--purple); }
+    .schedule-sep { font-size: 11px; color: var(--text-muted); font-weight: 500; flex-shrink: 0; }
+    .schedule-closed { font-size: 12px; color: var(--text-muted); font-style: italic; flex: 1; }
 
-    .resultado-senha code {
-      background: rgba(0,0,0,0.08);
-      padding: 2px 7px;
-      border-radius: 4px;
-      font-size: 12px;
-      letter-spacing: 0.5px;
-    }
+    /* ── AUDIÊNCIA PAGE TABS ── */
+    .page-tabs { display: flex; gap: 0; margin-bottom: 24px; border-bottom: 2px solid var(--border); }
+    .page-tab { padding: 10px 20px; font-size: 13px; font-weight: 600; color: var(--text-muted); background: none; border: none; border-bottom: 2px solid transparent; margin-bottom: -2px; cursor: pointer; transition: all 0.15s; }
+    .page-tab:hover { color: var(--text); }
+    .page-tab.active { color: var(--purple); border-bottom-color: var(--purple); }
 
-    .btn-copy-mini {
-      border: none;
-      background: rgba(0,0,0,0.1);
-      border-radius: 4px;
-      padding: 2px 7px;
-      font-size:10px;
-      cursor: pointer;
-      color: inherit;
-    }
-    .btn-copy-mini:hover { background: rgba(0,0,0,0.18); }
-
-    .btn-delete {
-      margin-left: 8px;
-      background: none;
-      border: 1.5px solid #fecaca;
-      border-radius: 8px;
-      color: #ef4444;
-      padding: 8px 12px;
-      font-size: 15px;
-      cursor: pointer;
-      transition: all 0.15s;
-      line-height: 1;
-    }
-    .btn-delete:hover { background: #fef2f2; border-color: #ef4444; }
-
-    .modal-confirm { text-align: center; }
-    .modal-confirm .warn-icon { font-size: 36px; margin-bottom: 12px; }
-    .modal-confirm p { font-size: 13px; color: #6b7280; margin-bottom: 6px; }
-    .modal-confirm strong { color: #1a1a2e; }
-    .btn-danger {
-      padding: 10px 22px;
-      border-radius: 8px;
-      border: none;
-      background: #ef4444;
-      color: #fff;
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.15s;
-    }
-    .btn-danger:hover { background: #dc2626; }
+    /* ── STATS CARDS ── */
+    .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px 24px; }
+    .stat-label { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 8px; }
+    .stat-value { font-size: 32px; font-weight: 800; color: var(--text); line-height: 1; margin-bottom: 4px; }
+    .stat-sub { font-size: 12px; color: var(--text-muted); }
   </style>
 </head>
 <body>
 
-<div class="sidebar">
-  <div class="sidebar-header">
-    <div class="sidebar-logo">Da1<span>Click</span></div>
-    <div class="sidebar-subtitle">Painel de Clientes</div>
+<!-- ── SIDEBAR ── -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <div class="sidebar-logo-text">Da1<span>Click</span></div>
+    <div class="sidebar-logo-sub">Painel Admin</div>
   </div>
 
-  <div class="sidebar-section">
-    <div class="sidebar-section-label">Contas</div>
-    <div id="client-list"></div>
+  <!-- Accounts list inside sidebar -->
+  <div class="nav-section">
+    <div class="nav-section-label">Contas</div>
+    <div id="sidebar-accounts"></div>
+  </div>
+
+  <!-- Main navigation -->
+  <div class="nav-section" style="margin-top:8px;">
+    <div class="nav-section-label">Ferramentas</div>
+    <div class="nav-item" id="nav-templates" onclick="navTo('templates')">
+      <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
+      <span class="nav-label">Templates Meta</span>
+    </div>
+    <div class="nav-item" id="nav-inatividade" onclick="navTo('inatividade')">
+      <span class="nav-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
+      <span class="nav-label">Inatividade</span>
+    </div>
+    <div class="nav-item" id="nav-agentes" onclick="navTo('agentes')">
+      <span class="nav-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/></svg></span>
+      <span class="nav-label">Agentes IA</span>
+    </div>
+    <div class="nav-item" id="nav-relatorios" onclick="navTo('relatorios')">
+      <span class="nav-icon"><svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span>
+      <span class="nav-label">Relatórios</span>
+    </div>
+    <div class="nav-item" id="nav-audiencias" onclick="navTo('audiencias')">
+      <span class="nav-icon"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span>
+      <span class="nav-label">Aviso de Audiência</span>
+    </div>
+  </div>
+
+  <div class="nav-section" style="margin-top:8px;">
+    <div class="nav-section-label">Sistema</div>
+    <div class="nav-item" id="nav-config" onclick="navTo('config')">
+      <span class="nav-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg></span>
+      <span class="nav-label">Configurações</span>
+    </div>
   </div>
 
   <div class="sidebar-footer">
-    <button class="btn-new" onclick="abrirModalChatwoot()" style="margin-bottom:8px;">+ Criar no Chatwoot</button>
-    <button class="btn-new" onclick="abrirModalUsuarios()">+ Criador de Usuários</button>
+    <button class="btn-new-account" onclick="abrirModalChatwoot()" style="margin-bottom:6px;">+ Criar no Chatwoot</button>
+    <button class="btn-new-account" onclick="abrirModalUsuarios()">+ Criador de Usuários</button>
   </div>
-</div>
+</aside>
 
-<div class="main">
+<!-- ── MAIN ── -->
+<main class="main">
   <div class="topbar">
-    <div>
-      <div class="page-title" id="page-title">Selecione uma conta</div>
-      <div class="page-sub" id="page-sub">Clique em uma conta na barra lateral para editar</div>
-    </div>
+    <span class="topbar-title" id="topbar-title">Painel Da1Click</span>
+    <span class="topbar-sep">·</span>
+    <span class="topbar-sub" id="topbar-sub">Selecione uma conta</span>
   </div>
+  <div class="page" id="page-content"></div>
+</main>
 
-  <div id="content">
-    <div class="empty-state">
-      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-        <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
-      </svg>
-      <p>Selecione uma conta para ver as configurações</p>
-    </div>
-  </div>
-</div>
 
-<!-- MODAL CONFIRMAR EXCLUSÃO -->
+<!-- ══════════════════════════════════════════════
+     MODAIS
+══════════════════════════════════════════════ -->
+
+<!-- CONFIRMAR EXCLUSÃO CONTA -->
 <div class="modal-overlay" id="modal-deletar">
-  <div class="modal modal-confirm" style="width:360px;">
-    <div class="warn-icon">🗑️</div>
-    <h3 style="margin-bottom:8px;">Remover conta?</h3>
-    <p>Isso vai excluir <strong id="deletar-nome"></strong> do Chatwoot</p>
-    <p style="color:#ef4444;font-size:11px;margin-top:4px;">Esta ação não pode ser desfeita.</p>
-    <div class="modal-actions" style="justify-content:center;margin-top:20px;">
-      <button class="btn-danger" id="btn-confirmar-delete" onclick="confirmarDeletar()">Sim, remover</button>
-      <button class="btn-cancel" onclick="document.getElementById('modal-deletar').classList.remove('open')">Cancelar</button>
+  <div class="modal" style="width:340px;">
+    <div style="text-align:center;padding:8px 0 16px;">
+      <div style="font-size:36px;margin-bottom:12px;">🗑️</div>
+      <h3 style="font-size:16px;font-weight:700;margin-bottom:8px;">Remover conta?</h3>
+      <p style="font-size:13px;color:var(--text-secondary);">Isso vai excluir <strong id="deletar-nome"></strong> do Chatwoot e do Supabase.</p>
+      <p style="font-size:11px;color:var(--red);margin-top:6px;">Esta ação não pode ser desfeita.</p>
+    </div>
+    <div class="modal-actions" style="justify-content:center;">
+      <button class="btn btn-danger" id="btn-confirmar-delete" onclick="confirmarDeletar()">Sim, remover</button>
+      <button class="btn btn-secondary" onclick="fecharModal('modal-deletar')">Cancelar</button>
     </div>
   </div>
 </div>
 
-<!-- MODAL CRIADOR DE USUÁRIOS -->
+<!-- CRIADOR DE USUÁRIOS -->
 <div class="modal-overlay" id="modal-usuarios">
-  <div class="modal" style="width:500px;max-height:90vh;overflow-y:auto;">
-    <h3>Criador de Usuários</h3>
-    <p style="font-size:12px;color:#8b8fa8;margin-bottom:18px;">Adicione quantos emails quiser. A senha será gerada automaticamente. Se o email já existir na plataforma, ele será vinculado à conta selecionada.</p>
+  <div class="modal" style="width:480px;">
+    <div class="modal-header">
+      <h3>Criador de Usuários</h3>
+      <button class="modal-close" onclick="fecharModal('modal-usuarios')">×</button>
+    </div>
+    <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px;">Adicione emails para criar/vincular à conta selecionada. Senha gerada automaticamente.</p>
 
     <div id="uu-form">
-      <div class="field-group" style="margin-bottom:16px;">
+      <div class="field-group" style="margin-bottom:14px;">
         <label>Conta</label>
-        <select id="uu-account" style="padding:10px 13px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:13px;color:#1a1a2e;background:#fafafa;width:100%;outline:none;">
-          <option value="">Selecione uma conta...</option>
-        </select>
+        <select id="uu-account"></select>
       </div>
-
-      <label style="margin-bottom:8px;display:block;">Usuários</label>
+      <label style="display:block;margin-bottom:8px;">Usuários</label>
       <div id="uu-lista"></div>
-      <button class="btn-add-email" onclick="adicionarLinhaUsuario()">+ Adicionar email</button>
-
-      <div class="modal-error" id="uu-error" style="margin-top:12px;"></div>
-      <div class="modal-actions" style="margin-top:16px;">
-        <button class="btn-save" id="btn-uu-criar" onclick="criarUsuarios()">Criar / Vincular</button>
-        <button class="btn-cancel" onclick="fecharModalUsuarios()">Cancelar</button>
+      <button class="btn-add-row" onclick="adicionarLinhaUsuario()">+ Adicionar email</button>
+      <div class="modal-error" id="uu-error"></div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="btn-uu-criar" onclick="criarUsuarios()">Criar / Vincular</button>
+        <button class="btn btn-secondary" onclick="fecharModal('modal-usuarios')">Cancelar</button>
       </div>
     </div>
-
     <div id="uu-resultados" style="display:none;">
       <div id="uu-resultados-lista"></div>
-      <div style="margin-top:16px;display:flex;gap:10px;">
-        <button class="btn-save" onclick="reiniciarModalUsuarios()">+ Adicionar mais</button>
-        <button class="btn-cancel" onclick="fecharModalUsuarios()">Fechar</button>
+      <div class="modal-actions">
+        <button class="btn btn-primary" onclick="reiniciarModalUsuarios()">+ Adicionar mais</button>
+        <button class="btn btn-secondary" onclick="fecharModal('modal-usuarios')">Fechar</button>
       </div>
     </div>
   </div>
 </div>
 
-<!-- MODAL CRIAR NO CHATWOOT -->
+<!-- CRIAR NO CHATWOOT -->
 <div class="modal-overlay" id="modal-chatwoot">
-  <div class="modal" style="width:420px;">
-    <h3>Criar Conta no Chatwoot</h3>
-    <p style="font-size:12px;color:#8b8fa8;margin-bottom:18px;">Conta criada em <strong>app.advbrasil.ai</strong> via Super Admin. A senha do admin será gerada automaticamente.</p>
+  <div class="modal" style="width:400px;">
+    <div class="modal-header">
+      <h3>Criar Conta no Chatwoot</h3>
+      <button class="modal-close" onclick="fecharModal('modal-chatwoot')">×</button>
+    </div>
+    <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px;">Conta criada em <strong>app.advbrasil.ai</strong>. Senha do admin gerada automaticamente.</p>
 
     <div id="cw-form">
-      <div class="fields-grid" style="gap:14px;">
-        <div class="field-group" style="grid-column:1/-1;">
-          <label>Nome da Conta</label>
-          <input type="text" id="cw-account-name" placeholder="Ex: Empresa XPTO" />
-        </div>
-        <div class="field-group" style="grid-column:1/-1;">
-          <label>Nome do Admin</label>
-          <input type="text" id="cw-admin-name" placeholder="Ex: João Silva" />
-        </div>
-        <div class="field-group" style="grid-column:1/-1;">
-          <label>Email do Admin</label>
-          <input type="text" id="cw-admin-email" placeholder="admin@empresa.com" />
-        </div>
+      <div class="fields-grid" style="gap:12px;">
+        <div class="field-group full"><label>Nome da Conta</label><input type="text" id="cw-account-name" placeholder="Ex: Empresa XPTO" /></div>
+        <div class="field-group full"><label>Nome do Admin</label><input type="text" id="cw-admin-name" placeholder="Ex: João Silva" /></div>
+        <div class="field-group full"><label>Email do Admin</label><input type="text" id="cw-admin-email" placeholder="admin@empresa.com" /></div>
       </div>
       <div class="modal-error" id="cw-error"></div>
       <div class="modal-actions">
-        <button class="btn-save" id="btn-cw-criar" onclick="criarContaChatwoot()">Criar Conta</button>
-        <button class="btn-cancel" onclick="fecharModalChatwoot()">Cancelar</button>
+        <button class="btn btn-primary" id="btn-cw-criar" onclick="criarContaChatwoot()">Criar Conta</button>
+        <button class="btn btn-secondary" onclick="fecharModal('modal-chatwoot')">Cancelar</button>
       </div>
     </div>
-
     <div id="cw-sucesso" style="display:none;">
-      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px;margin-bottom:16px;">
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:14px;margin-bottom:14px;">
         <div style="font-size:12px;font-weight:600;color:#166534;margin-bottom:10px;">Conta criada com sucesso!</div>
         <div style="font-size:12px;color:#374151;margin-bottom:6px;"><strong>Email:</strong> <span id="cw-sucesso-email"></span></div>
         <div style="font-size:12px;color:#374151;display:flex;align-items:center;gap:8px;">
           <strong>Senha:</strong>
-          <code id="cw-sucesso-senha" style="background:#e5e7eb;padding:3px 8px;border-radius:5px;font-size:13px;letter-spacing:1px;"></code>
-          <button onclick="copiarSenha()" style="border:none;background:#6c63ff;color:#fff;border-radius:5px;padding:3px 10px;font-size:11px;cursor:pointer;">📋 Copiar</button>
+          <code id="cw-sucesso-senha" style="background:#e5e7eb;padding:2px 8px;border-radius:5px;font-size:12px;letter-spacing:1px;"></code>
+          <button onclick="copiarSenha()" style="border:none;background:var(--purple);color:#fff;border-radius:5px;padding:3px 10px;font-size:11px;cursor:pointer;">📋 Copiar</button>
         </div>
       </div>
-      <button class="btn-cancel" onclick="fecharModalChatwoot()">Fechar</button>
+      <button class="btn btn-secondary" onclick="fecharModal('modal-chatwoot')">Fechar</button>
     </div>
   </div>
 </div>
 
-<!-- MODAL NOVO CLIENTE -->
-<div class="modal-overlay" id="modal-novo">
-  <div class="modal">
-    <h3>Nova Conta</h3>
-    <div class="fields-grid">
+<!-- VER TEMPLATE META -->
+<div class="modal-overlay" id="modal-ver-template">
+  <div class="modal" style="width:480px;">
+    <div class="modal-header">
+      <div>
+        <h3 id="mvt-name" style="margin-bottom:4px;"></h3>
+        <div class="mvt-badges" id="mvt-badges"></div>
+      </div>
+      <button class="modal-close" onclick="fecharModal('modal-ver-template')">×</button>
+    </div>
+
+    <div class="wapp-bg">
+      <div class="wapp-bubble" id="mvt-bubble"></div>
+    </div>
+
+    <div id="mvt-rejection" style="display:none;margin-top:12px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 12px;font-size:12px;color:#991b1b;"></div>
+
+    <div class="modal-actions" style="margin-top:16px;">
+      <button class="btn btn-secondary" onclick="fecharModal('modal-ver-template')">Fechar</button>
+      <button class="btn btn-danger" id="mvt-btn-delete" style="margin-left:auto;">Deletar template</button>
+    </div>
+  </div>
+</div>
+
+<!-- CRIAR TEMPLATE META -->
+<div class="modal-overlay" id="modal-template">
+  <div class="modal" style="width:580px;">
+    <div class="modal-header">
+      <h3 id="modal-template-title">Novo Template</h3>
+      <button class="modal-close" onclick="fecharModal('modal-template')">×</button>
+    </div>
+
+    <div class="fields-grid" style="gap:12px;">
       <div class="field-group">
-        <label>ID da Conta (account_id)</label>
-        <input type="number" id="novo-id" placeholder="Ex: 10" />
+        <label>Nome do template</label>
+        <input type="text" id="tpl-name" placeholder="ex: boas_vindas (snake_case)" oninput="this.value=this.value.toLowerCase().replace(/[^a-z0-9_]/g,'_')" />
+        <span class="field-hint">Apenas letras minúsculas, números e _</span>
       </div>
       <div class="field-group">
-        <label>Nome</label>
-        <input type="text" id="novo-nome" placeholder="Ex: Oramatec" />
+        <label>Categoria</label>
+        <select id="tpl-category">
+          <option value="MARKETING">MARKETING</option>
+          <option value="UTILITY">UTILITY</option>
+          <option value="AUTHENTICATION">AUTHENTICATION</option>
+        </select>
+      </div>
+      <div class="field-group">
+        <label>Idioma</label>
+        <select id="tpl-language">
+          <option value="pt_BR">Português (BR)</option>
+          <option value="en_US">English (US)</option>
+          <option value="es">Español</option>
+          <option value="pt_PT">Português (PT)</option>
+        </select>
+      </div>
+      <div class="field-group">
+        <label>Header</label>
+        <select id="tpl-header-type" onchange="onHeaderTypeChange()">
+          <option value="NONE">Sem header</option>
+          <option value="TEXT">Texto</option>
+          <option value="IMAGE">Imagem (URL)</option>
+          <option value="VIDEO">Vídeo (URL)</option>
+          <option value="DOCUMENT">Documento (URL)</option>
+        </select>
+      </div>
+      <div class="field-group full" id="tpl-header-content-wrap" style="display:none;">
+        <label id="tpl-header-content-label">Conteúdo do header</label>
+        <input type="text" id="tpl-header-content" placeholder="" />
+        <span class="field-hint" id="tpl-header-hint"></span>
+      </div>
+      <div class="field-group full">
+        <label>Corpo da mensagem <span style="color:var(--text-muted);font-weight:400;">(use {{1}}, {{2}}... para variáveis)</span></label>
+        <textarea id="tpl-body" placeholder="Olá! Entramos em contato sobre {{1}}..." rows="4"></textarea>
+      </div>
+      <div class="field-group full">
+        <label>Rodapé <span style="color:var(--text-muted);font-weight:400;">(opcional)</span></label>
+        <input type="text" id="tpl-footer" placeholder="Ex: Não responda a este número" />
       </div>
     </div>
+
+    <div class="section-divider" style="margin-top:16px;">Botões <span style="font-size:10px;color:var(--text-muted);font-weight:400;text-transform:none;letter-spacing:0;">(máx. 3)</span></div>
+    <div id="tpl-buttons-list"></div>
+    <button class="btn-add-row" id="btn-add-tpl-btn" onclick="adicionarBotaoTemplate()">+ Adicionar botão</button>
+
+    <div class="modal-error" id="tpl-error"></div>
     <div class="modal-actions">
-      <button class="btn-save" onclick="criarConta()">Criar</button>
-      <button class="btn-cancel" onclick="fecharModal()">Cancelar</button>
+      <button class="btn btn-primary" id="btn-tpl-criar" onclick="submeterTemplate()">Criar Template</button>
+      <button class="btn btn-secondary" onclick="fecharModal('modal-template')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- AUDIÊNCIA: CRIAR/EDITAR -->
+<div class="modal-overlay" id="modal-audiencia">
+  <div class="modal" style="width:600px;">
+    <div class="modal-header">
+      <h3 id="aud-modal-title">Nova Audiência</h3>
+      <button class="modal-close" onclick="fecharModal('modal-audiencia')">×</button>
+    </div>
+
+    <input type="hidden" id="aud-f-conversation-id" value="" />
+    <input type="hidden" id="aud-f-inbox-id" value="" />
+    <div class="fields-grid" style="gap:12px;">
+      <div class="field-group full">
+        <label>Conta</label>
+        <select id="aud-f-account"></select>
+      </div>
+      <div class="field-group full">
+        <label>Telefone</label>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input type="text" id="aud-f-telefone" placeholder="+5562999999999" style="flex:1;" />
+          <button class="btn btn-secondary" style="white-space:nowrap;padding:8px 12px;font-size:12px;" onclick="audBuscarContato()">Buscar</button>
+        </div>
+        <div id="aud-busca-resultado" style="margin-top:6px;"></div>
+      </div>
+      <div class="field-group full">
+        <label>Nome do Cliente</label>
+        <input type="text" id="aud-f-nome" placeholder="Nome completo do cliente" />
+      </div>
+      <div class="field-group" style="justify-content:flex-start;">
+        <label>Tem Processo</label>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:4px;">
+          <label class="toggle">
+            <input type="checkbox" id="aud-f-processo" />
+            <span class="toggle-slider"></span>
+          </label>
+          <span style="font-size:12px;color:var(--text-muted);">Possui processo ativo</span>
+        </div>
+      </div>
+      <div class="field-group">
+        <label>Data da Audiência</label>
+        <input type="date" id="aud-f-data" />
+      </div>
+      <div class="field-group">
+        <label>Horário</label>
+        <input type="time" id="aud-f-horario" />
+      </div>
+      <div class="field-group full">
+        <label>Tipo de Audiência</label>
+        <select id="aud-f-tipo"></select>
+      </div>
+      <div class="field-group full">
+        <label>Endereço</label>
+        <input type="text" id="aud-f-endereco" placeholder="Endereço do tribunal ou local" />
+      </div>
+      <div class="field-group full">
+        <label>Link Zoom (se aplicável)</label>
+        <input type="text" id="aud-f-zoom" placeholder="https://zoom.us/j/..." />
+      </div>
+    </div>
+
+    <div class="section-divider" style="margin-top:16px;">Testemunhas</div>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="field-group"><label>Testemunha 1</label><input type="text" id="aud-f-test1-nome" placeholder="Nome" /></div>
+        <div class="field-group"><label>WhatsApp</label><input type="text" id="aud-f-test1-wp" placeholder="+5562999999999" /></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="field-group"><label>Testemunha 2</label><input type="text" id="aud-f-test2-nome" placeholder="Nome" /></div>
+        <div class="field-group"><label>WhatsApp</label><input type="text" id="aud-f-test2-wp" placeholder="+5562999999999" /></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="field-group"><label>Testemunha 3</label><input type="text" id="aud-f-test3-nome" placeholder="Nome" /></div>
+        <div class="field-group"><label>WhatsApp</label><input type="text" id="aud-f-test3-wp" placeholder="+5562999999999" /></div>
+      </div>
+    </div>
+
+    <div class="modal-error" id="aud-modal-error"></div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" id="aud-btn-salvar" onclick="audSalvar()">Salvar</button>
+      <button class="btn btn-secondary" onclick="fecharModal('modal-audiencia')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- AUDIÊNCIA: TIPO -->
+<div class="modal-overlay" id="modal-audiencia-tipo">
+  <div class="modal" style="width:400px;">
+    <div class="modal-header">
+      <h3>Novo Tipo de Audiência</h3>
+      <button class="modal-close" onclick="fecharModal('modal-audiencia-tipo')">×</button>
+    </div>
+    <div class="fields-grid" style="gap:12px;">
+      <div class="field-group full">
+        <label>Nome</label>
+        <input type="text" id="aud-tipo-nome" placeholder="Ex: Audiência de Instrução Tele" />
+      </div>
+      <div class="field-group full">
+        <label>Descrição <span style="color:var(--text-muted);font-weight:400;">(opcional)</span></label>
+        <input type="text" id="aud-tipo-descricao" placeholder="Descrição do tipo" />
+      </div>
+    </div>
+    <div class="modal-error" id="aud-tipo-error"></div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" id="aud-tipo-btn-salvar" onclick="audTipoSalvar()">Criar</button>
+      <button class="btn btn-secondary" onclick="fecharModal('modal-audiencia-tipo')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-audiencia-msg">
+  <div class="modal" style="width:600px;">
+    <div class="modal-header">
+      <h3 id="aud-msg-modal-title">Nova Mensagem</h3>
+      <button class="modal-close" onclick="fecharModal('modal-audiencia-msg')">×</button>
+    </div>
+    <div class="fields-grid" style="gap:12px;">
+      <div class="field-group full">
+        <label>Conteúdo da mensagem</label>
+        <textarea id="aud-msg-conteudo" rows="8" placeholder="Use placeholders: [NOME], [DATA], [HORARIO], [ENDERECO], [ZOOM], [TELEFONE], [TIPO]" style="font-family:inherit;font-size:13px;resize:vertical;"></textarea>
+        <span class="field-hint">Placeholders disponíveis: [NOME], [DATA], [HORARIO], [ENDERECO], [ZOOM], [TELEFONE], [TIPO]</span>
+      </div>
+      <div class="field-group">
+        <label>Enviar quanto tempo antes</label>
+        <input type="number" id="aud-msg-tempo" value="5" min="1" />
+      </div>
+      <div class="field-group">
+        <label>Unidade</label>
+        <select id="aud-msg-unidade">
+          <option value="dias">Dias</option>
+          <option value="horas">Horas</option>
+        </select>
+      </div>
+      <div class="field-group full">
+        <label>Template WhatsApp <span style="color:var(--text-muted);font-weight:400;">(somente para API oficial fora da janela 24h)</span></label>
+        <div id="aud-msg-template-wrap">
+          <input type="text" id="aud-msg-template" placeholder="Ex: aviso_audiencia_conciliacao" />
+        </div>
+        <span class="field-hint" id="aud-msg-template-hint">Se a conta usa WhatsApp oficial e está fora da janela de 24h, este template será enviado ao invés do texto</span>
+      </div>
+    </div>
+    <div class="modal-error" id="aud-msg-error"></div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" id="aud-msg-btn-salvar" onclick="audMsgSalvar()">Salvar</button>
+      <button class="btn btn-secondary" onclick="fecharModal('modal-audiencia-msg')">Cancelar</button>
     </div>
   </div>
 </div>
 
 <script>
-  let clienteAtivo = null;
-  let clientes = [];
+// ══════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════
+let clientes = [];
+let clienteAtivo = null;
+let secaoAtiva = 'contas';
+let tpl_btn_id = 0;
+let _deletarId = null;
+let uu_row_id = 0;
 
-  async function carregarClientes() {
-    const res = await fetch('/api/clientes');
-    clientes = await res.json();
-    renderizarLista();
+// ══════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════
+async function init() {
+  await carregarClientes();
+  navTo('contas');
+}
+
+async function carregarClientes() {
+  const res = await fetch('/api/clientes');
+  clientes = await res.json();
+  renderSidebarAccounts();
+}
+
+function renderSidebarAccounts() {
+  const el = document.getElementById('sidebar-accounts');
+  if (!clientes.length) {
+    el.innerHTML = '<div style="font-size:11px;color:var(--text-muted);padding:6px 8px;">Nenhuma conta</div>';
+    return;
   }
+  el.innerHTML = clientes.map(c => `
+    <div class="account-list-item ${clienteAtivo === c.account_id && secaoAtiva === 'contas' ? 'active' : ''}"
+         onclick="selecionarConta(${c.account_id})">
+      <div class="acl-badge">${c.account_id}</div>
+      <div class="acl-name">${c.nome}</div>
+      <div class="acl-dot ${c.ativo ? 'on' : 'off'}"></div>
+    </div>
+  `).join('');
+}
 
-  function renderizarLista() {
-    const list = document.getElementById('client-list');
-    list.innerHTML = clientes.map(c => `
-      <div class="client-item ${clienteAtivo === c.account_id ? 'active' : ''}" onclick="selecionarCliente(${c.account_id})">
-        <div class="client-badge">${c.account_id}</div>
-        <div class="client-name">${c.nome}</div>
-        <div class="status-dot ${c.ativo ? 'on' : 'off'}"></div>
+// ══════════════════════════════════════════════
+// NAVIGATION
+// ══════════════════════════════════════════════
+function navTo(secao) {
+  secaoAtiva = secao;
+  // Update nav highlights (only for non-conta sections)
+  ['templates','inatividade','agentes','relatorios','audiencias','config'].forEach(s => {
+    document.getElementById(`nav-${s}`)?.classList.toggle('active', s === secao);
+  });
+  renderSidebarAccounts();
+
+  const titles = {
+    contas: 'Contas', templates: 'Templates Meta',
+    inatividade: 'Inatividade', agentes: 'Agentes IA',
+    relatorios: 'Relatórios', audiencias: 'Aviso de Audiência', config: 'Configurações',
+  };
+  document.getElementById('topbar-title').textContent = titles[secao] || secao;
+
+  const pages = { contas: renderPageContas, templates: renderPageTemplates,
+    inatividade: renderPageInatividade, agentes: renderPageAgentes,
+    relatorios: renderPageRelatorios, audiencias: renderPageAvisoAudiencia, config: renderPageConfig };
+  (pages[secao] || renderPageContas)();
+}
+
+// ══════════════════════════════════════════════
+// PAGE: CONTAS
+// ══════════════════════════════════════════════
+function renderPageContas() {
+  const el = document.getElementById('page-content');
+  document.getElementById('topbar-sub').textContent = clienteAtivo ? `Conta #${clienteAtivo}` : 'Selecione uma conta';
+
+  if (!clienteAtivo) {
+    el.innerHTML = `<div class="empty-state">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3">
+        <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
+      </svg>
+      <p>Selecione uma conta na barra lateral</p>
+      <p class="empty-sub">ou crie uma nova clicando em "+ Criar no Chatwoot"</p>
+    </div>`;
+    return;
+  }
+  carregarFormConta(clienteAtivo);
+}
+
+async function selecionarConta(id) {
+  clienteAtivo = id;
+  secaoAtiva = 'contas';
+  ['templates','inatividade','agentes','relatorios','audiencias','config'].forEach(s =>
+    document.getElementById(`nav-${s}`)?.classList.remove('active'));
+  renderSidebarAccounts();
+  document.getElementById('topbar-title').textContent = 'Contas';
+  document.getElementById('topbar-sub').textContent = `Conta #${id}`;
+  await carregarFormConta(id);
+}
+
+async function carregarFormConta(id) {
+  const el = document.getElementById('page-content');
+  el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:20px 0;">Carregando...</div>';
+
+  const res = await fetch(`/api/clientes/${id}`);
+  const c = await res.json();
+  const v = (key, fallback='') => (c[key] ?? fallback);
+
+  // Busca agentes, times e inboxes do Chatwoot em paralelo (falha silenciosa)
+  const [agentes, times, inboxes] = await Promise.all([
+    fetch(`/api/clientes/${id}/chatwoot/agents`).then(r => r.ok ? r.json() : []).catch(() => []),
+    fetch(`/api/clientes/${id}/chatwoot/teams`).then(r => r.ok ? r.json() : []).catch(() => []),
+    fetch(`/api/clientes/${id}/chatwoot/inboxes`).then(r => r.ok ? r.json() : []).catch(() => []),
+  ]);
+
+  const agentItems = agentes.map(a => ({ id: a.id, label: `${a.name} (ID: ${a.id})` }));
+  const teamItems  = times.map(t => ({ id: t.id, label: `${t.name} (ID: ${t.id})` }));
+  const inboxItems = inboxes.map(i => ({ id: i.id, label: `${i.name} — ${(i.channel_type||'').replace('Channel::','') || '?'} (ID: ${i.id})` }));
+
+  const _tag = (count, noun) => count
+    ? `<span style="color:var(--green);font-size:9px;font-weight:700;margin-left:4px;">✓ ${count} ${noun}</span>`
+    : `<span style="color:var(--text-muted);font-size:9px;margin-left:4px;">(configure URL+Token e recarregue)</span>`;
+
+  el.innerHTML = `
+    <div class="card" style="max-width:720px;">
+      <div class="card-header">
+        <div class="card-icon">${c.account_id}</div>
+        <div>
+          <div class="card-title">${c.nome}</div>
+          <div class="card-sub">account_id: ${c.account_id}</div>
+        </div>
+        <div class="toggle-wrapper" style="gap:12px;">
+          <span class="toggle-label">Ativo</span>
+          <label class="toggle">
+            <input type="checkbox" id="f-ativo" ${c.ativo ? 'checked' : ''} />
+            <span class="toggle-slider"></span>
+          </label>
+          <span class="toggle-label" style="margin-left:8px;">Inatividade</span>
+          <label class="toggle">
+            <input type="checkbox" id="f-inatividade-ativa" ${(c.inatividade_ativa ?? true) ? 'checked' : ''} />
+            <span class="toggle-slider"></span>
+          </label>
+          <button class="btn btn-secondary" style="margin-left:8px;padding:7px 10px;color:var(--red);border-color:#fecaca;"
+            onclick="abrirModalDeletar(${c.account_id},'${c.nome}')">🗑</button>
+        </div>
       </div>
-    `).join('');
+
+      <!-- ── ESCRITÓRIO ── -->
+      <div class="section-divider">Informações do Escritório</div>
+      <div class="fields-grid">
+        <div class="field-group full">
+          <label>Nome do Escritório</label>
+          <input type="text" id="f-nome-escritorio" value="${v('nome_escritorio')}" placeholder="Ex: AdvBrasil Advocacia" />
+        </div>
+        <div class="field-group">
+          <label>Nome Completo do Responsável</label>
+          <input type="text" id="f-nome-completo" value="${v('nome_completo')}" placeholder="Ex: João da Silva" />
+          <span class="field-hint">Quem vai usar o sistema</span>
+        </div>
+        <div class="field-group">
+          <label>Telefone</label>
+          <input type="text" id="f-telefone" value="${v('telefone')}" placeholder="Ex: (11) 99999-9999" />
+        </div>
+        <div class="field-group full">
+          <label>Endereço</label>
+          <input type="text" id="f-endereco" value="${v('endereco')}" placeholder="Ex: Rua das Flores, 123 — Belo Horizonte, MG" />
+        </div>
+      </div>
+
+      <!-- ── CHATWOOT ── -->
+      <div class="section-divider" style="justify-content:flex-start;gap:10px;">
+        Chatwoot
+        <button class="btn btn-ghost" style="font-size:11px;padding:2px 8px;margin-left:auto;"
+          title="Recarregar dados do Chatwoot" onclick="carregarFormConta(${c.account_id})">↻ Recarregar</button>
+      </div>
+      <div class="fields-grid">
+        <div class="field-group full">
+          <label>URL do Chatwoot</label>
+          <input type="text" id="f-chatwoot-url" value="${v('chatwoot_url')}" placeholder="https://app.chatwoot.com" />
+        </div>
+        <div class="field-group full">
+          <label>Token de API (chatwoot_token)</label>
+          <div class="secret-wrapper">
+            <input type="password" id="f-chatwoot-token" value="${v('chatwoot_token')}" placeholder="Token de acesso" />
+            <button class="eye-btn" onclick="toggleSecret('f-chatwoot-token')">👁</button>
+          </div>
+        </div>
+        <div class="field-group">
+          <label>Agente IA ${_tag(agentItems.length, 'agentes')}</label>
+          ${_buildSelect('f-ia-agent-id', agentItems, v('ia_agent_id'), 'Selecione o agente IA')}
+          <span class="field-hint">Conversa atribuída a este agente → IA responde</span>
+        </div>
+        <div class="field-group">
+          <label>Time ${_tag(teamItems.length, 'times')}</label>
+          ${_buildSelect('f-team-id', teamItems, v('team_id'), 'Selecione o time')}
+          <span class="field-hint">Time do Chatwoot para atribuição</span>
+        </div>
+        <div class="field-group">
+          <label>Notificação — Convertido</label>
+          ${_buildSelect('f-notif-convertido', agentItems, v('id_notificacao_convertido'), 'Selecione o agente')}
+          <span class="field-hint">Agente notificado ao converter lead</span>
+        </div>
+        <div class="field-group">
+          <label>Notificação — Cliente</label>
+          ${_buildSelect('f-notif-cliente', agentItems, v('id_notificacao_cliente'), 'Selecione o agente')}
+          <span class="field-hint">Agente notificado em ações do cliente</span>
+        </div>
+      </div>
+
+      <!-- ── OPENAI ── -->
+      <div class="section-divider">OpenAI</div>
+      <div class="fields-grid">
+        <div class="field-group full">
+          <label>OpenAI API Key</label>
+          <div class="secret-wrapper">
+            <input type="password" id="f-openai-key" value="${v('openai_api_key')}" placeholder="sk-..." />
+            <button class="eye-btn" onclick="toggleSecret('f-openai-key')">👁</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── AGENDA ── -->
+      <div class="section-divider">Agenda</div>
+      <div class="fields-grid">
+        <div class="field-group">
+          <label>Inbox ${_tag(inboxItems.length, 'inboxes')}</label>
+          ${_buildSelect('f-inbox-id', inboxItems, v('inbox_id'), 'Selecione a inbox')}
+          <span class="field-hint">Inbox usada para agendamentos</span>
+        </div>
+        <div class="field-group">
+          <label>Email da Agenda</label>
+          <input type="text" id="f-email-agenda" value="${v('email_agenda')}" placeholder="agenda@empresa.com" />
+          <span class="field-hint">Conta de calendário para sincronização</span>
+        </div>
+        <div class="field-group">
+          <label>Horas iniciais de busca</label>
+          <input type="number" id="f-horas-inicial" value="${v('horas_inicial_busca')}" placeholder="Ex: 2" />
+          <span class="field-hint">A partir de quantas horas buscar slots</span>
+        </div>
+        <div class="field-group">
+          <label>Dias a buscar</label>
+          <input type="number" id="f-qtd-dias" value="${v('quantidade_dias_a_buscar')}" placeholder="Ex: 7" />
+          <span class="field-hint">Janela de dias para consulta de slots</span>
+        </div>
+        <div class="field-group">
+          <label>Duração do agendamento (min)</label>
+          <input type="number" id="f-duracao" value="${v('duracao_agendamento')}" placeholder="Ex: 60" />
+          <span class="field-hint">Duração de cada consulta em minutos</span>
+        </div>
+        <div class="field-group">
+          <label>Especialidade</label>
+          <input type="text" id="f-especialidade" value="${v('especialidade')}" placeholder="Ex: Direito Trabalhista" />
+          <span class="field-hint">Área de atuação do escritório</span>
+        </div>
+        <div class="field-group full">
+          <label>Disponibilidade</label>
+          <div id="f-disponibilidade" class="schedule-grid"></div>
+          <span class="field-hint">Ative os dias e defina o horário de atendimento</span>
+        </div>
+      </div>
+
+      <!-- ── META ── -->
+      <div class="section-divider">WhatsApp Oficial (Meta)</div>
+      <div class="fields-grid">
+        <div class="field-group">
+          <label>WABA ID</label>
+          <input type="text" id="f-meta-waba" value="${v('meta_waba_id')}" placeholder="Ex: 123456789" />
+          <span class="field-hint">WhatsApp Business Account ID</span>
+        </div>
+        <div class="field-group">
+          <label>Meta Access Token</label>
+          <div class="secret-wrapper">
+            <input type="password" id="f-meta-token" value="${v('meta_access_token')}" placeholder="Token permanente do sistema" />
+            <button class="eye-btn" onclick="toggleSecret('f-meta-token')">👁</button>
+          </div>
+        </div>
+        <div class="field-group">
+          <label>Template Audiência</label>
+          <input type="text" id="f-template-audiencia" value="${v('template_audiencia')}" placeholder="Ex: aviso_audiencia" />
+          <span class="field-hint">Nome do template HSM aprovado para avisos de audiência</span>
+        </div>
+      </div>
+
+      <div class="card-actions">
+        <button class="btn btn-primary" onclick="salvarConta(${c.account_id})">Salvar</button>
+        <button class="btn btn-secondary" onclick="navTo('templates')">Ver Templates</button>
+        <span class="save-msg" id="save-msg">Salvo ✓</span>
+      </div>
+    </div>
+  `;
+
+  _buildScheduleWidget('f-disponibilidade', v('disponibilidade'));
+}
+
+function toggleSecret(id) {
+  const input = document.getElementById(id);
+  input.type = input.type === 'password' ? 'text' : 'password';
+}
+
+function _intOrNull(val) { const v = String(val ?? '').trim(); return v ? parseInt(v) : null; }
+
+function _buildSelect(id, items, currentVal, placeholder) {
+  if (!items || !items.length) {
+    return `<input type="number" id="${id}" value="${currentVal ?? ''}" placeholder="Ex: ID numérico" />`;
+  }
+  const opts = [`<option value="">— ${placeholder} —</option>`]
+    .concat(items.map(it => `<option value="${it.id}" ${it.id == currentVal ? 'selected' : ''}>${it.label}</option>`))
+    .join('');
+  return `<select id="${id}">${opts}</select>`;
+}
+
+// ── SCHEDULE WIDGET ──────────────────────────────────────────
+const _DIAS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+
+function _buildScheduleWidget(containerId, rawValue) {
+  let parsed = {};
+  try { parsed = rawValue && typeof rawValue === 'string' && rawValue.trim().startsWith('{') ? JSON.parse(rawValue) : {}; } catch(e) {}
+
+  const el = document.getElementById(containerId);
+  if (!el) return;
+
+  el.innerHTML = _DIAS.map((nome, d) => {
+    const slots = parsed[d] || [];
+    const isOn  = slots.length > 0;
+    const start = slots[0]?.start || '09:00';
+    const end   = slots[0]?.end   || '18:00';
+    return `
+      <div class="schedule-row ${isOn ? 'day-on' : ''}" id="sched-row-${d}">
+        <span class="schedule-day">${nome}</span>
+        <label class="toggle" style="flex-shrink:0;">
+          <input type="checkbox" id="sched-${d}-on" ${isOn ? 'checked' : ''} onchange="toggleScheduleDay(${d})" />
+          <span class="toggle-slider"></span>
+        </label>
+        <div class="schedule-times" id="sched-${d}-times" style="${isOn ? '' : 'display:none;'}">
+          <input type="time" id="sched-${d}-start" value="${start}" />
+          <span class="schedule-sep">até</span>
+          <input type="time" id="sched-${d}-end" value="${end}" />
+        </div>
+        <span class="schedule-closed" id="sched-${d}-closed" style="${isOn ? 'display:none;' : ''}">Fechado</span>
+      </div>`;
+  }).join('');
+}
+
+function toggleScheduleDay(d) {
+  const on  = document.getElementById(`sched-${d}-on`).checked;
+  document.getElementById(`sched-${d}-times`).style.display  = on ? '' : 'none';
+  document.getElementById(`sched-${d}-closed`).style.display = on ? 'none' : '';
+  document.getElementById(`sched-row-${d}`).classList.toggle('day-on', on);
+}
+
+function _readDisponibilidade() {
+  const result = {};
+  for (let d = 0; d < 7; d++) {
+    const on = document.getElementById(`sched-${d}-on`)?.checked;
+    if (on) {
+      const start = document.getElementById(`sched-${d}-start`)?.value || '';
+      const end   = document.getElementById(`sched-${d}-end`)?.value   || '';
+      result[d] = start && end ? [{ start, end }] : [];
+    } else {
+      result[d] = [];
+    }
+  }
+  return JSON.stringify(result);
+}
+
+async function salvarConta(id) {
+  const body = {
+    ativo:                      document.getElementById('f-ativo').checked,
+    inatividade_ativa:          document.getElementById('f-inatividade-ativa').checked,
+    nome_escritorio:            document.getElementById('f-nome-escritorio').value.trim(),
+    nome_completo:              document.getElementById('f-nome-completo').value.trim(),
+    telefone:                   document.getElementById('f-telefone').value.trim(),
+    endereco:                   document.getElementById('f-endereco').value.trim(),
+    chatwoot_url:               document.getElementById('f-chatwoot-url').value.trim(),
+    chatwoot_token:             document.getElementById('f-chatwoot-token').value.trim(),
+    openai_api_key:             document.getElementById('f-openai-key').value.trim(),
+    ia_agent_id:                _intOrNull(document.getElementById('f-ia-agent-id').value),
+    team_id:                    _intOrNull(document.getElementById('f-team-id').value),
+    inbox_id:                   _intOrNull(document.getElementById('f-inbox-id').value),
+    email_agenda:               document.getElementById('f-email-agenda').value.trim(),
+    horas_inicial_busca:        _intOrNull(document.getElementById('f-horas-inicial').value),
+    quantidade_dias_a_buscar:   _intOrNull(document.getElementById('f-qtd-dias').value),
+    duracao_agendamento:        _intOrNull(document.getElementById('f-duracao').value),
+    especialidade:              document.getElementById('f-especialidade').value.trim(),
+    disponibilidade:            _readDisponibilidade(),
+    id_notificacao_convertido:  _intOrNull(document.getElementById('f-notif-convertido').value),
+    id_notificacao_cliente:     _intOrNull(document.getElementById('f-notif-cliente').value),
+    meta_waba_id:               document.getElementById('f-meta-waba').value.trim(),
+    meta_access_token:          document.getElementById('f-meta-token').value.trim(),
+    template_audiencia:         document.getElementById('f-template-audiencia').value.trim(),
+  };
+  await fetch(`/api/clientes/${id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  const msg = document.getElementById('save-msg');
+  msg.classList.add('show');
+  setTimeout(() => msg.classList.remove('show'), 2500);
+  await carregarClientes();
+}
+
+// ══════════════════════════════════════════════
+// PAGE: TEMPLATES META
+// ══════════════════════════════════════════════
+function renderPageTemplates() {
+  const el = document.getElementById('page-content');
+  const temMeta = clientes.filter(c => c.ativo);
+
+  let accountOptions = clientes.map(c => `<option value="${c.account_id}">${c.nome} (#${c.account_id})</option>`).join('');
+  let selectedId = clienteAtivo || (clientes[0]?.account_id);
+
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+      <div>
+        <select id="tpl-account-sel" style="font-size:14px;font-weight:600;padding:8px 12px;border-radius:8px;min-width:200px;" onchange="carregarTemplates()">
+          ${accountOptions}
+        </select>
+      </div>
+      <button class="btn btn-primary" onclick="abrirModalTemplate()">+ Novo Template</button>
+    </div>
+    <div class="template-search">
+      <input type="text" id="tpl-search" placeholder="Buscar por nome..." oninput="filtrarTemplates()" />
+      <select id="tpl-filter-status" onchange="filtrarTemplates()" style="min-width:140px;">
+        <option value="">Todos os status</option>
+        <option value="APPROVED">Aprovados</option>
+        <option value="PENDING">Pendentes</option>
+        <option value="REJECTED">Rejeitados</option>
+        <option value="PAUSED">Pausados</option>
+      </select>
+    </div>
+    <div id="tpl-list">
+      <div style="color:var(--text-muted);font-size:13px;">Carregando templates...</div>
+    </div>
+  `;
+
+  document.getElementById('tpl-account-sel').value = selectedId;
+  carregarTemplates();
+}
+
+let _todosTemplates = [];
+
+async function carregarTemplates() {
+  const accountId = document.getElementById('tpl-account-sel')?.value;
+  if (!accountId) return;
+
+  document.getElementById('tpl-list').innerHTML = '<div style="color:var(--text-muted);font-size:13px;">Carregando...</div>';
+
+  try {
+    const res = await fetch(`/api/clientes/${accountId}/templates`);
+    if (!res.ok) {
+      const err = await res.json();
+      const msg = typeof err.detail === 'string' ? err.detail : JSON.stringify(err.detail);
+      document.getElementById('tpl-list').innerHTML = `
+        <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:16px;font-size:13px;color:#991b1b;">
+          <strong>Erro ao carregar templates:</strong><br>${msg}
+        </div>`;
+      return;
+    }
+    const data = await res.json();
+    _todosTemplates = data.data || [];
+    filtrarTemplates();
+  } catch(e) {
+    document.getElementById('tpl-list').innerHTML = `<div style="color:var(--red);font-size:13px;">Erro: ${e.message}</div>`;
+  }
+}
+
+function filtrarTemplates() {
+  const busca = document.getElementById('tpl-search')?.value.toLowerCase() || '';
+  const status = document.getElementById('tpl-filter-status')?.value || '';
+  const filtrados = _todosTemplates.filter(t =>
+    (!busca || t.name.includes(busca)) &&
+    (!status || t.status === status)
+  );
+  renderTabelaTemplates(filtrados);
+}
+
+function renderTabelaTemplates(templates) {
+  const el = document.getElementById('tpl-list');
+  if (!templates.length) {
+    el.innerHTML = `<div class="empty-state">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+      </svg>
+      <p>Nenhum template encontrado</p>
+    </div>`;
+    return;
   }
 
-  async function selecionarCliente(id) {
-    clienteAtivo = id;
-    renderizarLista();
+  const badgeStatus = s => {
+    const map = { APPROVED: 'badge-green', PENDING: 'badge-yellow', REJECTED: 'badge-red', PAUSED: 'badge-gray', FLAGGED: 'badge-red' };
+    return `<span class="badge ${map[s]||'badge-gray'}">${s}</span>`;
+  };
+  const badgeCat = c => `<span class="badge badge-purple">${c}</span>`;
 
-    const res = await fetch(`/api/clientes/${id}`);
-    const config = await res.json();
+  el.innerHTML = `
+    <div class="template-count">${templates.length} template${templates.length !== 1 ? 's' : ''}</div>
+    <div class="card" style="padding:0;overflow:hidden;">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>Categoria</th>
+              <th>Idioma</th>
+              <th>Status</th>
+              <th>Corpo (prévia)</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${templates.map(t => {
+              const body = t.components?.find(c=>c.type==='BODY');
+              const preview = body ? body.text.substring(0,60) + (body.text.length > 60 ? '…' : '') : '—';
+              return `<tr>
+                <td class="td-name">${t.name}</td>
+                <td>${badgeCat(t.category)}</td>
+                <td style="color:var(--text-secondary);font-size:12px;">${t.language}</td>
+                <td>${badgeStatus(t.status)}</td>
+                <td style="color:var(--text-secondary);font-size:12px;max-width:200px;">${preview}</td>
+                <td>
+                  <div class="td-actions">
+                    <button class="btn-icon" title="Ver detalhes" onclick="verTemplate('${t.name}')">
+                      <svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </button>
+                    <button class="btn-icon danger" title="Deletar" onclick="deletarTemplate('${t.name}')">
+                      <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                    </button>
+                  </div>
+                </td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
 
-    document.getElementById('page-title').textContent = config.nome;
-    document.getElementById('page-sub').textContent = `Conta #${config.account_id}`;
+function verTemplate(name) {
+  const t = _todosTemplates.find(x => x.name === name);
+  if (!t) return;
 
-    document.getElementById('content').innerHTML = `
-      <div class="card">
-        <div class="card-header">
-          <div class="card-icon">${config.account_id}</div>
-          <div>
-            <div class="card-title">${config.nome}</div>
-            <div class="card-id">account_id: ${config.account_id}</div>
+  const header  = t.components?.find(c => c.type === 'HEADER');
+  const body    = t.components?.find(c => c.type === 'BODY');
+  const footer  = t.components?.find(c => c.type === 'FOOTER');
+  const buttons = t.components?.find(c => c.type === 'BUTTONS');
+
+  // ── Badges de meta info
+  const badgeStatus = s => {
+    const map = { APPROVED:'badge-green', PENDING:'badge-yellow', REJECTED:'badge-red', PAUSED:'badge-gray', FLAGGED:'badge-red' };
+    return `<span class="badge ${map[s]||'badge-gray'}">${s}</span>`;
+  };
+  document.getElementById('mvt-name').textContent = t.name;
+  document.getElementById('mvt-badges').innerHTML = `
+    ${badgeStatus(t.status)}
+    <span class="badge badge-purple">${t.category}</span>
+    <span class="badge badge-gray">${t.language}</span>
+    ${t.quality_score?.score ? `<span class="mvt-field">Qualidade: ${t.quality_score.score}</span>` : ''}
+  `;
+
+  // ── Bubble de preview
+  let bubble = '';
+
+  if (header) {
+    const fmt = header.format;
+    if (fmt === 'TEXT') {
+      bubble += `<div class="wapp-header-text">${_escHtml(header.text || '')}</div>`;
+    } else if (fmt === 'IMAGE') {
+      const url = header.example?.header_handle?.[0] || '';
+      bubble += url
+        ? `<img class="wapp-img" src="${url}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
+           <div class="wapp-img-placeholder" style="display:none;">
+             <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+             Imagem
+           </div>`
+        : `<div class="wapp-img-placeholder">
+             <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+             Imagem
+           </div>`;
+    } else if (fmt === 'VIDEO') {
+      bubble += `<div class="wapp-img-placeholder">
+        <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        Vídeo
+      </div>`;
+    } else if (fmt === 'DOCUMENT') {
+      bubble += `<div class="wapp-img-placeholder">
+        <svg width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Documento
+      </div>`;
+    }
+  }
+
+  if (body)   bubble += `<div class="wapp-body">${_escHtml(body.text || '').replace(/\*(.+?)\*/g,'<strong>$1</strong>').replace(/_(.+?)_/g,'<em>$1</em>')}</div>`;
+  if (footer) bubble += `<div class="wapp-footer">${_escHtml(footer.text || '')}</div>`;
+  bubble += `<div class="wapp-time">agora ✓✓</div>`;
+
+  if (buttons?.buttons?.length) {
+    const icons = { URL: '🔗', PHONE_NUMBER: '📞', QUICK_REPLY: '↩' };
+    bubble += `<div class="wapp-buttons">` +
+      buttons.buttons.map(b => `<div class="wapp-btn">${icons[b.type]||''} ${_escHtml(b.text)}</div>`).join('') +
+      `</div>`;
+  }
+
+  document.getElementById('mvt-bubble').innerHTML = bubble;
+
+  // ── Rejeição
+  const rejEl = document.getElementById('mvt-rejection');
+  if (t.rejected_reason) {
+    rejEl.innerHTML = `<strong>Motivo de rejeição:</strong> ${_escHtml(t.rejected_reason)}`;
+    rejEl.style.display = '';
+  } else {
+    rejEl.style.display = 'none';
+  }
+
+  // ── Botão deletar
+  document.getElementById('mvt-btn-delete').onclick = () => {
+    fecharModal('modal-ver-template');
+    deletarTemplate(t.name);
+  };
+
+  abrirModal('modal-ver-template');
+}
+
+function _escHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+async function deletarTemplate(name) {
+  if (!confirm(`Deletar o template "${name}"?\n\nIsso remove TODAS as versões de idioma.`)) return;
+  const accountId = document.getElementById('tpl-account-sel').value;
+  const res = await fetch(`/api/clientes/${accountId}/templates/${name}`, { method: 'DELETE' });
+  if (res.ok) {
+    await carregarTemplates();
+  } else {
+    const err = await res.json();
+    alert(`Erro ao deletar: ${typeof err.detail === 'string' ? err.detail : JSON.stringify(err.detail)}`);
+  }
+}
+
+// ── MODAL CRIAR TEMPLATE ──
+function abrirModalTemplate() {
+  document.getElementById('tpl-name').value = '';
+  document.getElementById('tpl-body').value = '';
+  document.getElementById('tpl-footer').value = '';
+  document.getElementById('tpl-header-type').value = 'NONE';
+  document.getElementById('tpl-header-content').value = '';
+  document.getElementById('tpl-header-content-wrap').style.display = 'none';
+  document.getElementById('tpl-buttons-list').innerHTML = '';
+  document.getElementById('tpl-error').classList.remove('show');
+  tpl_btn_id = 0;
+  abrirModal('modal-template');
+}
+
+function onHeaderTypeChange() {
+  const tipo = document.getElementById('tpl-header-type').value;
+  const wrap = document.getElementById('tpl-header-content-wrap');
+  const label = document.getElementById('tpl-header-content-label');
+  const hint = document.getElementById('tpl-header-hint');
+  const input = document.getElementById('tpl-header-content');
+  if (tipo === 'NONE') { wrap.style.display = 'none'; return; }
+  wrap.style.display = '';
+  if (tipo === 'TEXT') {
+    label.textContent = 'Texto do header';
+    hint.textContent = 'Pode usar {{1}} como variável';
+    input.placeholder = 'Ex: Promoção especial para você!';
+  } else {
+    label.textContent = `URL da ${tipo === 'IMAGE' ? 'imagem' : tipo === 'VIDEO' ? 'vídeo' : 'documento'}`;
+    hint.textContent = 'URL pública acessível (https://)';
+    input.placeholder = 'https://...';
+  }
+}
+
+let _btns_counter = 0;
+function adicionarBotaoTemplate() {
+  const lista = document.getElementById('tpl-buttons-list');
+  if (lista.children.length >= 3) return;
+  const id = ++_btns_counter;
+  const div = document.createElement('div');
+  div.className = 'btn-row';
+  div.id = `tpl-btn-${id}`;
+  div.innerHTML = `
+    <select class="btn-row-type" id="tpl-btn-type-${id}" onchange="onBtnTypeChange(${id})">
+      <option value="QUICK_REPLY">Resposta rápida</option>
+      <option value="URL">URL</option>
+      <option value="PHONE_NUMBER">Telefone</option>
+    </select>
+    <input type="text" id="tpl-btn-text-${id}" placeholder="Texto do botão" style="flex:1;" />
+    <input type="text" id="tpl-btn-value-${id}" placeholder="" style="flex:1;display:none;" />
+    <button class="btn-remove-row" onclick="removerBotaoTemplate(${id})">×</button>
+  `;
+  lista.appendChild(div);
+}
+
+function onBtnTypeChange(id) {
+  const tipo = document.getElementById(`tpl-btn-type-${id}`).value;
+  const val = document.getElementById(`tpl-btn-value-${id}`);
+  if (tipo === 'QUICK_REPLY') { val.style.display = 'none'; val.value = ''; }
+  else if (tipo === 'URL') { val.style.display = ''; val.placeholder = 'https://site.com/{{1}}'; }
+  else { val.style.display = ''; val.placeholder = '+5511999999999'; }
+}
+
+function removerBotaoTemplate(id) {
+  document.getElementById(`tpl-btn-${id}`)?.remove();
+}
+
+async function submeterTemplate() {
+  const errEl = document.getElementById('tpl-error');
+  errEl.classList.remove('show');
+  const accountId = document.getElementById('tpl-account-sel')?.value || clienteAtivo;
+  if (!accountId) { errEl.textContent = 'Selecione uma conta.'; errEl.classList.add('show'); return; }
+
+  const name = document.getElementById('tpl-name').value.trim();
+  const body = document.getElementById('tpl-body').value.trim();
+  if (!name) { errEl.textContent = 'Nome do template é obrigatório.'; errEl.classList.add('show'); return; }
+  if (!body) { errEl.textContent = 'Corpo da mensagem é obrigatório.'; errEl.classList.add('show'); return; }
+
+  const components = [];
+  const headerType = document.getElementById('tpl-header-type').value;
+  if (headerType !== 'NONE') {
+    const headerContent = document.getElementById('tpl-header-content').value.trim();
+    if (headerType === 'TEXT') {
+      const comp = { type: 'HEADER', format: 'TEXT', text: headerContent };
+      if (headerContent.includes('{{1}}')) comp.example = { header_text: ['Exemplo'] };
+      components.push(comp);
+    } else {
+      components.push({ type: 'HEADER', format: headerType, example: { header_handle: [headerContent] } });
+    }
+  }
+
+  const bodyComp = { type: 'BODY', text: body };
+  const vars = [...body.matchAll(/\{\{(\d+)\}\}/g)].map(m => m[1]);
+  if (vars.length) bodyComp.example = { body_text: [vars.map(v => `Exemplo${v}`)] };
+  components.push(bodyComp);
+
+  const footer = document.getElementById('tpl-footer').value.trim();
+  if (footer) components.push({ type: 'FOOTER', text: footer });
+
+  const bRows = document.getElementById('tpl-buttons-list').children;
+  if (bRows.length) {
+    const buttons = [];
+    for (const row of bRows) {
+      const rowId = row.id.replace('tpl-btn-','');
+      const tipo = document.getElementById(`tpl-btn-type-${rowId}`).value;
+      const texto = document.getElementById(`tpl-btn-text-${rowId}`).value.trim();
+      const valor = document.getElementById(`tpl-btn-value-${rowId}`).value.trim();
+      if (!texto) continue;
+      if (tipo === 'QUICK_REPLY') buttons.push({ type: 'QUICK_REPLY', text: texto });
+      else if (tipo === 'URL') buttons.push({ type: 'URL', text: texto, url: valor });
+      else buttons.push({ type: 'PHONE_NUMBER', text: texto, phone_number: valor });
+    }
+    if (buttons.length) components.push({ type: 'BUTTONS', buttons });
+  }
+
+  const payload = {
+    name,
+    category: document.getElementById('tpl-category').value,
+    language: document.getElementById('tpl-language').value,
+    components,
+  };
+
+  const btn = document.getElementById('btn-tpl-criar');
+  btn.textContent = 'Enviando...'; btn.classList.add('loading');
+
+  try {
+    const res = await fetch(`/api/clientes/${accountId}/templates`, {
+      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      const msg = typeof data.detail === 'string' ? data.detail : (data.detail?.error?.message || JSON.stringify(data.detail));
+      errEl.textContent = `Erro: ${msg}`; errEl.classList.add('show');
+      return;
+    }
+    fecharModal('modal-template');
+    await carregarTemplates();
+  } catch(e) {
+    errEl.textContent = `Erro: ${e.message}`; errEl.classList.add('show');
+  } finally {
+    btn.textContent = 'Criar Template'; btn.classList.remove('loading');
+  }
+}
+
+// ══════════════════════════════════════════════
+// PAGE: INATIVIDADE
+// ══════════════════════════════════════════════
+let _inativCfg = null;
+let _inativTemplates = [];
+
+function _renderTemplateSelector(stagio, currentVal) {
+  if (_inativTemplates.length > 0) {
+    const opts = [`<option value="">— selecione —</option>`]
+      .concat(_inativTemplates.map(t =>
+        `<option value="${t.name}" ${t.name === currentVal ? 'selected' : ''}>${t.name}</option>`
+      )).join('');
+    return `<select id="inativ-tpl-${stagio}" style="min-width:190px;padding:5px 8px;font-size:12px;">${opts}</select>`;
+  }
+  return `<input type="text" id="inativ-tpl-${stagio}" value="${currentVal || ''}" placeholder="nome_do_template" style="width:170px;padding:5px 8px;font-size:12px;" />`;
+}
+
+function _atualizarTodosTemplateSelectors() {
+  if (!_inativCfg) return;
+  _inativCfg.estagios.forEach(e => {
+    if (!document.getElementById(`inativ-wpp-${e.stagio}`)?.checked) return;
+    const old = document.getElementById(`inativ-tpl-${e.stagio}`);
+    if (!old) return;
+    const currentVal = old.value || '';
+    const tmp = document.createElement('div');
+    tmp.innerHTML = _renderTemplateSelector(e.stagio, currentVal);
+    old.replaceWith(tmp.firstElementChild);
+  });
+}
+
+async function carregarTemplatesInatividade() {
+  const status = document.getElementById('inativ-tpl-status');
+  if (!clienteAtivo) {
+    _inativTemplates = [];
+    _atualizarTodosTemplateSelectors();
+    return;
+  }
+  if (status) { status.textContent = 'Carregando...'; status.style.color = 'var(--text-muted)'; }
+  try {
+    const res = await fetch(`/api/clientes/${clienteAtivo}/templates`);
+    if (!res.ok) throw new Error('Sem credenciais Meta configuradas');
+    const data = await res.json();
+    _inativTemplates = (data.data || []).filter(t => t.status === 'APPROVED');
+    if (status) {
+      status.textContent = `✓ ${_inativTemplates.length} template${_inativTemplates.length !== 1 ? 's' : ''} aprovado${_inativTemplates.length !== 1 ? 's' : ''}`;
+      status.style.color = 'var(--green)';
+    }
+  } catch(e) {
+    _inativTemplates = [];
+    if (status) { status.textContent = e.message; status.style.color = 'var(--red)'; }
+  }
+  _atualizarTodosTemplateSelectors();
+}
+
+async function renderPageInatividade() {
+  document.getElementById('topbar-sub').textContent = 'Configuração de estágios';
+  const el = document.getElementById('page-content');
+  el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:20px 0;">Carregando...</div>';
+
+  const res = await fetch('/api/config/inatividade');
+  _inativCfg = await res.json();
+
+  const stageColors = ['','#f0fdf4','#fffbeb','#fff1f2','#f5f3ff','#eff6ff','#fff7ed'];
+  const stageBorder = ['','#bbf7d0','#fde68a','#fecdd3','#ddd6fe','#bfdbfe','#fed7aa'];
+
+  const stagesHtml = _inativCfg.estagios.map(e => {
+    const hasTemplate = !!e.template_whatsapp;
+    return `
+      <div style="display:flex;align-items:center;gap:10px;padding:11px 14px;border-radius:10px;
+                  margin-bottom:8px;background:${stageColors[e.stagio]||'#fafafa'};
+                  border:1.5px solid ${stageBorder[e.stagio]||'var(--border)'};">
+
+        <div style="width:26px;height:26px;border-radius:7px;background:var(--purple);color:#fff;
+                    font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          ${e.stagio}
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:2px;flex:0 0 80px;">
+          <span style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;">Horas</span>
+          <div style="display:flex;align-items:center;gap:4px;">
+            <input type="number" id="inativ-horas-${e.stagio}" value="${e.horas}" min="1"
+                   style="width:60px;padding:5px 8px;font-size:13px;" />
+            <span style="font-size:11px;color:var(--text-muted);">h</span>
           </div>
-          <div class="toggle-wrapper">
-            <span class="toggle-label">Ativo</span>
-            <label class="toggle">
-              <input type="checkbox" id="f-ativo" ${config.ativo ? 'checked' : ''} />
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:2px;flex:1;min-width:0;">
+          <span style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;">Label Chatwoot</span>
+          <input type="text" id="inativ-label-${e.stagio}" value="${e.label}"
+                 style="padding:5px 8px;font-size:12px;" />
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:4px;flex:0 0 auto;">
+          <span style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;">WhatsApp Oficial</span>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <label class="toggle" style="flex-shrink:0;">
+              <input type="checkbox" id="inativ-wpp-${e.stagio}" ${hasTemplate ? 'checked' : ''}
+                     onchange="toggleInativTemplate(${e.stagio})" />
               <span class="toggle-slider"></span>
             </label>
-            <button class="btn-delete" onclick="abrirModalDeletar(${config.account_id}, '${config.nome}')" title="Remover conta">🗑</button>
+            <div id="inativ-tpl-wrap-${e.stagio}" style="${hasTemplate ? '' : 'display:none;'}flex-direction:column;gap:2px;">
+              ${_renderTemplateSelector(e.stagio, e.template_whatsapp || '')}
+              <div style="font-size:10px;color:var(--text-muted);">selecione ou digite o nome do template</div>
+            </div>
+            <span id="inativ-tpl-off-${e.stagio}" style="${hasTemplate ? 'display:none;' : ''}font-size:11px;color:var(--text-muted);font-style:italic;">IA gera texto</span>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+
+  el.innerHTML = `
+    <div style="max-width:760px;">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon" style="font-size:18px;">⏰</div>
+          <div>
+            <div class="card-title">Estágios de Inatividade</div>
+            <div class="card-sub">Timers, labels e templates por estágio</div>
           </div>
         </div>
 
-        <div class="section-divider">Chatwoot</div>
-        <div class="fields-grid">
-          <div class="field-group full">
-            <label>URL do Chatwoot</label>
-            <input type="text" id="f-chatwoot-url" value="${config.chatwoot_url || ''}" placeholder="https://app.chatwoot.com" />
-          </div>
-          <div class="field-group full">
-            <label>Token de API do Chatwoot</label>
-            <div class="secret-wrapper">
-              <input type="password" id="f-chatwoot-token" value="${config.chatwoot_token || ''}" placeholder="Token de acesso" />
-              <button class="eye-btn" onclick="toggleSecret('f-chatwoot-token')">👁</button>
-            </div>
-          </div>
-          <div class="field-group">
-            <label>ID do Agente IA</label>
-            <input type="number" id="f-ia-agent-id" value="${config.ia_agent_id || ''}" placeholder="Ex: 42" />
-            <span class="field-hint">Quando a conversa estiver atribuída a este agente, a IA responde. Caso contrário, só transcreve áudio.</span>
-          </div>
+        <!-- Conta de referência para templates -->
+        <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:#f5f3ff;border-radius:8px;margin-bottom:16px;border:1px solid #ddd6fe;">
+          <span style="font-size:11px;font-weight:700;color:var(--purple);flex-shrink:0;">Templates Meta:</span>
+          ${clienteAtivo
+            ? `<span style="font-size:12px;color:var(--text-secondary);">${clientes.find(c=>c.account_id==clienteAtivo)?.nome || ''} <span style="color:var(--text-muted);">(#${clienteAtivo})</span></span>`
+            : `<span style="font-size:12px;color:var(--text-muted);font-style:italic;">Selecione uma conta na barra lateral para carregar templates</span>`
+          }
+          <span id="inativ-tpl-status" style="font-size:11px;margin-left:auto;flex-shrink:0;color:var(--text-muted);"></span>
         </div>
 
-        <div class="section-divider">OpenAI</div>
-        <div class="fields-grid">
-          <div class="field-group full">
-            <label>OpenAI API Key</label>
-            <div class="secret-wrapper">
-              <input type="password" id="f-openai-key" value="${config.openai_api_key || ''}" placeholder="sk-..." />
-              <button class="eye-btn" onclick="toggleSecret('f-openai-key')">👁</button>
-            </div>
+        <div style="display:flex;gap:8px;font-size:10px;font-weight:700;color:var(--text-muted);
+                    text-transform:uppercase;letter-spacing:.6px;padding:0 14px 8px;border-bottom:1px solid #f0f0f5;margin-bottom:12px;">
+          <span style="width:26px;flex-shrink:0;"></span>
+          <span style="flex:0 0 80px;">Horas</span>
+          <span style="flex:1;">Label</span>
+          <span style="flex:0 0 auto;">WhatsApp Oficial → Template</span>
+        </div>
+
+        ${stagesHtml}
+
+        <div style="margin-top:16px;padding:10px 14px;background:#f8f9fb;border-radius:8px;font-size:12px;color:var(--text-muted);">
+          <strong style="color:var(--text-secondary);">Labels removidas ao avançar estágio:</strong>
+          <div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:4px;">
+            ${_inativCfg.labels_remover.map(l => `<span class="badge badge-gray">${l}</span>`).join('')}
           </div>
         </div>
 
         <div class="card-actions">
-          <button class="btn-save" onclick="salvarCliente(${config.account_id})">Salvar</button>
-          <span class="save-msg" id="save-msg">Salvo com sucesso</span>
+          <button class="btn btn-primary" onclick="salvarInatividade()">Salvar</button>
+          <span class="save-msg" id="inativ-save-msg">Salvo ✓</span>
         </div>
       </div>
-    `;
 
-  }
+      <div class="card" style="margin-top:16px;">
 
-  function toggleSecret(id) {
-    const input = document.getElementById(id);
-    input.type = input.type === 'password' ? 'text' : 'password';
-  }
-
-  async function salvarCliente(id) {
-    const iaAgentRaw = document.getElementById('f-ia-agent-id').value.trim();
-    const body = {
-      ativo: document.getElementById('f-ativo').checked,
-      chatwoot_url: document.getElementById('f-chatwoot-url').value.trim(),
-      chatwoot_token: document.getElementById('f-chatwoot-token').value.trim(),
-      openai_api_key: document.getElementById('f-openai-key').value.trim(),
-      ia_agent_id: iaAgentRaw ? parseInt(iaAgentRaw) : null,
-    };
-
-    await fetch(`/api/clientes/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-
-    const msg = document.getElementById('save-msg');
-    msg.classList.add('show');
-    setTimeout(() => msg.classList.remove('show'), 2500);
-    carregarClientes();
-  }
-
-  function abrirModalNovo() {
-    document.getElementById('modal-novo').classList.add('open');
-  }
-
-  function fecharModal() {
-    document.getElementById('modal-novo').classList.remove('open');
-  }
-
-  async function criarConta() {
-    const id = parseInt(document.getElementById('novo-id').value);
-    const nome = document.getElementById('novo-nome').value.trim();
-    if (!id || !nome) return;
-
-    await fetch('/api/clientes', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ account_id: id, nome }),
-    });
-
-    fecharModal();
-    await carregarClientes();
-    selecionarCliente(id);
-  }
-
-  document.getElementById('modal-novo').addEventListener('click', (e) => {
-    if (e.target === e.currentTarget) fecharModal();
-  });
-
-  // ── DELETAR CONTA ──────────────────────────────────────────
-
-  let _deletarId = null;
-
-  function abrirModalDeletar(id, nome) {
-    _deletarId = id;
-    document.getElementById('deletar-nome').textContent = nome;
-    document.getElementById('modal-deletar').classList.add('open');
-  }
-
-  async function confirmarDeletar() {
-    if (!_deletarId) return;
-    const btn = document.getElementById('btn-confirmar-delete');
-    btn.textContent = 'Removendo...';
-    btn.disabled = true;
-
-    await fetch(`/api/clientes/${_deletarId}`, { method: 'DELETE' });
-
-    document.getElementById('modal-deletar').classList.remove('open');
-    clienteAtivo = null;
-    document.getElementById('page-title').textContent = 'Selecione uma conta';
-    document.getElementById('page-sub').textContent = 'Clique em uma conta na barra lateral para editar';
-    document.getElementById('content').innerHTML = `<div class="empty-state"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg><p>Selecione uma conta para ver as configurações</p></div>`;
-    btn.textContent = 'Sim, remover';
-    btn.disabled = false;
-    await carregarClientes();
-  }
-
-  // ── CRIADOR DE USUÁRIOS ────────────────────────────────────
-
-  let uu_row_id = 0;
-
-  function abrirModalUsuarios() {
-    reiniciarModalUsuarios();
-    // Preencher select de contas
-    const sel = document.getElementById('uu-account');
-    sel.innerHTML = '<option value="">Selecione uma conta...</option>';
-    clientes.forEach(c => {
-      const opt = document.createElement('option');
-      opt.value = c.account_id;
-      opt.textContent = `#${c.account_id} — ${c.nome}`;
-      sel.appendChild(opt);
-    });
-    document.getElementById('modal-usuarios').classList.add('open');
-  }
-
-  function fecharModalUsuarios() {
-    document.getElementById('modal-usuarios').classList.remove('open');
-  }
-
-  function reiniciarModalUsuarios() {
-    document.getElementById('uu-form').style.display = '';
-    document.getElementById('uu-resultados').style.display = 'none';
-    document.getElementById('uu-error').classList.remove('show');
-    document.getElementById('uu-lista').innerHTML = '';
-    uu_row_id = 0;
-    adicionarLinhaUsuario();
-  }
-
-  document.getElementById('modal-usuarios').addEventListener('click', (e) => {
-    if (e.target === e.currentTarget) fecharModalUsuarios();
-  });
-
-  function adicionarLinhaUsuario() {
-    const id = ++uu_row_id;
-    const div = document.createElement('div');
-    div.className = 'usuario-row';
-    div.id = `uu-row-${id}`;
-    div.innerHTML = `
-      <input type="text" placeholder="email@empresa.com" id="uu-email-${id}" />
-      <div class="role-toggle">
-        <input type="radio" name="role-${id}" id="role-agent-${id}" value="agent" checked />
-        <label for="role-agent-${id}">Agente</label>
-        <input type="radio" name="role-${id}" id="role-admin-${id}" value="administrator" />
-        <label for="role-admin-${id}">Admin</label>
+        <div class="card-header" style="margin-bottom:12px;padding-bottom:12px;">
+          <div class="card-icon" style="font-size:16px;background:#eff6ff;color:#3b82f6;">?</div>
+          <div><div class="card-title" style="font-size:14px;">Lógica de envio por estágio</div></div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px;font-size:13px;color:var(--text-secondary);line-height:1.6;">
+          <div style="display:flex;gap:10px;align-items:flex-start;">
+            <span style="background:#f0fdf4;color:#166534;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600;flex-shrink:0;margin-top:2px;">Inbox normal</span>
+            <span>Sempre envia texto gerado pela IA, independente do tempo.</span>
+          </div>
+          <div style="display:flex;gap:10px;align-items:flex-start;">
+            <span style="background:#eff6ff;color:#1e40af;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600;flex-shrink:0;margin-top:2px;">WhatsApp Oficial</span>
+            <span>
+              Dentro de <strong>24h</strong> da última mensagem do cliente → envia texto gerado pela IA.<br>
+              Após <strong>24h</strong> → obrigatório usar template. Se nenhum template estiver configurado para o estágio, o envio é <em>pulado</em> (label e timer avançam normalmente).
+            </span>
+          </div>
+          <div style="display:flex;gap:10px;align-items:flex-start;">
+            <span style="background:#fff7ed;color:#92400e;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600;flex-shrink:0;margin-top:2px;">Reset</span>
+            <span>Qualquer mensagem nova (cliente ou IA) volta ao estágio 1 com timer de ${_inativCfg.estagios[0]?.horas || 2}h.</span>
+          </div>
+        </div>
       </div>
-      <button class="btn-remove-row" onclick="removerLinhaUsuario(${id})" title="Remover">×</button>
-    `;
-    document.getElementById('uu-lista').appendChild(div);
-    document.getElementById(`uu-email-${id}`).focus();
-  }
+    </div>
+  `;
 
-  function removerLinhaUsuario(id) {
-    const el = document.getElementById(`uu-row-${id}`);
-    if (el) el.remove();
-  }
+  // Auto-carrega templates da conta ativa
+  carregarTemplatesInatividade();
+}
 
-  async function criarUsuarios() {
-    const account_id = document.getElementById('uu-account').value;
-    const errEl = document.getElementById('uu-error');
-    errEl.classList.remove('show');
-
-    if (!account_id) {
-      errEl.textContent = 'Selecione uma conta.';
-      errEl.classList.add('show');
-      return;
-    }
-
-    const rows = document.getElementById('uu-lista').querySelectorAll('.usuario-row');
-    const usuarios = [];
-    rows.forEach(row => {
-      const idMatch = row.id.match(/uu-row-(\d+)/);
-      if (!idMatch) return;
-      const rid = idMatch[1];
-      const email = document.getElementById(`uu-email-${rid}`).value.trim();
-      const role = document.querySelector(`input[name="role-${rid}"]:checked`)?.value || 'agent';
-      if (email) usuarios.push({ email, role });
-    });
-
-    if (!usuarios.length) {
-      errEl.textContent = 'Adicione pelo menos um email.';
-      errEl.classList.add('show');
-      return;
-    }
-
-    const btn = document.getElementById('btn-uu-criar');
-    btn.textContent = 'Processando...';
-    btn.classList.add('loading');
-    btn.disabled = true;
-
-    try {
-      const res = await fetch('/api/criar-usuarios-chatwoot', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ account_id: parseInt(account_id), usuarios }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        const msg = typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail);
-        errEl.textContent = `Erro: ${msg}`;
-        errEl.classList.add('show');
-        return;
-      }
-
-      // Mostrar resultados
-      document.getElementById('uu-form').style.display = 'none';
-      const lista = document.getElementById('uu-resultados-lista');
-      lista.innerHTML = data.resultados.map(r => {
-        const icone = r.status === 'criado' ? '✓ Criado' : r.status === 'vinculado' ? '↗ Vinculado' : '✗ Erro';
-        const roleLabel = r.role === 'administrator' ? 'Admin' : 'Agente';
-        const textoParaCopiar = `Email: ${r.email}\nSenha: ${r.senha}`;
-        const senhaHtml = r.senha
-          ? `<span class="resultado-senha"><code>${r.senha}</code><button class="btn-copy-mini" onclick="copiarCredencial(this, \`${textoParaCopiar.replace(/`/g, '\\`')}\`)">📋 Copiar</button></span>`
-          : r.status === 'vinculado' ? '<span style="margin-left:auto;font-size:11px;opacity:0.7">já existia</span>' : '';
-        return `<div class="resultado-item ${r.status === 'erro' || r.status === 'erro_vinculo' ? 'erro' : r.status}">
-          <strong>${icone}</strong> ${r.email} <span style="opacity:0.6;font-size:11px;">(${roleLabel})</span>
-          ${senhaHtml}
-        </div>`;
-      }).join('');
-      document.getElementById('uu-resultados').style.display = '';
-
-    } catch (e) {
-      errEl.textContent = `Erro inesperado: ${e.message}`;
-      errEl.classList.add('show');
-    } finally {
-      btn.textContent = 'Criar / Vincular';
-      btn.classList.remove('loading');
-      btn.disabled = false;
+function toggleInativTemplate(stagio) {
+  const on  = document.getElementById(`inativ-wpp-${stagio}`).checked;
+  document.getElementById(`inativ-tpl-wrap-${stagio}`).style.display = on ? 'flex' : 'none';
+  document.getElementById(`inativ-tpl-off-${stagio}`).style.display  = on ? 'none' : '';
+  if (on) {
+    const old = document.getElementById(`inativ-tpl-${stagio}`);
+    const currentVal = old?.value || '';
+    if (old) {
+      const tmp = document.createElement('div');
+      tmp.innerHTML = _renderTemplateSelector(stagio, currentVal);
+      old.replaceWith(tmp.firstElementChild);
     }
   }
+}
 
-  // ── CRIAR NO CHATWOOT ──────────────────────────────────────
-
-  function abrirModalChatwoot() {
-    document.getElementById('cw-error').classList.remove('show');
-    document.getElementById('cw-error').textContent = '';
-    document.getElementById('cw-form').style.display = '';
-    document.getElementById('cw-sucesso').style.display = 'none';
-    document.getElementById('cw-account-name').value = '';
-    document.getElementById('cw-admin-name').value = '';
-    document.getElementById('cw-admin-email').value = '';
-    document.getElementById('modal-chatwoot').classList.add('open');
-  }
-
-  function fecharModalChatwoot() {
-    document.getElementById('modal-chatwoot').classList.remove('open');
-  }
-
-  document.getElementById('modal-chatwoot').addEventListener('click', (e) => {
-    if (e.target === e.currentTarget) fecharModalChatwoot();
+async function salvarInatividade() {
+  const estagios = _inativCfg.estagios.map(e => {
+    const horas = parseInt(document.getElementById(`inativ-horas-${e.stagio}`)?.value) || e.horas;
+    const label = document.getElementById(`inativ-label-${e.stagio}`)?.value.trim() || e.label;
+    const usaTpl = document.getElementById(`inativ-wpp-${e.stagio}`)?.checked;
+    const tpl = usaTpl ? (document.getElementById(`inativ-tpl-${e.stagio}`)?.value.trim() || null) : null;
+    return { ...e, horas, label, template_whatsapp: tpl };
   });
 
-  async function criarContaChatwoot() {
-    const accountName = document.getElementById('cw-account-name').value.trim();
-    const adminName = document.getElementById('cw-admin-name').value.trim();
-    const adminEmail = document.getElementById('cw-admin-email').value.trim();
-    const errEl = document.getElementById('cw-error');
-    errEl.classList.remove('show');
+  await fetch('/api/config/inatividade', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ..._inativCfg, estagios }),
+  });
 
-    if (!accountName || !adminEmail) {
-      errEl.textContent = 'Preencha o nome da conta e o email do admin.';
-      errEl.classList.add('show');
+  _inativCfg = { ..._inativCfg, estagios };
+  const msg = document.getElementById('inativ-save-msg');
+  msg.classList.add('show');
+  setTimeout(() => msg.classList.remove('show'), 2500);
+}
+
+// ══════════════════════════════════════════════
+// PAGE: AGENTES IA
+// ══════════════════════════════════════════════
+function renderPageAgentes() {
+  document.getElementById('topbar-sub').textContent = 'Gestão de agentes';
+  document.getElementById('page-content').innerHTML = `
+    <div class="coming-soon">
+      <div class="coming-soon-icon">🤖</div>
+      <h2>Agentes IA</h2>
+      <p>Listagem e gestão de agentes por conta em breve.</p>
+    </div>`;
+}
+
+// ══════════════════════════════════════════════
+// PAGE: RELATÓRIOS
+// ══════════════════════════════════════════════
+function renderPageRelatorios() {
+  document.getElementById('topbar-sub').textContent = 'Métricas e dados';
+  document.getElementById('page-content').innerHTML = `
+    <div class="coming-soon">
+      <div class="coming-soon-icon">📊</div>
+      <h2>Relatórios</h2>
+      <p>Leads, conversas, agendamentos e transcrições em breve.</p>
+    </div>`;
+}
+
+// ══════════════════════════════════════════════
+// PAGE: CONFIGURAÇÕES
+// ══════════════════════════════════════════════
+function renderPageConfig() {
+  document.getElementById('topbar-sub').textContent = 'Configurações globais';
+  document.getElementById('page-content').innerHTML = `
+    <div class="card" style="max-width:600px;">
+      <div class="card-header">
+        <div class="card-icon">⚙</div>
+        <div><div class="card-title">Configurações Globais</div>
+          <div class="card-sub">Variáveis de ambiente do sistema</div></div>
+      </div>
+      <div class="section-divider">Chatwoot</div>
+      <div class="fields-grid">
+        <div class="field-group full"><label>Chatwoot URL</label>
+          <input type="text" disabled value="Configurado via .env" style="background:#f3f4f6;color:var(--text-muted);" /></div>
+        <div class="field-group full"><label>Admins padrão (CHATWOOT_DEFAULT_ADMINS)</label>
+          <input type="text" disabled value="Configurado via .env" style="background:#f3f4f6;color:var(--text-muted);" /></div>
+      </div>
+      <div class="section-divider">Supabase</div>
+      <div class="fields-grid">
+        <div class="field-group full"><label>Supabase URL</label>
+          <input type="text" disabled value="Configurado via .env" style="background:#f3f4f6;color:var(--text-muted);" /></div>
+      </div>
+      <p style="font-size:12px;color:var(--text-muted);margin-top:16px;">Edite as variáveis diretamente no arquivo <code>.env</code> e reinicie o servidor para aplicar.</p>
+    </div>`;
+}
+
+// ══════════════════════════════════════════════
+// MODAL HELPERS
+// ══════════════════════════════════════════════
+function abrirModal(id) { document.getElementById(id).classList.add('open'); }
+function fecharModal(id) { document.getElementById(id).classList.remove('open'); }
+
+document.addEventListener('click', e => {
+  ['modal-deletar','modal-usuarios','modal-chatwoot','modal-template','modal-ver-template','modal-audiencia','modal-audiencia-tipo','modal-audiencia-msg'].forEach(id => {
+    const el = document.getElementById(id);
+    if (e.target === el) el.classList.remove('open');
+  });
+});
+
+// ══════════════════════════════════════════════
+// MODAL: DELETAR CONTA
+// ══════════════════════════════════════════════
+function abrirModalDeletar(id, nome) {
+  _deletarId = id;
+  document.getElementById('deletar-nome').textContent = nome;
+  abrirModal('modal-deletar');
+}
+
+async function confirmarDeletar() {
+  if (!_deletarId) return;
+  const btn = document.getElementById('btn-confirmar-delete');
+  btn.textContent = 'Removendo...'; btn.disabled = true;
+  await fetch(`/api/clientes/${_deletarId}`, { method: 'DELETE' });
+  fecharModal('modal-deletar');
+  clienteAtivo = null;
+  await carregarClientes();
+  navTo('contas');
+  btn.textContent = 'Sim, remover'; btn.disabled = false;
+}
+
+// ══════════════════════════════════════════════
+// MODAL: CRIAR CONTA CHATWOOT
+// ══════════════════════════════════════════════
+function abrirModalChatwoot() {
+  document.getElementById('cw-error').classList.remove('show');
+  document.getElementById('cw-form').style.display = '';
+  document.getElementById('cw-sucesso').style.display = 'none';
+  ['cw-account-name','cw-admin-name','cw-admin-email'].forEach(id => document.getElementById(id).value = '');
+  abrirModal('modal-chatwoot');
+}
+
+async function criarContaChatwoot() {
+  const accountName = document.getElementById('cw-account-name').value.trim();
+  const adminName = document.getElementById('cw-admin-name').value.trim();
+  const adminEmail = document.getElementById('cw-admin-email').value.trim();
+  const errEl = document.getElementById('cw-error');
+  errEl.classList.remove('show');
+  if (!accountName || !adminEmail) { errEl.textContent = 'Preencha nome da conta e email.'; errEl.classList.add('show'); return; }
+  const btn = document.getElementById('btn-cw-criar');
+  btn.textContent = 'Criando...'; btn.classList.add('loading');
+  try {
+    const res = await fetch('/api/criar-conta-chatwoot', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ account_name: accountName, admin_email: adminEmail, admin_name: adminName })
+    });
+    const data = await res.json();
+    if (!res.ok) { errEl.textContent = `Erro: ${typeof data.detail==='string'?data.detail:JSON.stringify(data.detail)}`; errEl.classList.add('show'); return; }
+    await carregarClientes();
+    clienteAtivo = data.account_id;
+    document.getElementById('cw-form').style.display = 'none';
+    document.getElementById('cw-sucesso-email').textContent = data.admin_email;
+    document.getElementById('cw-sucesso-senha').textContent = data.senha || '(sem senha)';
+    document.getElementById('cw-sucesso').style.display = '';
+  } catch(e) { errEl.textContent = `Erro: ${e.message}`; errEl.classList.add('show'); }
+  finally { btn.textContent = 'Criar Conta'; btn.classList.remove('loading'); }
+}
+
+function copiarSenha() {
+  const email = document.getElementById('cw-sucesso-email').textContent;
+  const senha = document.getElementById('cw-sucesso-senha').textContent;
+  navigator.clipboard.writeText(`Email: ${email}\nSenha: ${senha}`);
+}
+
+// ══════════════════════════════════════════════
+// MODAL: CRIADOR DE USUÁRIOS
+// ══════════════════════════════════════════════
+function abrirModalUsuarios() {
+  reiniciarModalUsuarios();
+  const sel = document.getElementById('uu-account');
+  sel.innerHTML = '<option value="">Selecione...</option>' + clientes.map(c => `<option value="${c.account_id}">#${c.account_id} — ${c.nome}</option>`).join('');
+  abrirModal('modal-usuarios');
+}
+
+function reiniciarModalUsuarios() {
+  document.getElementById('uu-form').style.display = '';
+  document.getElementById('uu-resultados').style.display = 'none';
+  document.getElementById('uu-error').classList.remove('show');
+  document.getElementById('uu-lista').innerHTML = '';
+  uu_row_id = 0;
+  adicionarLinhaUsuario();
+}
+
+function fecharModalUsuarios() { fecharModal('modal-usuarios'); }
+
+function adicionarLinhaUsuario() {
+  const id = ++uu_row_id;
+  const div = document.createElement('div');
+  div.className = 'btn-row';
+  div.id = `uu-row-${id}`;
+  div.innerHTML = `
+    <input type="text" placeholder="email@empresa.com" id="uu-email-${id}" style="flex:1;" />
+    <select id="uu-role-${id}" style="min-width:100px;">
+      <option value="agent">Agente</option>
+      <option value="administrator">Admin</option>
+    </select>
+    <button class="btn-remove-row" onclick="document.getElementById('uu-row-${id}').remove()">×</button>
+  `;
+  document.getElementById('uu-lista').appendChild(div);
+  document.getElementById(`uu-email-${id}`).focus();
+}
+
+async function criarUsuarios() {
+  const account_id = document.getElementById('uu-account').value;
+  const errEl = document.getElementById('uu-error');
+  errEl.classList.remove('show');
+  if (!account_id) { errEl.textContent = 'Selecione uma conta.'; errEl.classList.add('show'); return; }
+  const rows = document.getElementById('uu-lista').querySelectorAll('.btn-row');
+  const usuarios = [];
+  rows.forEach(row => {
+    const rid = row.id.replace('uu-row-','');
+    const email = document.getElementById(`uu-email-${rid}`)?.value.trim();
+    const role = document.getElementById(`uu-role-${rid}`)?.value || 'agent';
+    if (email) usuarios.push({ email, role });
+  });
+  if (!usuarios.length) { errEl.textContent = 'Adicione pelo menos um email.'; errEl.classList.add('show'); return; }
+  const btn = document.getElementById('btn-uu-criar');
+  btn.textContent = 'Processando...'; btn.classList.add('loading');
+  try {
+    const res = await fetch('/api/criar-usuarios-chatwoot', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ account_id: parseInt(account_id), usuarios }) });
+    const data = await res.json();
+    if (!res.ok) { errEl.textContent = `Erro: ${typeof data.detail==='string'?data.detail:JSON.stringify(data.detail)}`; errEl.classList.add('show'); return; }
+    document.getElementById('uu-form').style.display = 'none';
+    const lista = document.getElementById('uu-resultados-lista');
+    lista.innerHTML = data.resultados.map(r => {
+      const cls = r.status === 'criado' ? 'badge-green' : r.status === 'vinculado' ? 'badge-purple' : 'badge-red';
+      return `<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);">
+        <span class="badge ${cls}">${r.status}</span>
+        <span style="font-size:13px;">${r.email}</span>
+        ${r.senha ? `<code style="margin-left:auto;background:#f3f4f6;padding:2px 8px;border-radius:4px;font-size:12px;">${r.senha}</code>` : ''}
+      </div>`;
+    }).join('');
+    document.getElementById('uu-resultados').style.display = '';
+  } catch(e) { errEl.textContent = `Erro: ${e.message}`; errEl.classList.add('show'); }
+  finally { btn.textContent = 'Criar / Vincular'; btn.classList.remove('loading'); }
+}
+
+// ══════════════════════════════════════════════
+// PAGE: AVISO DE AUDIÊNCIA
+// ══════════════════════════════════════════════
+let _audTab = 'overview';
+let _audAudiencias = [];
+let _audTipos = [];
+let _audEditId = null;
+
+async function renderPageAvisoAudiencia() {
+  document.getElementById('topbar-sub').textContent = 'Gestão de audiências';
+  const el = document.getElementById('page-content');
+
+  el.innerHTML = `
+    <div class="page-tabs">
+      <button class="page-tab ${_audTab === 'overview' ? 'active' : ''}" onclick="audSetTab('overview')">Visão Geral</button>
+      <button class="page-tab ${_audTab === 'list' ? 'active' : ''}" onclick="audSetTab('list')">Audiências</button>
+      <button class="page-tab ${_audTab === 'config' ? 'active' : ''}" onclick="audSetTab('config')">Configurações</button>
+    </div>
+    <div id="aud-tab-overview" style="${_audTab !== 'overview' ? 'display:none' : ''}"></div>
+    <div id="aud-tab-list" style="${_audTab !== 'list' ? 'display:none' : ''}"></div>
+    <div id="aud-tab-config" style="${_audTab !== 'config' ? 'display:none' : ''}"></div>
+  `;
+
+  await Promise.all([_audCarregarAudiencias(), _audCarregarTipos()]);
+  _audRenderTab();
+}
+
+function audSetTab(tab) {
+  _audTab = tab;
+  ['overview', 'list', 'config'].forEach((t, i) => {
+    document.querySelectorAll('.page-tab')[i]?.classList.toggle('active', t === tab);
+    const el = document.getElementById(`aud-tab-${t}`);
+    if (el) el.style.display = t === tab ? '' : 'none';
+  });
+  _audRenderTab();
+}
+
+async function _audCarregarAudiencias() {
+  const res = await fetch('/api/audiencias');
+  _audAudiencias = await res.json();
+}
+
+async function _audCarregarTipos() {
+  const res = await fetch('/api/audiencias/tipos');
+  _audTipos = await res.json();
+}
+
+function _audRenderTab() {
+  if (_audTab === 'overview') _audRenderOverview();
+  else if (_audTab === 'list') _audRenderList();
+  else if (_audTab === 'config') _audRenderConfig();
+}
+
+function _audRenderOverview() {
+  const el = document.getElementById('aud-tab-overview');
+  if (!el) return;
+
+  const today = new Date().toISOString().split('T')[0];
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+  const total = _audAudiencias.length;
+  const hoje = _audAudiencias.filter(a => a.data === today).length;
+  const amanha = _audAudiencias.filter(a => a.data === tomorrow).length;
+
+  const proximas = [..._audAudiencias]
+    .filter(a => a.data >= today)
+    .sort((a, b) => (a.data + a.horario).localeCompare(b.data + b.horario))
+    .slice(0, 10);
+
+  el.innerHTML = `
+    <div style="max-width:960px;">
+      <div style="margin-bottom:20px;">
+        <h2 style="font-size:18px;font-weight:700;margin-bottom:4px;">Bem-vindo ao Dashboard</h2>
+        <p style="font-size:13px;color:var(--text-muted);">Gerencie suas audiências e processos jurídicos</p>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">Total de Audiências</div>
+          <div class="stat-value">${total}</div>
+          <div class="stat-sub">Cadastradas no sistema</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Audiências Hoje</div>
+          <div class="stat-value">${hoje}</div>
+          <div class="stat-sub">Agendadas para hoje</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Audiências Amanhã</div>
+          <div class="stat-value">${amanha}</div>
+          <div class="stat-sub">Agendadas para amanhã</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-header" style="margin-bottom:16px;">
+          <div class="card-icon" style="font-size:16px;">📅</div>
+          <div>
+            <div class="card-title">Próximas Audiências</div>
+            <div class="card-sub">Audiências a partir de hoje</div>
+          </div>
+          <button class="btn btn-primary" style="margin-left:auto;" onclick="audSetTab('list')">Ver Todas</button>
+        </div>
+        ${proximas.length ? `
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>CLIENTE</th><th>TELEFONE</th><th>AUDIÊNCIA</th><th>LOCAL</th></tr></thead>
+              <tbody>${proximas.map(a => `<tr>${_audColunas(a)}</tr>`).join('')}</tbody>
+            </table>
+          </div>
+        ` : `<div class="empty-state" style="padding:30px 20px;"><p>Nenhuma audiência futura cadastrada</p></div>`}
+      </div>
+    </div>
+  `;
+}
+
+function _audRenderList() {
+  const el = document.getElementById('aud-tab-list');
+  if (!el) return;
+
+  el.innerHTML = `
+    <div style="max-width:1100px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;gap:10px;flex-wrap:wrap;">
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <input type="date" id="aud-filter-data"
+            style="padding:7px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:#fafafa;"
+            onchange="_audFiltrar()" />
+          <input type="text" id="aud-search" placeholder="Buscar por nome, telefone ou processo..."
+            style="width:280px;" oninput="_audFiltrar()" />
+        </div>
+        <button class="btn btn-primary" onclick="audAbrirModal()">+ Nova Audiência</button>
+      </div>
+      <div id="aud-list-body"></div>
+    </div>
+  `;
+
+  _audFiltrar();
+}
+
+function _audFiltrar() {
+  const data = document.getElementById('aud-filter-data')?.value || '';
+  const busca = (document.getElementById('aud-search')?.value || '').toLowerCase();
+
+  const filtrados = _audAudiencias.filter(a => {
+    const matchData = !data || a.data === data;
+    const matchBusca = !busca ||
+      (a.nome_cliente || '').toLowerCase().includes(busca) ||
+      (a.telefone || '').includes(busca);
+    return matchData && matchBusca;
+  }).sort((a, b) => (a.data + a.horario).localeCompare(b.data + b.horario));
+
+  _audRenderTabela(filtrados);
+}
+
+function _audRenderTabela(audiencias) {
+  const el = document.getElementById('aud-list-body');
+  if (!el) return;
+
+  if (!audiencias.length) {
+    el.innerHTML = `<div class="empty-state"><p>Nenhuma audiência encontrada</p></div>`;
+    return;
+  }
+
+  el.innerHTML = `
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">${audiencias.length} audiência${audiencias.length !== 1 ? 's' : ''} encontrada${audiencias.length !== 1 ? 's' : ''}</div>
+    <div class="card" style="padding:0;overflow:hidden;">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>CLIENTE</th><th>TELEFONE</th><th>AUDIÊNCIA</th><th>LOCAL</th><th></th></tr></thead>
+          <tbody>
+            ${audiencias.map(a => `
+              <tr>
+                ${_audColunas(a)}
+                <td>
+                  <div class="td-actions">
+                    <button class="btn-icon" title="Editar" onclick="audAbrirModal('${a.id}')">
+                      <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    </button>
+                    <button class="btn-icon danger" title="Excluir" onclick="audDeletar('${a.id}', \`${a.nome_cliente.replace(/`/g,"'")}\`)">
+                      <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                    </button>
+                  </div>
+                </td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+function _audColunas(a) {
+  const dataFmt = a.data ? a.data.split('-').reverse().join('/') : '—';
+  const local = a.link_zoom
+    ? `<div style="font-size:11px;color:var(--text-muted);">Link Zoom</div>
+       <a href="${_escHtml(a.link_zoom)}" target="_blank" style="font-size:11px;color:var(--purple);">Abrir link</a>`
+    : `<div style="font-size:12px;color:${a.endereco ? 'var(--text-secondary)' : 'var(--text-muted)'};max-width:220px;font-style:${a.endereco ? 'normal' : 'italic'};">${_escHtml(a.endereco || 'Endereço não informado')}</div>`;
+  return `
+    <td class="td-name">${_escHtml(a.nome_cliente)}</td>
+    <td style="color:var(--text-secondary);font-size:12px;">${a.telefone || '—'}</td>
+    <td>
+      <div style="font-weight:500;">${dataFmt} às ${a.horario || '—'}</div>
+      <div style="font-size:11px;color:var(--text-muted);">${_escHtml(a.tipo_audiencia || '')}</div>
+    </td>
+    <td>${local}</td>
+  `;
+}
+
+function _audRenderConfig() {
+  const el = document.getElementById('aud-tab-config');
+  if (!el) return;
+
+  el.innerHTML = `
+    <div style="max-width:900px;">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon">⚙</div>
+          <div>
+            <div class="card-title">Tipos de Audiência</div>
+            <div class="card-sub">Gerencie os tipos e suas mensagens de aviso</div>
+          </div>
+          <button class="btn btn-primary" style="margin-left:auto;" onclick="audTipoAbrirModal()">Novo Tipo</button>
+        </div>
+        ${_audTipos.length ? _audTipos.map(t => {
+          const msgs = t.mensagens || [];
+          const expanded = _audTipoExpandido === t.id;
+          return `
+            <div style="border-bottom:1px solid var(--border);">
+              <div style="display:flex;align-items:center;padding:12px 16px;gap:10px;cursor:pointer;" onclick="_audToggleTipo(${t.id})">
+                <span style="font-size:12px;color:var(--text-muted);transform:rotate(${expanded ? '90' : '0'}deg);transition:.2s;">▶</span>
+                <span style="font-weight:600;font-size:13px;flex:1;">${_escHtml(t.nome)}</span>
+                <span class="badge ${t.ativo ? 'badge-green' : 'badge-gray'}" style="font-size:10px;">${t.ativo ? 'Ativo' : 'Inativo'}</span>
+                <span style="font-size:11px;color:var(--text-muted);">${msgs.length} msg${msgs.length !== 1 ? 's' : ''}</span>
+                <button class="btn-icon danger" title="Excluir tipo" onclick="event.stopPropagation();audTipoDeletar(${t.id}, \`${t.nome.replace(/`/g,"'")}\`)">
+                  <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                </button>
+              </div>
+              ${expanded ? `
+                <div style="padding:0 16px 16px 36px;">
+                  ${msgs.length ? msgs.sort((a,b) => (a.idx||0)-(b.idx||0)).map(m => `
+                    <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px;">
+                      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+                        <span class="badge badge-blue" style="font-size:10px;">#${m.idx}</span>
+                        <span style="font-size:12px;font-weight:600;">${m.tempo_antes} ${m.unidade_tempo} antes</span>
+                        ${m.template_whatsapp ? `<span class="badge badge-purple" style="font-size:10px;">Template: ${_escHtml(m.template_whatsapp)}</span>` : ''}
+                        <div style="margin-left:auto;display:flex;gap:4px;">
+                          <button class="btn-icon" title="Editar" onclick="audMsgAbrirModal(${t.id}, '${m.id}')">
+                            <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                          </button>
+                          <button class="btn-icon danger" title="Excluir" onclick="audMsgDeletar(${t.id}, '${m.id}')">
+                            <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+                          </button>
+                        </div>
+                      </div>
+                      <div style="font-size:12px;color:var(--text-secondary);white-space:pre-wrap;max-height:120px;overflow-y:auto;background:#fff;padding:8px;border-radius:6px;border:1px solid var(--border);">${_escHtml(m.conteudo || '(sem conteúdo)')}</div>
+                    </div>
+                  `).join('') : `<div style="font-size:12px;color:var(--text-muted);padding:8px 0;">Nenhuma mensagem configurada</div>`}
+                  <button class="btn btn-secondary" style="font-size:12px;margin-top:4px;" onclick="audMsgAbrirModal(${t.id})">+ Nova Mensagem</button>
+                </div>
+              ` : ''}
+            </div>`;
+        }).join('') : `<div class="empty-state" style="padding:40px;"><p>Nenhum tipo cadastrado</p></div>`}
+      </div>
+    </div>
+  `;
+}
+
+let _audTipoExpandido = null;
+function _audToggleTipo(tipoId) {
+  _audTipoExpandido = _audTipoExpandido === tipoId ? null : tipoId;
+  _audRenderConfig();
+}
+
+// ── MODAL: MENSAGEM DE TIPO ──
+let _audMsgEditTipoId = null;
+let _audMsgEditId = null;
+
+let _audMsgTemplates = [];
+
+async function audMsgAbrirModal(tipoId, msgId = null) {
+  _audMsgEditTipoId = tipoId;
+  _audMsgEditId = msgId;
+
+  const tipo = _audTipos.find(t => t.id === tipoId);
+  const msg = msgId ? (tipo?.mensagens || []).find(m => m.id === msgId) : null;
+
+  document.getElementById('aud-msg-modal-title').textContent = msg ? 'Editar Mensagem' : 'Nova Mensagem';
+  document.getElementById('aud-msg-conteudo').value = msg?.conteudo || '';
+  document.getElementById('aud-msg-tempo').value = msg?.tempo_antes ?? 5;
+  document.getElementById('aud-msg-unidade').value = msg?.unidade_tempo || 'dias';
+  document.getElementById('aud-msg-error').classList.remove('show');
+
+  // Carregar templates aprovados do cliente ativo
+  const wrap = document.getElementById('aud-msg-template-wrap');
+  const hint = document.getElementById('aud-msg-template-hint');
+  const currentVal = msg?.template_whatsapp || '';
+
+  if (clienteAtivo) {
+    wrap.innerHTML = '<span style="font-size:12px;color:var(--text-muted);">Carregando templates...</span>';
+    try {
+      const res = await fetch(`/api/clientes/${clienteAtivo}/templates`);
+      if (res.ok) {
+        const data = await res.json();
+        _audMsgTemplates = (data.data || []).filter(t => t.status === 'APPROVED');
+      } else {
+        _audMsgTemplates = [];
+      }
+    } catch(e) {
+      _audMsgTemplates = [];
+    }
+  } else {
+    _audMsgTemplates = [];
+  }
+
+  if (_audMsgTemplates.length > 0) {
+    const opts = [`<option value="">— Nenhum (texto livre) —</option>`]
+      .concat(_audMsgTemplates.map(t =>
+        `<option value="${t.name}" ${t.name === currentVal ? 'selected' : ''}>${t.name}</option>`
+      )).join('');
+    wrap.innerHTML = `<select id="aud-msg-template" style="width:100%;">${opts}</select>`;
+    hint.textContent = `${_audMsgTemplates.length} template(s) aprovado(s) encontrado(s)`;
+    hint.style.color = 'var(--green)';
+  } else {
+    wrap.innerHTML = `<input type="text" id="aud-msg-template" value="${_escHtml(currentVal)}" placeholder="Ex: aviso_audiencia_conciliacao" />`;
+    hint.textContent = clienteAtivo
+      ? 'Nenhum template aprovado encontrado — configure as credenciais Meta no cliente ou digite manualmente'
+      : 'Selecione um cliente ativo para carregar templates';
+    hint.style.color = 'var(--text-muted)';
+  }
+
+  abrirModal('modal-audiencia-msg');
+}
+
+async function audMsgSalvar() {
+  const errEl = document.getElementById('aud-msg-error');
+  errEl.classList.remove('show');
+
+  const conteudo = document.getElementById('aud-msg-conteudo').value.trim();
+  if (!conteudo) { errEl.textContent = 'Conteúdo é obrigatório.'; errEl.classList.add('show'); return; }
+
+  const dados = {
+    conteudo,
+    tempo_antes: parseInt(document.getElementById('aud-msg-tempo').value) || 5,
+    unidade_tempo: document.getElementById('aud-msg-unidade').value || 'dias',
+    template_whatsapp: document.getElementById('aud-msg-template').value.trim(),
+  };
+
+  const btn = document.getElementById('aud-msg-btn-salvar');
+  btn.textContent = 'Salvando...'; btn.classList.add('loading');
+
+  try {
+    const base = `/api/audiencias/tipos/${_audMsgEditTipoId}/mensagens`;
+    const url = _audMsgEditId ? `${base}/${_audMsgEditId}` : base;
+    const method = _audMsgEditId ? 'PUT' : 'POST';
+    const res = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(dados) });
+    if (!res.ok) {
+      const err = await res.json();
+      errEl.textContent = `Erro: ${err.detail}`; errEl.classList.add('show');
+      return;
+    }
+    fecharModal('modal-audiencia-msg');
+    await _audCarregarTipos();
+    _audRenderConfig();
+  } catch(e) {
+    errEl.textContent = `Erro: ${e.message}`; errEl.classList.add('show');
+  } finally {
+    btn.textContent = 'Salvar'; btn.classList.remove('loading');
+  }
+}
+
+async function audMsgDeletar(tipoId, msgId) {
+  if (!confirm('Excluir esta mensagem?')) return;
+  const res = await fetch(`/api/audiencias/tipos/${tipoId}/mensagens/${msgId}`, { method: 'DELETE' });
+  if (res.ok) {
+    await _audCarregarTipos();
+    _audRenderConfig();
+  }
+}
+
+// ── MODAL: CRIAR/EDITAR AUDIÊNCIA ──
+async function audAbrirModal(id = null) {
+  _audEditId = id;
+  const a = id ? _audAudiencias.find(x => x.id === id) : null;
+  document.getElementById('aud-modal-title').textContent = id ? 'Editar Audiência' : 'Nova Audiência';
+
+  const v = (key, fallback = '') => a ? (a[key] ?? fallback) : fallback;
+
+  const accountSel = document.getElementById('aud-f-account');
+  accountSel.innerHTML = clientes.map(c =>
+    `<option value="${c.account_id}" ${v('account_id') == c.account_id ? 'selected' : ''}>${c.nome} (#${c.account_id})</option>`
+  ).join('');
+  if (!id && clienteAtivo) accountSel.value = clienteAtivo;
+
+  document.getElementById('aud-f-telefone').value = v('telefone');
+  document.getElementById('aud-f-nome').value = v('nome_cliente');
+  document.getElementById('aud-f-processo').checked = v('tem_processo', false);
+  document.getElementById('aud-f-data').value = v('data');
+  document.getElementById('aud-f-horario').value = v('horario');
+  document.getElementById('aud-f-endereco').value = v('endereco');
+  document.getElementById('aud-f-zoom').value = v('link_zoom');
+  document.getElementById('aud-f-conversation-id').value = v('conversation_id', '');
+  document.getElementById('aud-f-inbox-id').value = v('inbox_id', '');
+  document.getElementById('aud-busca-resultado').innerHTML = '';
+
+  const tipoSel = document.getElementById('aud-f-tipo');
+  tipoSel.innerHTML = `<option value="">— Selecione o tipo —</option>` +
+    _audTipos.filter(t => t.ativo).map(t =>
+      `<option value="${_escHtml(t.nome)}" ${t.nome === v('tipo_audiencia') ? 'selected' : ''}>${_escHtml(t.nome)}</option>`
+    ).join('');
+
+  const testemunhas = v('testemunhas', [{nome:'',whatsapp:''},{nome:'',whatsapp:''},{nome:'',whatsapp:''}]);
+  for (let i = 0; i < 3; i++) {
+    const t = testemunhas[i] || {nome:'',whatsapp:''};
+    document.getElementById(`aud-f-test${i+1}-nome`).value = t.nome || '';
+    document.getElementById(`aud-f-test${i+1}-wp`).value = t.whatsapp || '';
+  }
+
+  document.getElementById('aud-modal-error').classList.remove('show');
+  abrirModal('modal-audiencia');
+}
+
+async function audBuscarContato() {
+  const telefone = document.getElementById('aud-f-telefone').value.trim();
+  const accountId = document.getElementById('aud-f-account').value;
+  const resultDiv = document.getElementById('aud-busca-resultado');
+
+  if (!telefone) { resultDiv.innerHTML = '<span style="font-size:12px;color:var(--red);">Digite um telefone</span>'; return; }
+  if (!accountId) { resultDiv.innerHTML = '<span style="font-size:12px;color:var(--red);">Selecione uma conta</span>'; return; }
+
+  resultDiv.innerHTML = '<span style="font-size:12px;color:var(--text-muted);">Buscando...</span>';
+
+  try {
+    const res = await fetch(`/api/clientes/${accountId}/chatwoot/contatos/buscar?q=${encodeURIComponent(telefone)}`);
+    if (!res.ok) throw new Error('Erro na busca');
+    const contatos = await res.json();
+
+    if (!contatos.length) {
+      resultDiv.innerHTML = '<span style="font-size:12px;color:var(--text-muted);">Nenhum contato encontrado</span>';
       return;
     }
 
-    const btn = document.getElementById('btn-cw-criar');
-    btn.textContent = 'Criando...';
-    btn.classList.add('loading');
-    btn.disabled = true;
+    resultDiv.innerHTML = contatos.map(c => `
+      <div onclick="audSelecionarContato(${JSON.stringify(c).replace(/"/g,'&quot;')})"
+           style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;margin-bottom:4px;cursor:pointer;background:#fff;transition:.15s;"
+           onmouseenter="this.style.background='#f0f9ff';this.style.borderColor='var(--purple)'"
+           onmouseleave="this.style.background='#fff';this.style.borderColor='var(--border)'">
+        <div style="flex:1;">
+          <div style="font-size:13px;font-weight:600;">${_escHtml(c.nome)}</div>
+          <div style="font-size:11px;color:var(--text-muted);">${_escHtml(c.telefone || '')}${c.conversation_id ? ' — conversa #' + c.conversation_id : ''}</div>
+        </div>
+        <span style="font-size:11px;color:var(--purple);font-weight:600;">Selecionar</span>
+      </div>
+    `).join('');
+  } catch(e) {
+    resultDiv.innerHTML = `<span style="font-size:12px;color:var(--red);">Erro: ${e.message}</span>`;
+  }
+}
 
-    try {
-      const res = await fetch('/api/criar-conta-chatwoot', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ account_name: accountName, admin_email: adminEmail, admin_name: adminName }),
-      });
+function audSelecionarContato(contato) {
+  document.getElementById('aud-f-nome').value = contato.nome || '';
+  document.getElementById('aud-f-telefone').value = contato.telefone || '';
+  document.getElementById('aud-f-conversation-id').value = contato.conversation_id || '';
+  document.getElementById('aud-f-inbox-id').value = contato.inbox_id || '';
+  document.getElementById('aud-busca-resultado').innerHTML =
+    `<span style="font-size:12px;color:var(--green);font-weight:600;">Contato selecionado: ${_escHtml(contato.nome)}${contato.conversation_id ? ' (conversa #' + contato.conversation_id + ')' : ''}</span>`;
+}
 
-      const data = await res.json();
+async function audSalvar() {
+  const errEl = document.getElementById('aud-modal-error');
+  errEl.classList.remove('show');
 
-      if (!res.ok) {
-        const msg = typeof data.detail === 'string'
-          ? data.detail
-          : JSON.stringify(data.detail);
-        errEl.textContent = `Erro: ${msg}`;
-        errEl.classList.add('show');
-        return;
-      }
+  const nome = document.getElementById('aud-f-nome').value.trim();
+  if (!nome) { errEl.textContent = 'Nome do cliente é obrigatório.'; errEl.classList.add('show'); return; }
 
-      await carregarClientes();
-      selecionarCliente(data.account_id);
+  const testemunhas = [];
+  for (let i = 1; i <= 3; i++) {
+    testemunhas.push({
+      nome: document.getElementById(`aud-f-test${i}-nome`).value.trim(),
+      whatsapp: document.getElementById(`aud-f-test${i}-wp`).value.trim(),
+    });
+  }
 
-      // Mostrar tela de sucesso com a senha
-      document.getElementById('cw-form').style.display = 'none';
-      document.getElementById('cw-sucesso-email').textContent = data.admin_email;
-      document.getElementById('cw-sucesso-senha').textContent = data.senha || '(verifique o email de convite)';
-      document.getElementById('cw-sucesso').style.display = '';
-    } catch (e) {
-      errEl.textContent = `Erro inesperado: ${e.message}`;
+  const dados = {
+    account_id: parseInt(document.getElementById('aud-f-account').value) || null,
+    nome_cliente: nome,
+    tem_processo: document.getElementById('aud-f-processo').checked,
+    telefone: document.getElementById('aud-f-telefone').value.trim(),
+    conversation_id: parseInt(document.getElementById('aud-f-conversation-id').value) || null,
+    inbox_id: parseInt(document.getElementById('aud-f-inbox-id').value) || null,
+    data: document.getElementById('aud-f-data').value,
+    horario: document.getElementById('aud-f-horario').value,
+    tipo_audiencia: document.getElementById('aud-f-tipo').value,
+    endereco: document.getElementById('aud-f-endereco').value.trim(),
+    link_zoom: document.getElementById('aud-f-zoom').value.trim(),
+    testemunhas,
+  };
+
+  const btn = document.getElementById('aud-btn-salvar');
+  btn.textContent = 'Salvando...'; btn.classList.add('loading');
+
+  try {
+    const url = _audEditId ? `/api/audiencias/${_audEditId}` : '/api/audiencias';
+    const method = _audEditId ? 'PUT' : 'POST';
+    const res = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(dados) });
+    if (!res.ok) {
+      const err = await res.json();
+      errEl.textContent = `Erro: ${typeof err.detail === 'string' ? err.detail : JSON.stringify(err.detail)}`;
       errEl.classList.add('show');
-    } finally {
-      btn.textContent = 'Criar Conta';
-      btn.classList.remove('loading');
-      btn.disabled = false;
+      return;
     }
+    fecharModal('modal-audiencia');
+    await _audCarregarAudiencias();
+    _audRenderTab();
+  } catch(e) {
+    errEl.textContent = `Erro: ${e.message}`; errEl.classList.add('show');
+  } finally {
+    btn.textContent = 'Salvar'; btn.classList.remove('loading');
   }
+}
 
-  function copiarSenha() {
-    const email = document.getElementById('cw-sucesso-email').textContent;
-    const senha = document.getElementById('cw-sucesso-senha').textContent;
-    const btn = document.querySelector('#cw-sucesso button');
-    navigator.clipboard.writeText(`Email: ${email}\nSenha: ${senha}`);
-    if (btn) { btn.textContent = '✓ Copiado'; setTimeout(() => btn.textContent = '📋 Copiar', 2000); }
+async function audDeletar(id, nome) {
+  if (!confirm(`Excluir a audiência de "${nome}"?`)) return;
+  const res = await fetch(`/api/audiencias/${id}`, { method: 'DELETE' });
+  if (res.ok) {
+    await _audCarregarAudiencias();
+    _audRenderTab();
   }
+}
 
-  function copiarCredencial(btn, texto) {
-    navigator.clipboard.writeText(texto);
-    btn.textContent = '✓ Copiado';
-    setTimeout(() => btn.textContent = '📋 Copiar', 2000);
+// ── MODAL: TIPOS DE AUDIÊNCIA ──
+function audTipoAbrirModal() {
+  document.getElementById('aud-tipo-nome').value = '';
+  document.getElementById('aud-tipo-descricao').value = '';
+  document.getElementById('aud-tipo-error').classList.remove('show');
+  abrirModal('modal-audiencia-tipo');
+}
+
+async function audTipoSalvar() {
+  const errEl = document.getElementById('aud-tipo-error');
+  errEl.classList.remove('show');
+  const nome = document.getElementById('aud-tipo-nome').value.trim();
+  if (!nome) { errEl.textContent = 'Nome é obrigatório.'; errEl.classList.add('show'); return; }
+
+  const dados = {
+    nome,
+    descricao: document.getElementById('aud-tipo-descricao').value.trim() || nome,
+    ativo: true,
+  };
+
+  const btn = document.getElementById('aud-tipo-btn-salvar');
+  btn.textContent = 'Salvando...'; btn.classList.add('loading');
+
+  try {
+    const res = await fetch('/api/audiencias/tipos', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(dados) });
+    if (!res.ok) {
+      const err = await res.json();
+      errEl.textContent = `Erro: ${err.detail}`; errEl.classList.add('show');
+      return;
+    }
+    fecharModal('modal-audiencia-tipo');
+    await _audCarregarTipos();
+    _audRenderTab();
+  } catch(e) {
+    errEl.textContent = `Erro: ${e.message}`; errEl.classList.add('show');
+  } finally {
+    btn.textContent = 'Criar'; btn.classList.remove('loading');
   }
+}
 
-  carregarClientes();
+async function audTipoDeletar(id, nome) {
+  if (!confirm(`Excluir o tipo "${nome}"?`)) return;
+  const res = await fetch(`/api/audiencias/tipos/${id}`, { method: 'DELETE' });
+  if (res.ok) {
+    await _audCarregarTipos();
+    _audRenderTab();
+  }
+}
+
+// ══════════════════════════════════════════════
+// START
+// ══════════════════════════════════════════════
+init();
 </script>
 </body>
 </html>

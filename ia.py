@@ -381,13 +381,21 @@ async def enviar_nota_privada(chatwoot_url: str, chatwoot_token: str, account_id
         resp.raise_for_status()
 
 
-async def enviar_resposta_chatwoot(chatwoot_url: str, chatwoot_token: str, account_id: int, conversation_id: int, texto: str):
+async def enviar_resposta_chatwoot(chatwoot_url: str, chatwoot_token: str, account_id: int, conversation_id: int, texto: str, inbox_id: int | None = None, inatividade_ativa: bool = True):
     partes = dividir_mensagem(texto)
     logger.info(f"Enviando {len(partes)} parte(s) na conversa {conversation_id}")
     for i, parte in enumerate(partes):
         await enviar_parte_chatwoot(chatwoot_url, chatwoot_token, account_id, conversation_id, parte)
         if i < len(partes) - 1:
             await asyncio.sleep(0.5)
+
+    # Resetar inatividade (IA respondeu — timer recomeça do estágio 1)
+    if inatividade_ativa:
+        try:
+            from inatividade import registrar_atividade
+            registrar_atividade(account_id, conversation_id, inbox_id)
+        except Exception as e:
+            logger.warning(f"Erro ao resetar inatividade após resposta IA: {e}")
 
 
 # ── OPENAI: SUPERVISOR E AGENTE COM TOOLS ─────────────────────
@@ -526,6 +534,8 @@ async def processar_mensagem(config: dict, account_id: int, conversation_id: int
             account_id=account_id,
             conversation_id=conversation_id,
             texto=resposta,
+            inbox_id=inbox_id,
+            inatividade_ativa=config.get("inatividade_ativa", True),
         )
 
 

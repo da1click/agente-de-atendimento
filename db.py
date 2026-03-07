@@ -89,6 +89,50 @@ def inserir_agendamento(account_id: int, inbox_id: int, conversation_id: int, co
 
 # ── TRANSCRIÇÕES ──────────────────────────────────────────────
 
+# ── INATIVIDADE ───────────────────────────────────────────────
+
+def upsert_inatividade(account_id: int, conversation_id: int, inbox_id: int | None, stagio: int, proximo_disparo: str):
+    db = get_db()
+    db.table("ia_inatividade").upsert({
+        "account_id": account_id,
+        "conversation_id": conversation_id,
+        "inbox_id": inbox_id,
+        "stagio": stagio,
+        "proximo_disparo": proximo_disparo,
+        "ativo": True,
+        "updated_at": "now()",
+    }, on_conflict="account_id,conversation_id").execute()
+
+
+def get_inatividades_pendentes() -> list:
+    db = get_db()
+    resp = (
+        db.table("ia_inatividade")
+        .select("*")
+        .eq("ativo", True)
+        .lte("proximo_disparo", "now()")
+        .execute()
+    )
+    return resp.data or []
+
+
+def desativar_inatividade(account_id: int, conversation_id: int):
+    db = get_db()
+    db.table("ia_inatividade").update({"ativo": False, "updated_at": "now()"}).eq(
+        "account_id", account_id
+    ).eq("conversation_id", conversation_id).execute()
+
+
+def deletar_dados_conta(account_id: int):
+    db = get_db()
+    for tabela in ("ia_transcricoes", "ia_agendamentos", "ia_leads", "ia_conversations", "ia_inatividade"):
+        try:
+            db.table(tabela).delete().eq("account_id", account_id).execute()
+            logger.info(f"Supabase: {tabela} limpa para account_id={account_id}")
+        except Exception as e:
+            logger.warning(f"Supabase: erro ao limpar {tabela} (account_id={account_id}): {e}")
+
+
 def salvar_transcricao(account_id: int, inbox_id: int, conversation_id: int, chatwoot_message_id: int, transcription: str, audio_url: str):
     db = get_db()
     db.table("ia_transcricoes").insert({

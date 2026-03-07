@@ -1,0 +1,49 @@
+{
+  "ativo": false,
+  "estagios": [
+    {
+      "stagio": 1,
+      "horas": 2,
+      "label": "inatividade",
+      "template_whatsapp": null
+    },
+    {
+      "stagio": 2,
+      "horas": 6,
+      "label": "inatividade-2",
+      "template_whatsapp": null
+    },
+    {
+      "stagio": 3,
+      "horas": 12,
+      "label": "inatividade-3",
+      "template_whatsapp": null
+    },
+    {
+      "stagio": 4,
+      "horas": 24,
+      "label": "inatividade-4",
+      "template_whatsapp": null
+    },
+    {
+      "stagio": 5,
+      "horas": 12,
+      "label": "necessita_atencao",
+      "template_whatsapp": null
+    },
+    {
+      "stagio": 6,
+      "horas": 72,
+      "label": "remarketing",
+      "template_whatsapp": null
+    }
+  ],
+  "labels_remover": [
+    "inatividade",
+    "inatividade-2",
+    "inatividade-3",
+    "inatividade-4",
+    "necessita_atencao",
+    "remarketing"
+  ]
+}
