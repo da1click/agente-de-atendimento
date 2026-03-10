@@ -149,14 +149,20 @@ def criar_usuario(email: str, password_hash: str, nome: str, role: str) -> dict:
 
 def get_usuario_por_email(email: str) -> dict | None:
     db = get_db()
-    resp = db.table("dashboard_users").select("*").eq("email", email).eq("ativo", True).maybe_single().execute()
-    return resp.data
+    try:
+        resp = db.table("dashboard_users").select("*").eq("email", email).eq("ativo", True).maybe_single().execute()
+        return resp.data if resp else None
+    except Exception:
+        return None
 
 
 def get_usuario_por_id(user_id: str) -> dict | None:
     db = get_db()
-    resp = db.table("dashboard_users").select("*").eq("id", user_id).maybe_single().execute()
-    return resp.data
+    try:
+        resp = db.table("dashboard_users").select("*").eq("id", user_id).maybe_single().execute()
+        return resp.data if resp else None
+    except Exception:
+        return None
 
 
 def listar_usuarios() -> list:
