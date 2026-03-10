@@ -403,8 +403,8 @@
   <!-- Lista oculta (mantida para compatibilidade interna) -->
   <div id="sidebar-accounts-section" style="display:none;"><div id="sidebar-accounts"></div></div>
 
-  <!-- Main navigation -->
-  <div class="nav-section" id="nav-ferramentas" style="margin-top:8px;">
+  <!-- Main navigation (oculto até selecionar conta) -->
+  <div class="nav-section" id="nav-ferramentas" style="margin-top:8px;display:none;">
     <div class="nav-section-label">Ferramentas</div>
     <div class="nav-item" id="nav-templates" onclick="navTo('templates')">
       <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
@@ -428,7 +428,7 @@
     </div>
   </div>
 
-  <div class="nav-section" style="margin-top:8px;">
+  <div class="nav-section" id="nav-sistema" style="margin-top:8px;display:none;">
     <div class="nav-section-label">Sistema</div>
     <div class="nav-item" id="nav-config" onclick="navTo('config')">
       <span class="nav-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg></span>
@@ -1068,6 +1068,11 @@ function renderSidebarAccounts() {
   }
   sel.innerHTML = '<option value="">Selecione uma conta</option>' +
     clientes.map(c => `<option value="${c.account_id}" ${clienteAtivo === c.account_id ? 'selected' : ''}>${c.nome} (#${c.account_id})</option>`).join('');
+
+  // Mostra/esconde menus conforme conta selecionada
+  const show = clienteAtivo ? '' : 'none';
+  document.getElementById('nav-ferramentas').style.display = show;
+  document.getElementById('nav-sistema').style.display = show;
 }
 
 function trocarContaTopbar(id) {
