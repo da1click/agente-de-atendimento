@@ -1464,8 +1464,18 @@ async function salvarConta(id) {
     meta_access_token:          document.getElementById('f-meta-token').value.trim(),
     template_audiencia:         document.getElementById('f-template-audiencia').value.trim(),
   };
-  await fetch(`/api/clientes/${id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  const res = await fetch(`/api/clientes/${id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
   const msg = document.getElementById('save-msg');
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    msg.textContent = `Erro: ${err.detail || res.status}`;
+    msg.style.color = 'var(--red)';
+    msg.classList.add('show');
+    setTimeout(() => { msg.classList.remove('show'); msg.textContent = 'Salvo ✓'; msg.style.color = ''; }, 4000);
+    return;
+  }
+  msg.textContent = 'Salvo ✓';
+  msg.style.color = '';
   msg.classList.add('show');
   setTimeout(() => msg.classList.remove('show'), 2500);
   await carregarClientes();
