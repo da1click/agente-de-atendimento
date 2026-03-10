@@ -454,10 +454,37 @@ async def atualizar_cliente(account_id: int, request: Request, user: dict = Depe
     # Campos restritos ao super_admin
     if user.get("role") == "super_admin":
         campos_editaveis += ["plano", "dia_ciclo"]
+
+    # Detectar mudança no campo "ativo" para suspender/reativar no Chatwoot
+    ativo_anterior = config.get("ativo", True)
+    ativo_novo = dados.get("ativo", ativo_anterior)
+
     for campo in campos_editaveis:
         if campo in dados:
             config[campo] = dados[campo]
     salvar_config_cliente(account_id, config)
+
+    # Se o campo "ativo" mudou, atualizar status da conta no Chatwoot (suspended)
+    if "ativo" in dados and ativo_novo != ativo_anterior:
+        chatwoot_url = os.getenv("CHATWOOT_URL", "").rstrip("/")
+        platform_token = os.getenv("CHATWOOT_PLATFORM_TOKEN", "")
+        if chatwoot_url and platform_token:
+            # status: "suspended" para desativar, "active" para reativar
+            status_chatwoot = "active" if ativo_novo else "suspended"
+            try:
+                async with httpx.AsyncClient(timeout=10) as client:
+                    r = await client.patch(
+                        f"{chatwoot_url}/platform/api/v1/accounts/{account_id}",
+                        headers={"api_access_token": platform_token},
+                        json={"status": status_chatwoot},
+                    )
+                    if r.is_success:
+                        logger.info(f"Chatwoot: conta {account_id} → {status_chatwoot}")
+                    else:
+                        logger.warning(f"Chatwoot: erro ao mudar status da conta {account_id}: {r.status_code} {r.text}")
+            except Exception as e:
+                logger.warning(f"Erro ao atualizar status Chatwoot da conta {account_id}: {e}")
+
     return {"status": "ok"}
 
 
