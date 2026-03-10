@@ -261,3 +261,89 @@ def listar_configs_clientes() -> list:
 def deletar_config_cliente(account_id: int):
     db = get_db()
     db.table("ia_clientes_config").delete().eq("account_id", account_id).execute()
+
+
+# ── RELATÓRIOS ───────────────────────────────────────────────
+
+def contar_conversas(account_id: int, data_inicio: str, data_fim: str) -> int:
+    db = get_db()
+    try:
+        resp = db.table("ia_conversations").select("id", count="exact").eq(
+            "account_id", account_id
+        ).gte("created_at", data_inicio).lte("created_at", data_fim).execute()
+        return resp.count or 0
+    except Exception:
+        return 0
+
+
+def contar_leads_por_status(account_id: int, data_inicio: str, data_fim: str) -> dict:
+    db = get_db()
+    resultado = {"em_atendimento": 0, "convertido": 0, "inviavel": 0, "transferido": 0}
+    try:
+        resp = db.table("ia_leads").select("status").eq(
+            "account_id", account_id
+        ).gte("created_at", data_inicio).lte("created_at", data_fim).execute()
+        for r in (resp.data or []):
+            s = r.get("status", "em_atendimento")
+            if s in resultado:
+                resultado[s] += 1
+    except Exception:
+        pass
+    return resultado
+
+
+def contar_agendamentos(account_id: int, data_inicio: str, data_fim: str) -> int:
+    db = get_db()
+    try:
+        resp = db.table("ia_agendamentos").select("id", count="exact").eq(
+            "account_id", account_id
+        ).gte("created_at", data_inicio).lte("created_at", data_fim).execute()
+        return resp.count or 0
+    except Exception:
+        return 0
+
+
+def contar_transcricoes(account_id: int, data_inicio: str, data_fim: str) -> int:
+    db = get_db()
+    try:
+        resp = db.table("ia_transcricoes").select("id", count="exact").eq(
+            "account_id", account_id
+        ).gte("created_at", data_inicio).lte("created_at", data_fim).execute()
+        return resp.count or 0
+    except Exception:
+        return 0
+
+
+# ── USO MENSAL ───────────────────────────────────────────────
+
+def registrar_uso_mensal(account_id: int, conversation_id: int, mes: str):
+    """Registra que uma conversa teve atividade neste mês (upsert, conta 1x por mês)."""
+    db = get_db()
+    try:
+        db.table("ia_uso_mensal").upsert({
+            "account_id": account_id,
+            "conversation_id": conversation_id,
+            "mes": mes,
+        }, on_conflict="account_id,conversation_id,mes").execute()
+    except Exception as e:
+        logger.warning(f"Erro ao registrar uso mensal: {e}")
+
+
+def contar_uso_mensal(account_id: int, mes: str) -> int:
+    """Conta conversas únicas que tiveram atividade no mês."""
+    db = get_db()
+    try:
+        resp = db.table("ia_uso_mensal").select("id", count="exact").eq(
+            "account_id", account_id
+        ).eq("mes", mes).execute()
+        return resp.count or 0
+    except Exception:
+        return 0
+
+
+def historico_uso_mensal(account_id: int, meses: list[str]) -> dict:
+    """Retorna contagem de conversas por mês."""
+    resultado = {}
+    for mes in meses:
+        resultado[mes] = contar_uso_mensal(account_id, mes)
+    return resultado

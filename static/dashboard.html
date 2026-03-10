@@ -1188,6 +1188,21 @@ async function carregarFormConta(id) {
         </div>
       </div>
 
+      <!-- ── PLANO ── -->
+      <div class="section-divider">Plano</div>
+      <div class="fields-grid">
+        <div class="field-group">
+          <label>Plano Contratado</label>
+          <select id="f-plano">
+            <option value="1" ${v('plano',1)==1?'selected':''}>Plano Inicial — 1.000 conversas (R$ 1.890)</option>
+            <option value="2" ${v('plano',1)==2?'selected':''}>Plano 2 — 2.000 conversas (R$ 3.390)</option>
+            <option value="3" ${v('plano',1)==3?'selected':''}>Plano 3 — 3.000 conversas (R$ 4.320)</option>
+            <option value="4" ${v('plano',1)==4?'selected':''}>Plano 4 — 5.000 conversas (R$ 6.190)</option>
+          </select>
+          <span class="field-hint">Define o limite mensal de conversas e valor do excedente</span>
+        </div>
+      </div>
+
       <!-- ── ESCRITÓRIO ── -->
       <div class="section-divider">Informações do Escritório</div>
       <div class="fields-grid">
@@ -1408,6 +1423,7 @@ function _readDisponibilidade() {
 
 async function salvarConta(id) {
   const body = {
+    plano:                      parseInt(document.getElementById('f-plano').value) || 1,
     ativo:                      document.getElementById('f-ativo').checked,
     inatividade_ativa:          document.getElementById('f-inatividade-ativa').checked,
     nome_escritorio:            document.getElementById('f-nome-escritorio').value.trim(),
@@ -2065,7 +2081,7 @@ function renderPageAgentes() {
 // ══════════════════════════════════════════════
 // PAGE: RELATÓRIOS
 // ══════════════════════════════════════════════
-function renderPageRelatorios() {
+async function renderPageRelatorios() {
   const el = document.getElementById('page-content');
   if (!clienteAtivo) {
     document.getElementById('topbar-sub').textContent = 'Selecione uma conta';
@@ -2073,12 +2089,107 @@ function renderPageRelatorios() {
     return;
   }
   document.getElementById('topbar-sub').textContent = `Relatórios — Conta #${clienteAtivo}`;
-  el.innerHTML = `
-    <div class="coming-soon">
-      <div class="coming-soon-icon">📊</div>
-      <h2>Relatórios</h2>
-      <p>Leads, conversas, agendamentos e transcrições em breve.</p>
-    </div>`;
+  el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:20px 0;">Carregando relatório...</div>';
+
+  try {
+    const res = await fetch(`/api/clientes/${clienteAtivo}/relatorio`);
+    if (!res.ok) throw new Error('Erro ao carregar relatório');
+    const r = await res.json();
+
+    const pct = Math.min(r.uso.percentual, 100);
+    const barColor = r.uso.percentual >= 100 ? 'var(--red)' : r.uso.percentual >= 80 ? 'var(--yellow)' : 'var(--green)';
+    const alertaHtml = r.uso.percentual >= 80 && r.uso.percentual < 100
+      ? `<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:#92400e;">
+           Atenção: uso em <b>${r.uso.percentual}%</b> do limite mensal. Conversas excedentes serão cobradas a R$ ${r.plano.excedente_por_conversa.toFixed(2)} cada.
+         </div>`
+      : '';
+    const alertaExcedente = r.uso.excedente > 0
+      ? `<div style="background:#fee2e2;border:1px solid #ef4444;border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:#991b1b;">
+           Limite excedido! <b>${r.uso.excedente}</b> conversas excedentes = <b>R$ ${r.uso.valor_excedente.toFixed(2)}</b> adicional.
+         </div>`
+      : '';
+
+    // Histórico: barras simples
+    const maxHist = Math.max(...Object.values(r.historico), 1);
+    const histBars = Object.entries(r.historico).map(([mes, qtd]) => {
+      const h = Math.max((qtd / maxHist) * 120, 4);
+      const label = mes.split('-')[1] + '/' + mes.split('-')[0].slice(2);
+      return `<div style="display:flex;flex-direction:column;align-items:center;gap:4px;">
+        <span style="font-size:11px;color:var(--text-secondary);font-weight:600;">${qtd}</span>
+        <div style="width:32px;height:${h}px;background:var(--purple);border-radius:4px;"></div>
+        <span style="font-size:10px;color:var(--text-muted);">${label}</span>
+      </div>`;
+    }).join('');
+
+    el.innerHTML = `
+      ${alertaHtml}
+      ${alertaExcedente}
+
+      <!-- Plano e Uso -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon" style="background:var(--purple-light);color:var(--purple);">$</div>
+          <div>
+            <div class="card-title">${r.plano.nome}</div>
+            <div class="card-sub">${r.plano.limite_conversas.toLocaleString()} conversas/mês — R$ ${r.plano.valor.toFixed(2)}</div>
+          </div>
+        </div>
+
+        <div style="margin-top:20px;">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">
+            <span style="font-size:13px;font-weight:600;">Uso do mês (${r.mes})</span>
+            <span style="font-size:13px;font-weight:700;color:${barColor};">${r.uso.conversas.toLocaleString()} / ${r.plano.limite_conversas.toLocaleString()}</span>
+          </div>
+          <div style="background:var(--bg);border-radius:8px;height:24px;overflow:hidden;position:relative;">
+            <div style="background:${barColor};height:100%;width:${pct}%;border-radius:8px;transition:width 0.5s;"></div>
+            <span style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:11px;font-weight:700;color:var(--text);">${r.uso.percentual}%</span>
+          </div>
+          ${r.uso.excedente > 0 ? `<div style="margin-top:6px;font-size:12px;color:var(--red);font-weight:600;">Excedente: ${r.uso.excedente} conversas = R$ ${r.uso.valor_excedente.toFixed(2)}</div>` : ''}
+        </div>
+      </div>
+
+      <!-- Detalhamento -->
+      <div class="card">
+        <div style="font-size:14px;font-weight:700;margin-bottom:16px;">Detalhamento do Mês</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;">
+          <div style="background:var(--bg);border-radius:10px;padding:16px;text-align:center;">
+            <div style="font-size:24px;font-weight:800;color:var(--purple);">${r.uso.conversas}</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Conversas</div>
+          </div>
+          <div style="background:var(--bg);border-radius:10px;padding:16px;text-align:center;">
+            <div style="font-size:24px;font-weight:800;color:var(--green);">${r.leads.convertido || 0}</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Convertidos</div>
+          </div>
+          <div style="background:var(--bg);border-radius:10px;padding:16px;text-align:center;">
+            <div style="font-size:24px;font-weight:800;color:var(--red);">${r.leads.inviavel || 0}</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Inviáveis</div>
+          </div>
+          <div style="background:var(--bg);border-radius:10px;padding:16px;text-align:center;">
+            <div style="font-size:24px;font-weight:800;color:var(--yellow);">${r.leads.transferido || 0}</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Transferidos</div>
+          </div>
+          <div style="background:var(--bg);border-radius:10px;padding:16px;text-align:center;">
+            <div style="font-size:24px;font-weight:800;color:#6366f1;">${r.agendamentos}</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Agendamentos</div>
+          </div>
+          <div style="background:var(--bg);border-radius:10px;padding:16px;text-align:center;">
+            <div style="font-size:24px;font-weight:800;color:#14b8a6;">${r.transcricoes}</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Transcrições</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Histórico -->
+      <div class="card">
+        <div style="font-size:14px;font-weight:700;margin-bottom:16px;">Histórico de Conversas (últimos 6 meses)</div>
+        <div style="display:flex;align-items:flex-end;justify-content:space-around;gap:8px;min-height:160px;padding-top:10px;">
+          ${histBars}
+        </div>
+      </div>
+    `;
+  } catch (e) {
+    el.innerHTML = `<div class="empty-state"><p>Erro ao carregar relatório</p><p class="empty-sub">${e.message}</p></div>`;
+  }
 }
 
 // ══════════════════════════════════════════════

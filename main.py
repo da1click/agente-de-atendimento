@@ -15,6 +15,10 @@ from db import (
     salvar_config_cliente as db_salvar_config,
     listar_configs_clientes, deletar_config_cliente,
 )
+from db import (
+    registrar_uso_mensal, contar_uso_mensal, historico_uso_mensal,
+    contar_conversas, contar_leads_por_status, contar_agendamentos, contar_transcricoes,
+)
 from auth import hash_password, verify_password, create_token, get_current_user, require_super_admin
 from inatividade import registrar_atividade, iniciar_monitoramento
 import httpx
@@ -276,6 +280,94 @@ def obter_cliente(account_id: int, user: dict = Depends(get_current_user)):
     if not config:
         raise HTTPException(status_code=404, detail="Cliente não encontrado")
     return config
+
+
+PLANOS = {
+    1: {"nome": "Plano Inicial", "limite_conversas": 1000, "valor": 1890.00, "excedente_conversa": 1.89},
+    2: {"nome": "Plano 2", "limite_conversas": 2000, "valor": 3390.00, "excedente_conversa": 1.70},
+    3: {"nome": "Plano 3", "limite_conversas": 3000, "valor": 4320.00, "excedente_conversa": 1.44},
+    4: {"nome": "Plano 4", "limite_conversas": 5000, "valor": 6190.00, "excedente_conversa": 1.24},
+}
+
+
+@app.get("/api/clientes/{account_id}/relatorio")
+def relatorio_conta(account_id: int, mes: str = None, user: dict = Depends(get_current_user)):
+    """Relatório de uso da conta: conversas, leads, agendamentos, etc."""
+    if user.get("role") != "super_admin":
+        contas_permitidas = get_contas_do_usuario(user["sub"])
+        if account_id not in contas_permitidas:
+            raise HTTPException(status_code=403, detail="Sem permissão")
+
+    config = carregar_config_cliente(account_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+
+    from datetime import datetime as _dt, timedelta
+    if not mes:
+        mes = _dt.now().strftime("%Y-%m")
+
+    # Datas do mês para filtros de created_at
+    ano, m = mes.split("-")
+    data_inicio = f"{mes}-01T00:00:00"
+    if int(m) == 12:
+        data_fim = f"{int(ano)+1}-01-01T00:00:00"
+    else:
+        data_fim = f"{ano}-{int(m)+1:02d}-01T00:00:00"
+
+    # Uso mensal (conversas únicas)
+    conversas_mes = contar_uso_mensal(account_id, mes)
+
+    # Leads por status
+    leads = contar_leads_por_status(account_id, data_inicio, data_fim)
+
+    # Agendamentos e transcrições
+    agendamentos = contar_agendamentos(account_id, data_inicio, data_fim)
+    transcricoes = contar_transcricoes(account_id, data_inicio, data_fim)
+
+    # Plano
+    plano_id = config.get("plano", 1)
+    plano = PLANOS.get(plano_id, PLANOS[1])
+    limite = plano["limite_conversas"]
+    excedente = max(0, conversas_mes - limite)
+    valor_excedente = round(excedente * plano["excedente_conversa"], 2)
+
+    # Histórico últimos 6 meses
+    meses_hist = []
+    dt = _dt.now()
+    for i in range(5, -1, -1):
+        d = dt.replace(day=1) - timedelta(days=i * 30)
+        meses_hist.append(d.strftime("%Y-%m"))
+    # deduplica e ordena
+    meses_hist = sorted(set(meses_hist))[-6:]
+    historico = historico_uso_mensal(account_id, meses_hist)
+
+    return {
+        "account_id": account_id,
+        "nome": config.get("nome", ""),
+        "mes": mes,
+        "plano": {
+            "id": plano_id,
+            "nome": plano["nome"],
+            "limite_conversas": limite,
+            "valor": plano["valor"],
+            "excedente_por_conversa": plano["excedente_conversa"],
+        },
+        "uso": {
+            "conversas": conversas_mes,
+            "percentual": round((conversas_mes / limite) * 100, 1) if limite else 0,
+            "excedente": excedente,
+            "valor_excedente": valor_excedente,
+        },
+        "leads": leads,
+        "agendamentos": agendamentos,
+        "transcricoes": transcricoes,
+        "historico": historico,
+    }
+
+
+@app.get("/api/planos")
+def listar_planos():
+    return PLANOS
 
 
 @app.delete("/api/clientes/{account_id}")
@@ -694,6 +786,14 @@ async def chatwoot_webhook(request: Request):
             upsert_lead(account_id, inbox_id, conversation_id, nome, telefone)
         except Exception as e:
             logger.warning(f"Erro ao registrar lead no Supabase: {e}")
+
+        # Registrar uso mensal (1 conversa por mês por conversation_id)
+        from datetime import datetime as _dt
+        mes_atual = _dt.now().strftime("%Y-%m")
+        try:
+            registrar_uso_mensal(account_id, conversation_id, mes_atual)
+        except Exception as e:
+            logger.warning(f"Erro ao registrar uso mensal: {e}")
 
         # Resetar inatividade (cliente respondeu)
         if config.get("inatividade_ativa", True):
