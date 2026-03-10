@@ -335,7 +335,8 @@
 
 <!-- ── LOGIN ── -->
 <div id="login-screen">
-  <div class="login-box">
+  <!-- LOGIN -->
+  <div class="login-box" id="login-box">
     <div class="login-logo">
       <div class="login-logo-text">Da1<span style="color:var(--purple);">Click</span></div>
       <div class="login-logo-sub">Painel Admin</div>
@@ -351,6 +352,39 @@
     </div>
     <div id="login-error" style="display:none;font-size:12px;color:var(--red);background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:8px 12px;margin-bottom:14px;"></div>
     <button class="btn btn-primary" style="width:100%;" id="btn-login" onclick="fazerLogin()">Entrar</button>
+    <p style="text-align:center;margin-top:16px;font-size:13px;color:var(--text-muted);">
+      Nao tem conta? <a href="#" onclick="mostrarCadastro()" style="color:var(--purple);font-weight:600;text-decoration:none;">Criar conta</a>
+    </p>
+  </div>
+
+  <!-- CADASTRO -->
+  <div class="login-box" id="cadastro-box" style="display:none;">
+    <div class="login-logo">
+      <div class="login-logo-text">Da1<span style="color:var(--purple);">Click</span></div>
+      <div class="login-logo-sub">Criar Conta</div>
+    </div>
+    <div class="field-group" style="margin-bottom:14px;">
+      <label>Nome</label>
+      <input type="text" id="cadastro-nome" placeholder="Seu nome" autocomplete="name" />
+    </div>
+    <div class="field-group" style="margin-bottom:14px;">
+      <label>Email</label>
+      <input type="text" id="cadastro-email" placeholder="seu@email.com" autocomplete="email" />
+    </div>
+    <div class="field-group" style="margin-bottom:14px;">
+      <label>Senha</label>
+      <input type="password" id="cadastro-senha" placeholder="Min. 6 caracteres" autocomplete="new-password" />
+    </div>
+    <div class="field-group" style="margin-bottom:20px;">
+      <label>Confirmar Senha</label>
+      <input type="password" id="cadastro-senha2" placeholder="Repita a senha" autocomplete="new-password"
+             onkeydown="if(event.key==='Enter') fazerCadastro()" />
+    </div>
+    <div id="cadastro-error" style="display:none;font-size:12px;color:var(--red);background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:8px 12px;margin-bottom:14px;"></div>
+    <button class="btn btn-primary" style="width:100%;" id="btn-cadastro" onclick="fazerCadastro()">Criar Conta</button>
+    <p style="text-align:center;margin-top:16px;font-size:13px;color:var(--text-muted);">
+      Ja tem conta? <a href="#" onclick="mostrarLogin()" style="color:var(--purple);font-weight:600;text-decoration:none;">Entrar</a>
+    </p>
   </div>
 </div>
 
@@ -915,6 +949,51 @@ async function fazerLogin() {
     errEl.textContent = 'Erro de conexão.'; errEl.style.display = 'block';
   } finally {
     btn.textContent = 'Entrar'; btn.classList.remove('loading');
+  }
+}
+
+function mostrarCadastro() {
+  document.getElementById('login-box').style.display = 'none';
+  document.getElementById('cadastro-box').style.display = '';
+  document.getElementById('cadastro-error').style.display = 'none';
+  ['cadastro-nome','cadastro-email','cadastro-senha','cadastro-senha2'].forEach(id => document.getElementById(id).value = '');
+}
+
+function mostrarLogin() {
+  document.getElementById('cadastro-box').style.display = 'none';
+  document.getElementById('login-box').style.display = '';
+  document.getElementById('login-error').style.display = 'none';
+}
+
+async function fazerCadastro() {
+  const nome = document.getElementById('cadastro-nome').value.trim();
+  const email = document.getElementById('cadastro-email').value.trim();
+  const senha = document.getElementById('cadastro-senha').value;
+  const senha2 = document.getElementById('cadastro-senha2').value;
+  const errEl = document.getElementById('cadastro-error');
+  const btn = document.getElementById('btn-cadastro');
+  errEl.style.display = 'none';
+
+  if (!nome || !email || !senha) { errEl.textContent = 'Preencha todos os campos.'; errEl.style.display = 'block'; return; }
+  if (senha.length < 6) { errEl.textContent = 'Senha deve ter no minimo 6 caracteres.'; errEl.style.display = 'block'; return; }
+  if (senha !== senha2) { errEl.textContent = 'As senhas nao coincidem.'; errEl.style.display = 'block'; return; }
+
+  btn.textContent = 'Criando...'; btn.classList.add('loading');
+  try {
+    const res = await _origFetch('/auth/cadastro', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nome, email, senha }),
+    });
+    const data = await res.json();
+    if (!res.ok) { errEl.textContent = data.detail || 'Erro ao criar conta.'; errEl.style.display = 'block'; return; }
+    localStorage.setItem('da1click_token', data.token);
+    currentUser = data.user;
+    _iniciarDashboard();
+  } catch(e) {
+    errEl.textContent = 'Erro de conexao.'; errEl.style.display = 'block';
+  } finally {
+    btn.textContent = 'Criar Conta'; btn.classList.remove('loading');
   }
 }
 

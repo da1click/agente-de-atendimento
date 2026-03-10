@@ -159,6 +159,30 @@ async def login(request: Request):
     }
 
 
+@app.post("/auth/cadastro")
+async def cadastro(request: Request):
+    """Cadastro público de novo usuário (role=viewer, sem contas)."""
+    dados = await request.json()
+    nome = dados.get("nome", "").strip()
+    email = dados.get("email", "").strip().lower()
+    senha = dados.get("senha", "")
+    if not nome or not email or not senha:
+        raise HTTPException(status_code=400, detail="Nome, email e senha são obrigatórios")
+    if len(senha) < 6:
+        raise HTTPException(status_code=400, detail="Senha deve ter no mínimo 6 caracteres")
+    existente = get_usuario_por_email(email)
+    if existente:
+        raise HTTPException(status_code=409, detail="Email já cadastrado")
+    user = criar_usuario(email=email, password_hash=hash_password(senha), nome=nome, role="viewer")
+    if not user:
+        raise HTTPException(status_code=500, detail="Erro ao criar usuário")
+    token = create_token(str(user["id"]), user["email"], user["role"])
+    return {
+        "token": token,
+        "user": {"id": user["id"], "email": user["email"], "nome": user["nome"], "role": user["role"]},
+    }
+
+
 @app.get("/auth/me")
 async def me(user: dict = Depends(get_current_user)):
     u = get_usuario_por_id(user["sub"])
