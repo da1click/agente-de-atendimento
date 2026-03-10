@@ -252,17 +252,26 @@ async def remover_conta(user_id: str, account_id: int, user: dict = Depends(get_
 # ── API CLIENTES ──────────────────────────────────────────────
 
 @app.get("/api/clientes")
-def listar_clientes():
+def listar_clientes(user: dict = Depends(get_current_user)):
     rows = listar_configs_clientes()
     clientes = []
     for row in rows:
         c = row["config"]
         clientes.append({"account_id": c["account_id"], "nome": c["nome"], "ativo": c.get("ativo", True)})
+    # Se não for super_admin, filtra pelas contas atribuídas
+    if user.get("role") != "super_admin":
+        contas_permitidas = get_contas_do_usuario(user["sub"])
+        clientes = [c for c in clientes if c["account_id"] in contas_permitidas]
     return clientes
 
 
 @app.get("/api/clientes/{account_id}")
-def obter_cliente(account_id: int):
+def obter_cliente(account_id: int, user: dict = Depends(get_current_user)):
+    # Se não for super_admin, verifica permissão
+    if user.get("role") != "super_admin":
+        contas_permitidas = get_contas_do_usuario(user["sub"])
+        if account_id not in contas_permitidas:
+            raise HTTPException(status_code=403, detail="Sem permissão para acessar esta conta")
     config = carregar_config_cliente(account_id)
     if not config:
         raise HTTPException(status_code=404, detail="Cliente não encontrado")
