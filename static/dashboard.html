@@ -1188,7 +1188,8 @@ async function carregarFormConta(id) {
         </div>
       </div>
 
-      <!-- ── PLANO ── -->
+      <!-- ── PLANO (só super_admin) ── -->
+      ${currentUser && currentUser.role === 'super_admin' ? `
       <div class="section-divider">Plano e Ciclo de Cobrança</div>
       <div class="fields-grid">
         <div class="field-group">
@@ -1207,6 +1208,7 @@ async function carregarFormConta(id) {
           <span class="field-hint">Dia do mês em que o ciclo de cobrança inicia (1 a 28)</span>
         </div>
       </div>
+      ` : `<input type="hidden" id="f-plano" value="${v('plano',1)}" /><input type="hidden" id="f-dia-ciclo" value="${v('dia_ciclo',1)}" />`}
 
       <!-- ── ESCRITÓRIO ── -->
       <div class="section-divider">Informações do Escritório</div>

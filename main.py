@@ -438,7 +438,7 @@ async def deletar_cliente(account_id: int):
 
 
 @app.put("/api/clientes/{account_id}")
-async def atualizar_cliente(account_id: int, request: Request):
+async def atualizar_cliente(account_id: int, request: Request, user: dict = Depends(get_current_user)):
     config = carregar_config_cliente(account_id)
     if not config:
         raise HTTPException(status_code=404, detail="Cliente não encontrado")
@@ -449,7 +449,11 @@ async def atualizar_cliente(account_id: int, request: Request):
         "quantidade_dias_a_buscar", "duracao_agendamento", "disponibilidade",
         "especialidade", "id_notificacao_convertido", "id_notificacao_cliente",
         "meta_waba_id", "meta_access_token", "template_audiencia",
+        "nome_escritorio", "nome_completo", "telefone", "endereco",
     ]
+    # Campos restritos ao super_admin
+    if user.get("role") == "super_admin":
+        campos_editaveis += ["plano", "dia_ciclo"]
     for campo in campos_editaveis:
         if campo in dados:
             config[campo] = dados[campo]
