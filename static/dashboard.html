@@ -1444,18 +1444,16 @@ async function salvarConta(id) {
 // ══════════════════════════════════════════════
 function renderPageTemplates() {
   const el = document.getElementById('page-content');
-  const temMeta = clientes.filter(c => c.ativo);
-
-  let accountOptions = clientes.map(c => `<option value="${c.account_id}">${c.nome} (#${c.account_id})</option>`).join('');
-  let selectedId = clienteAtivo || (clientes[0]?.account_id);
+  if (!clienteAtivo) {
+    document.getElementById('topbar-sub').textContent = 'Selecione uma conta';
+    el.innerHTML = `<div class="empty-state"><p>Selecione uma conta no menu acima</p></div>`;
+    return;
+  }
+  document.getElementById('topbar-sub').textContent = `Templates — Conta #${clienteAtivo}`;
 
   el.innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
-      <div>
-        <select id="tpl-account-sel" style="font-size:14px;font-weight:600;padding:8px 12px;border-radius:8px;min-width:200px;" onchange="carregarTemplates()">
-          ${accountOptions}
-        </select>
-      </div>
+      <div style="font-size:14px;font-weight:600;">${clientes.find(c=>c.account_id==clienteAtivo)?.nome || ''} (#${clienteAtivo})</div>
       <button class="btn btn-primary" onclick="abrirModalTemplate()">+ Novo Template</button>
     </div>
     <div class="template-search">
@@ -1473,14 +1471,13 @@ function renderPageTemplates() {
     </div>
   `;
 
-  document.getElementById('tpl-account-sel').value = selectedId;
   carregarTemplates();
 }
 
 let _todosTemplates = [];
 
 async function carregarTemplates() {
-  const accountId = document.getElementById('tpl-account-sel')?.value;
+  const accountId = clienteAtivo;
   if (!accountId) return;
 
   document.getElementById('tpl-list').innerHTML = '<div style="color:var(--text-muted);font-size:13px;">Carregando...</div>';
@@ -1667,7 +1664,7 @@ function _escHtml(str) {
 
 async function deletarTemplate(name) {
   if (!confirm(`Deletar o template "${name}"?\n\nIsso remove TODAS as versões de idioma.`)) return;
-  const accountId = document.getElementById('tpl-account-sel').value;
+  const accountId = clienteAtivo;
   const res = await fetch(`/api/clientes/${accountId}/templates/${name}`, { method: 'DELETE' });
   if (res.ok) {
     await carregarTemplates();
@@ -1746,7 +1743,7 @@ function removerBotaoTemplate(id) {
 async function submeterTemplate() {
   const errEl = document.getElementById('tpl-error');
   errEl.classList.remove('show');
-  const accountId = document.getElementById('tpl-account-sel')?.value || clienteAtivo;
+  const accountId = clienteAtivo;
   if (!accountId) { errEl.textContent = 'Selecione uma conta.'; errEl.classList.add('show'); return; }
 
   const name = document.getElementById('tpl-name').value.trim();
@@ -1875,8 +1872,13 @@ async function carregarTemplatesInatividade() {
 }
 
 async function renderPageInatividade() {
-  document.getElementById('topbar-sub').textContent = 'Configuração de estágios';
   const el = document.getElementById('page-content');
+  if (!clienteAtivo) {
+    document.getElementById('topbar-sub').textContent = 'Selecione uma conta';
+    el.innerHTML = `<div class="empty-state"><p>Selecione uma conta no menu acima</p></div>`;
+    return;
+  }
+  document.getElementById('topbar-sub').textContent = `Inatividade — Conta #${clienteAtivo}`;
   el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:20px 0;">Carregando...</div>';
 
   const res = await fetch('/api/config/inatividade');
@@ -2045,12 +2047,18 @@ async function salvarInatividade() {
 // PAGE: AGENTES IA
 // ══════════════════════════════════════════════
 function renderPageAgentes() {
-  document.getElementById('topbar-sub').textContent = 'Gestão de agentes';
-  document.getElementById('page-content').innerHTML = `
+  const el = document.getElementById('page-content');
+  if (!clienteAtivo) {
+    document.getElementById('topbar-sub').textContent = 'Selecione uma conta';
+    el.innerHTML = `<div class="empty-state"><p>Selecione uma conta no menu acima</p></div>`;
+    return;
+  }
+  document.getElementById('topbar-sub').textContent = `Agentes IA — Conta #${clienteAtivo}`;
+  el.innerHTML = `
     <div class="coming-soon">
       <div class="coming-soon-icon">🤖</div>
       <h2>Agentes IA</h2>
-      <p>Listagem e gestão de agentes por conta em breve.</p>
+      <p>Listagem e gestão de agentes em breve.</p>
     </div>`;
 }
 
@@ -2058,8 +2066,14 @@ function renderPageAgentes() {
 // PAGE: RELATÓRIOS
 // ══════════════════════════════════════════════
 function renderPageRelatorios() {
-  document.getElementById('topbar-sub').textContent = 'Métricas e dados';
-  document.getElementById('page-content').innerHTML = `
+  const el = document.getElementById('page-content');
+  if (!clienteAtivo) {
+    document.getElementById('topbar-sub').textContent = 'Selecione uma conta';
+    el.innerHTML = `<div class="empty-state"><p>Selecione uma conta no menu acima</p></div>`;
+    return;
+  }
+  document.getElementById('topbar-sub').textContent = `Relatórios — Conta #${clienteAtivo}`;
+  el.innerHTML = `
     <div class="coming-soon">
       <div class="coming-soon-icon">📊</div>
       <h2>Relatórios</h2>
@@ -2357,8 +2371,13 @@ let _audTipos = [];
 let _audEditId = null;
 
 async function renderPageAvisoAudiencia() {
-  document.getElementById('topbar-sub').textContent = 'Gestão de audiências';
   const el = document.getElementById('page-content');
+  if (!clienteAtivo) {
+    document.getElementById('topbar-sub').textContent = 'Selecione uma conta';
+    el.innerHTML = `<div class="empty-state"><p>Selecione uma conta no menu acima</p></div>`;
+    return;
+  }
+  document.getElementById('topbar-sub').textContent = `Audiências — Conta #${clienteAtivo}`;
 
   el.innerHTML = `
     <div class="page-tabs">
@@ -2386,7 +2405,8 @@ function audSetTab(tab) {
 }
 
 async function _audCarregarAudiencias() {
-  const res = await fetch('/api/audiencias');
+  const url = clienteAtivo ? `/api/audiencias?account_id=${clienteAtivo}` : '/api/audiencias';
+  const res = await fetch(url);
   _audAudiencias = await res.json();
 }
 
