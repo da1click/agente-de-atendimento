@@ -328,6 +328,103 @@ async def criar_cliente(request: Request):
     return {"status": "criado", "account_id": account_id}
 
 
+@app.post("/api/buscar-conta-chatwoot")
+async def buscar_conta_chatwoot(request: Request):
+    """Busca dados de uma conta existente no Chatwoot (nome, agentes, inboxes)."""
+    dados = await request.json()
+    chatwoot_url = dados.get("chatwoot_url", "").strip().rstrip("/")
+    chatwoot_token = dados.get("chatwoot_token", "").strip()
+    account_id = dados.get("account_id")
+
+    if not chatwoot_url or not chatwoot_token or not account_id:
+        raise HTTPException(status_code=400, detail="chatwoot_url, chatwoot_token e account_id são obrigatórios")
+
+    headers = {"api_access_token": chatwoot_token}
+    base = f"{chatwoot_url}/api/v1/accounts/{account_id}"
+
+    async with httpx.AsyncClient(timeout=15) as client:
+        try:
+            # Buscar agentes
+            r_agents = await client.get(f"{base}/agents", headers=headers)
+            if not r_agents.is_success:
+                raise HTTPException(status_code=400, detail=f"Falha ao conectar ao Chatwoot: {r_agents.status_code}")
+            agents = r_agents.json()
+
+            # Buscar inboxes
+            r_inboxes = await client.get(f"{base}/inboxes", headers=headers)
+            inboxes_raw = r_inboxes.json() if r_inboxes.is_success else []
+            if isinstance(inboxes_raw, dict):
+                inboxes_raw = inboxes_raw.get("payload", [])
+
+            # Buscar info da conta
+            r_account = await client.get(f"{base}", headers=headers)
+            account_name = ""
+            if r_account.is_success:
+                acc_data = r_account.json()
+                account_name = acc_data.get("name", "")
+
+        except httpx.RequestError as e:
+            raise HTTPException(status_code=502, detail=f"Erro ao conectar: {e}")
+
+    agentes = [{"id": a["id"], "name": a.get("name", a.get("email", ""))} for a in agents] if isinstance(agents, list) else []
+    inboxes = [{"id": i["id"], "name": i.get("name", ""), "channel_type": i.get("channel_type", "")} for i in inboxes_raw] if isinstance(inboxes_raw, list) else []
+
+    return {"account_name": account_name, "agentes": agentes, "inboxes": inboxes}
+
+
+@app.post("/api/importar-conta")
+async def importar_conta(request: Request):
+    """Importa uma conta Chatwoot já existente (só salva config no Supabase)."""
+    dados = await request.json()
+    account_id = dados.get("account_id")
+    nome = dados.get("nome", "").strip()
+    chatwoot_url = dados.get("chatwoot_url", "").strip().rstrip("/")
+    chatwoot_token = dados.get("chatwoot_token", "").strip()
+
+    if not account_id or not nome:
+        raise HTTPException(status_code=400, detail="account_id e nome são obrigatórios")
+    if not chatwoot_url or not chatwoot_token:
+        raise HTTPException(status_code=400, detail="chatwoot_url e chatwoot_token são obrigatórios")
+
+    # Verificar se a conta já existe
+    existente = carregar_config_cliente(account_id)
+    if existente:
+        raise HTTPException(status_code=409, detail=f"Conta {account_id} já está cadastrada")
+
+    # Testar conexão com o Chatwoot
+    async with httpx.AsyncClient(timeout=15) as client:
+        try:
+            r = await client.get(
+                f"{chatwoot_url}/api/v1/accounts/{account_id}/agents",
+                headers={"api_access_token": chatwoot_token},
+            )
+            if not r.is_success:
+                raise HTTPException(status_code=400, detail=f"Falha ao conectar ao Chatwoot: {r.status_code} — verifique URL, token e account_id")
+        except httpx.RequestError as e:
+            raise HTTPException(status_code=502, detail=f"Erro ao conectar: {e}")
+
+    # Criar pasta de prompts
+    pasta = os.path.join(CLIENTES_DIR, f"{account_id}-{nome.replace(' ', '_')}")
+    os.makedirs(os.path.join(pasta, "prompt"), exist_ok=True)
+
+    # Salvar config no Supabase
+    config = {
+        "account_id": account_id,
+        "nome": nome,
+        "ativo": True,
+        "openai_api_key": dados.get("openai_api_key", ""),
+        "chatwoot_url": chatwoot_url,
+        "chatwoot_token": chatwoot_token,
+        "ia_agent_id": dados.get("ia_agent_id"),
+        "team_id": None,
+        "inbox_id": None,
+        "inboxes": dados.get("inboxes", []),
+    }
+    salvar_config_cliente(account_id, config)
+    logger.info(f"Conta importada: account_id={account_id}, nome={nome}")
+    return {"status": "importado", "account_id": account_id}
+
+
 @app.post("/api/criar-conta-chatwoot")
 async def criar_conta_chatwoot(request: Request):
     """Cria conta no Chatwoot via Platform Apps API e salva o config local."""

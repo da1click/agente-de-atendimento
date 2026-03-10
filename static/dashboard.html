@@ -315,9 +315,44 @@
     .stat-label { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 8px; }
     .stat-value { font-size: 32px; font-weight: 800; color: var(--text); line-height: 1; margin-bottom: 4px; }
     .stat-sub { font-size: 12px; color: var(--text-muted); }
+
+    /* ── LOGIN ── */
+    #login-screen { position: fixed; inset: 0; background: var(--bg); z-index: 2000; display: flex; align-items: center; justify-content: center; }
+    .login-box { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 40px; width: 360px; box-shadow: 0 20px 60px rgba(0,0,0,0.08); }
+    .login-logo { text-align: center; margin-bottom: 28px; }
+    .login-logo-text { font-size: 22px; font-weight: 800; color: var(--text); }
+    .login-logo-sub { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+    /* ── USER TABLE ── */
+    .role-badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 700; }
+    .role-super_admin { background: #f3e8ff; color: #6d28d9; }
+    .role-admin { background: #dbeafe; color: #1d4ed8; }
+    .role-moderador { background: #fef9c3; color: #92400e; }
+    .role-agente { background: #f3f4f6; color: #374151; }
   </style>
 </head>
 <body>
+
+<!-- ── LOGIN ── -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo">
+      <div class="login-logo-text">Da1<span style="color:var(--purple);">Click</span></div>
+      <div class="login-logo-sub">Painel Admin</div>
+    </div>
+    <div class="field-group" style="margin-bottom:14px;">
+      <label>Email</label>
+      <input type="text" id="login-email" placeholder="seu@email.com" autocomplete="email" />
+    </div>
+    <div class="field-group" style="margin-bottom:20px;">
+      <label>Senha</label>
+      <input type="password" id="login-senha" placeholder="••••••••" autocomplete="current-password"
+             onkeydown="if(event.key==='Enter') fazerLogin()" />
+    </div>
+    <div id="login-error" style="display:none;font-size:12px;color:var(--red);background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:8px 12px;margin-bottom:14px;"></div>
+    <button class="btn btn-primary" style="width:100%;" id="btn-login" onclick="fazerLogin()">Entrar</button>
+  </div>
+</div>
 
 <!-- ── SIDEBAR ── -->
 <aside class="sidebar" id="sidebar">
@@ -370,9 +405,22 @@
     </div>
   </div>
 
+  <div class="nav-section" id="nav-section-usuarios" style="margin-top:8px;display:none;">
+    <div class="nav-section-label">Admin</div>
+    <div class="nav-item" id="nav-usuarios" onclick="navTo('usuarios')">
+      <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+      <span class="nav-label">Usuários</span>
+    </div>
+  </div>
+
   <div class="sidebar-footer">
-    <button class="btn-new-account" onclick="abrirModalChatwoot()" style="margin-bottom:6px;">+ Criar no Chatwoot</button>
-    <button class="btn-new-account" onclick="abrirModalUsuarios()">+ Criador de Usuários</button>
+    <div style="font-size:11px;color:var(--text-muted);padding:2px 4px 10px;display:flex;align-items:center;justify-content:space-between;">
+      <span id="sidebar-user-info" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;"></span>
+      <button onclick="fazerLogout()" style="border:none;background:none;color:var(--text-muted);font-size:11px;cursor:pointer;padding:2px 6px;border-radius:4px;flex-shrink:0;" title="Sair">Sair</button>
+    </div>
+    <button class="btn-new-account" onclick="abrirModalImportar()" id="btn-importar-conta" style="margin-bottom:6px;display:none;">+ Importar Conta</button>
+    <button class="btn-new-account" onclick="abrirModalChatwoot()" id="btn-criar-chatwoot" style="margin-bottom:6px;display:none;">+ Criar no Chatwoot</button>
+    <button class="btn-new-account" onclick="abrirModalUsuarios()" id="btn-criador-usuarios" style="display:none;">+ Criador de Usuários</button>
   </div>
 </aside>
 
@@ -440,6 +488,59 @@
 </div>
 
 <!-- CRIAR NO CHATWOOT -->
+<!-- IMPORTAR CONTA EXISTENTE -->
+<div class="modal-overlay" id="modal-importar">
+  <div class="modal" style="width:480px;">
+    <div class="modal-header">
+      <h3>Importar Conta Existente</h3>
+      <button class="modal-close" onclick="fecharModal('modal-importar')">×</button>
+    </div>
+    <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px;">Informe os dados de conexao e clique em "Buscar" para preencher automaticamente.</p>
+
+    <div id="imp-form">
+      <!-- Etapa 1: conexao -->
+      <div id="imp-step1">
+        <div class="fields-grid" style="gap:12px;">
+          <div class="field-group full"><label>URL do Chatwoot</label><input type="text" id="imp-chatwoot-url" placeholder="https://app.chatwoot.com" /></div>
+          <div class="field-group full"><label>Token do Chatwoot (admin/agent)</label><input type="password" id="imp-chatwoot-token" placeholder="Token de acesso" /></div>
+          <div class="field-group full"><label>Account ID (do Chatwoot)</label><input type="number" id="imp-account-id" placeholder="Ex: 5" /></div>
+        </div>
+        <div class="modal-error" id="imp-error"></div>
+        <div class="modal-actions">
+          <button class="btn btn-primary" id="btn-imp-buscar" onclick="buscarDadosChatwoot()">Buscar Dados</button>
+          <button class="btn btn-secondary" onclick="fecharModal('modal-importar')">Cancelar</button>
+        </div>
+      </div>
+
+      <!-- Etapa 2: dados encontrados -->
+      <div id="imp-step2" style="display:none;">
+        <div class="fields-grid" style="gap:12px;">
+          <div class="field-group full"><label>Nome da Conta</label><input type="text" id="imp-nome" /></div>
+
+          <div class="field-group full">
+            <label>Agente da IA (ia_agent_id)</label>
+            <select id="imp-agent-id" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg-card);color:var(--text-primary);font-size:13px;">
+              <option value="">-- Selecione o agente da IA --</option>
+            </select>
+          </div>
+
+          <div class="field-group full">
+            <label>Inboxes Monitoradas</label>
+            <div id="imp-inboxes-list" style="max-height:140px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:8px 10px;background:var(--bg-card);"></div>
+          </div>
+
+          <div class="field-group full"><label>OpenAI API Key <span style="color:var(--text-muted);font-weight:400;">(opcional)</span></label><input type="password" id="imp-openai-key" placeholder="sk-..." /></div>
+        </div>
+        <div class="modal-error" id="imp-error2"></div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" onclick="voltarStep1()">Voltar</button>
+          <button class="btn btn-primary" id="btn-imp-criar" onclick="importarConta()">Importar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-chatwoot">
   <div class="modal" style="width:400px;">
     <div class="modal-header">
@@ -715,6 +816,56 @@
   </div>
 </div>
 
+<!-- MODAL USUÁRIO -->
+<div class="modal-overlay" id="modal-usuario">
+  <div class="modal" style="width:460px;">
+    <div class="modal-header">
+      <h3 id="mu-modal-title">Novo Usuário</h3>
+      <button class="modal-close" onclick="fecharModal('modal-usuario')">×</button>
+    </div>
+    <input type="hidden" id="mu-id" />
+    <div class="fields-grid" style="gap:12px;">
+      <div class="field-group full">
+        <label>Nome</label>
+        <input type="text" id="mu-nome" placeholder="Nome completo" />
+      </div>
+      <div class="field-group full">
+        <label>Email</label>
+        <input type="text" id="mu-email" placeholder="email@exemplo.com" />
+      </div>
+      <div class="field-group full">
+        <label>Senha <span id="mu-senha-hint" style="font-weight:400;color:var(--text-muted);display:none;">(deixe em branco para não alterar)</span></label>
+        <input type="password" id="mu-senha" placeholder="••••••••" />
+      </div>
+      <div class="field-group">
+        <label>Role</label>
+        <select id="mu-role" onchange="_renderContasCheckboxes(null)">
+          <option value="admin">Admin</option>
+          <option value="moderador">Moderador</option>
+          <option value="agente">Agente</option>
+          <option value="super_admin">Super Admin</option>
+        </select>
+      </div>
+      <div class="field-group" style="justify-content:flex-start;">
+        <label>Status</label>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:4px;">
+          <label class="toggle"><input type="checkbox" id="mu-ativo" checked /><span class="toggle-slider"></span></label>
+          <span style="font-size:12px;color:var(--text-muted);">Ativo</span>
+        </div>
+      </div>
+      <div class="field-group full">
+        <label>Contas atribuídas</label>
+        <div id="mu-contas-wrap" style="margin-top:4px;max-height:140px;overflow-y:auto;"></div>
+      </div>
+    </div>
+    <div class="modal-error" id="mu-error"></div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" id="mu-btn-salvar" onclick="salvarUsuario()">Salvar</button>
+      <button class="btn btn-secondary" onclick="fecharModal('modal-usuario')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ══════════════════════════════════════════════
 // STATE
@@ -725,13 +876,106 @@ let secaoAtiva = 'contas';
 let tpl_btn_id = 0;
 let _deletarId = null;
 let uu_row_id = 0;
+let currentUser = null;
+
+// ══════════════════════════════════════════════
+// AUTH
+// ══════════════════════════════════════════════
+
+// Intercepta todo fetch para adicionar o token automaticamente
+const _origFetch = window.fetch.bind(window);
+window.fetch = function(url, opts = {}) {
+  const token = localStorage.getItem('da1click_token');
+  if (token && typeof url === 'string' && url.startsWith('/')) {
+    opts = { ...opts, headers: { ...(opts.headers || {}), 'Authorization': `Bearer ${token}` } };
+  }
+  return _origFetch(url, opts);
+};
+
+async function fazerLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const senha = document.getElementById('login-senha').value;
+  const errEl = document.getElementById('login-error');
+  const btn = document.getElementById('btn-login');
+  errEl.style.display = 'none';
+  if (!email || !senha) { errEl.textContent = 'Preencha email e senha.'; errEl.style.display = 'block'; return; }
+  btn.textContent = 'Entrando...'; btn.classList.add('loading');
+  try {
+    const res = await _origFetch('/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, senha }),
+    });
+    const data = await res.json();
+    if (!res.ok) { errEl.textContent = data.detail || 'Credenciais inválidas.'; errEl.style.display = 'block'; return; }
+    localStorage.setItem('da1click_token', data.token);
+    currentUser = data.user;
+    _iniciarDashboard();
+  } catch(e) {
+    errEl.textContent = 'Erro de conexão.'; errEl.style.display = 'block';
+  } finally {
+    btn.textContent = 'Entrar'; btn.classList.remove('loading');
+  }
+}
+
+function fazerLogout() {
+  localStorage.removeItem('da1click_token');
+  currentUser = null;
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('sidebar').style.display = 'none';
+  document.querySelector('.main').style.display = 'none';
+}
+
+function aplicarPermissoes() {
+  const role = currentUser.role;
+  // Seção e botões apenas para super_admin
+  document.getElementById('nav-section-usuarios').style.display = role === 'super_admin' ? 'block' : 'none';
+  document.getElementById('btn-importar-conta').style.display = role === 'super_admin' ? 'block' : 'none';
+  document.getElementById('btn-criar-chatwoot').style.display = role === 'super_admin' ? 'block' : 'none';
+  document.getElementById('btn-criador-usuarios').style.display = role === 'super_admin' ? 'block' : 'none';
+  // Nav items visíveis por role
+  const PERMS = {
+    super_admin: ['templates', 'inatividade', 'agentes', 'relatorios', 'audiencias', 'config', 'usuarios'],
+    admin:       ['templates', 'inatividade', 'agentes', 'relatorios', 'audiencias', 'config'],
+    moderador:   ['relatorios', 'audiencias'],
+    agente:      ['relatorios'],
+  };
+  const allowed = PERMS[role] || [];
+  ['templates', 'inatividade', 'agentes', 'relatorios', 'audiencias', 'config'].forEach(s => {
+    const el = document.getElementById(`nav-${s}`);
+    if (el) el.style.display = allowed.includes(s) ? 'flex' : 'none';
+  });
+}
+
+async function _iniciarDashboard() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('sidebar').style.display = 'flex';
+  document.querySelector('.main').style.display = 'block';
+  document.getElementById('sidebar-user-info').textContent = `${currentUser.nome} (${currentUser.role})`;
+  aplicarPermissoes();
+  await carregarClientes();
+  navTo('contas');
+}
 
 // ══════════════════════════════════════════════
 // INIT
 // ══════════════════════════════════════════════
 async function init() {
-  await carregarClientes();
-  navTo('contas');
+  const token = localStorage.getItem('da1click_token');
+  if (!token) {
+    document.getElementById('login-screen').style.display = 'flex';
+    document.getElementById('sidebar').style.display = 'none';
+    document.querySelector('.main').style.display = 'none';
+    return;
+  }
+  try {
+    const res = await _origFetch('/auth/me', { headers: { 'Authorization': `Bearer ${token}` } });
+    if (!res.ok) { fazerLogout(); return; }
+    currentUser = await res.json();
+    _iniciarDashboard();
+  } catch(e) {
+    fazerLogout();
+  }
 }
 
 async function carregarClientes() {
@@ -776,7 +1020,7 @@ function trocarContaTopbar(id) {
 function navTo(secao) {
   secaoAtiva = secao;
   // Update nav highlights (only for non-conta sections)
-  ['templates','inatividade','agentes','relatorios','audiencias','config'].forEach(s => {
+  ['templates','inatividade','agentes','relatorios','audiencias','config','usuarios'].forEach(s => {
     document.getElementById(`nav-${s}`)?.classList.toggle('active', s === secao);
   });
   renderSidebarAccounts();
@@ -785,12 +1029,14 @@ function navTo(secao) {
     contas: 'Contas', templates: 'Templates Meta',
     inatividade: 'Inatividade', agentes: 'Agentes IA',
     relatorios: 'Relatórios', audiencias: 'Aviso de Audiência', config: 'Configurações',
+    usuarios: 'Gerenciar Usuários',
   };
   document.getElementById('topbar-title').textContent = titles[secao] || secao;
 
   const pages = { contas: renderPageContas, templates: renderPageTemplates,
     inatividade: renderPageInatividade, agentes: renderPageAgentes,
-    relatorios: renderPageRelatorios, audiencias: renderPageAvisoAudiencia, config: renderPageConfig };
+    relatorios: renderPageRelatorios, audiencias: renderPageAvisoAudiencia, config: renderPageConfig,
+    usuarios: renderPageUsuarios };
   (pages[secao] || renderPageContas)();
 }
 
@@ -1814,6 +2060,116 @@ async function confirmarDeletar() {
 }
 
 // ══════════════════════════════════════════════
+// MODAL: IMPORTAR CONTA EXISTENTE
+// ══════════════════════════════════════════════
+function abrirModalImportar() {
+  document.getElementById('imp-error').classList.remove('show');
+  ['imp-account-id','imp-chatwoot-url','imp-chatwoot-token','imp-openai-key','imp-nome'].forEach(id => { const el = document.getElementById(id); if(el) el.value = ''; });
+  document.getElementById('imp-step1').style.display = '';
+  document.getElementById('imp-step2').style.display = 'none';
+  const sel = document.getElementById('imp-agent-id');
+  sel.innerHTML = '<option value="">-- Selecione o agente da IA --</option>';
+  document.getElementById('imp-inboxes-list').innerHTML = '';
+  abrirModal('modal-importar');
+}
+
+function voltarStep1() {
+  document.getElementById('imp-step1').style.display = '';
+  document.getElementById('imp-step2').style.display = 'none';
+}
+
+async function buscarDadosChatwoot() {
+  const chatwootUrl = document.getElementById('imp-chatwoot-url').value.trim();
+  const chatwootToken = document.getElementById('imp-chatwoot-token').value.trim();
+  const accountId = parseInt(document.getElementById('imp-account-id').value);
+  const errEl = document.getElementById('imp-error');
+  errEl.classList.remove('show');
+
+  if (!chatwootUrl || !chatwootToken || !accountId) {
+    errEl.textContent = 'Preencha URL, token e Account ID.';
+    errEl.classList.add('show');
+    return;
+  }
+
+  const btn = document.getElementById('btn-imp-buscar');
+  btn.textContent = 'Buscando...'; btn.classList.add('loading');
+  try {
+    const res = await apiFetch('/api/buscar-conta-chatwoot', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ chatwoot_url: chatwootUrl, chatwoot_token: chatwootToken, account_id: accountId })
+    });
+    const data = await res.json();
+    if (!res.ok) { errEl.textContent = `Erro: ${typeof data.detail==='string'?data.detail:JSON.stringify(data.detail)}`; errEl.classList.add('show'); return; }
+
+    // Preencher nome
+    document.getElementById('imp-nome').value = data.account_name || '';
+
+    // Preencher select de agentes
+    const sel = document.getElementById('imp-agent-id');
+    sel.innerHTML = '<option value="">-- Selecione o agente da IA --</option>';
+    (data.agentes || []).forEach(a => {
+      const opt = document.createElement('option');
+      opt.value = a.id;
+      opt.textContent = `${a.name} (ID: ${a.id})`;
+      sel.appendChild(opt);
+    });
+
+    // Preencher checkboxes de inboxes
+    const inboxDiv = document.getElementById('imp-inboxes-list');
+    inboxDiv.innerHTML = '';
+    (data.inboxes || []).forEach(i => {
+      const lbl = document.createElement('label');
+      lbl.style.cssText = 'display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px;cursor:pointer;';
+      const chk = document.createElement('input');
+      chk.type = 'checkbox'; chk.value = i.id; chk.className = 'imp-inbox-chk';
+      const tipo = i.channel_type ? ` (${i.channel_type.replace('Channel::','')})` : '';
+      lbl.appendChild(chk);
+      lbl.appendChild(document.createTextNode(`${i.name}${tipo} — ID: ${i.id}`));
+      inboxDiv.appendChild(lbl);
+    });
+
+    // Mostrar etapa 2
+    document.getElementById('imp-step1').style.display = 'none';
+    document.getElementById('imp-step2').style.display = '';
+  } catch(e) { errEl.textContent = `Erro: ${e.message}`; errEl.classList.add('show'); }
+  finally { btn.textContent = 'Buscar Dados'; btn.classList.remove('loading'); }
+}
+
+async function importarConta() {
+  const accountId = parseInt(document.getElementById('imp-account-id').value);
+  const nome = document.getElementById('imp-nome').value.trim();
+  const chatwootUrl = document.getElementById('imp-chatwoot-url').value.trim();
+  const chatwootToken = document.getElementById('imp-chatwoot-token').value.trim();
+  const openaiKey = document.getElementById('imp-openai-key').value.trim();
+  const iaAgentId = document.getElementById('imp-agent-id').value ? parseInt(document.getElementById('imp-agent-id').value) : null;
+  const inboxes = [...document.querySelectorAll('.imp-inbox-chk:checked')].map(c => parseInt(c.value));
+  const errEl = document.getElementById('imp-error2');
+  errEl.classList.remove('show');
+
+  if (!accountId || !nome || !chatwootUrl || !chatwootToken) {
+    errEl.textContent = 'Preencha todos os campos obrigatorios.';
+    errEl.classList.add('show');
+    return;
+  }
+
+  const btn = document.getElementById('btn-imp-criar');
+  btn.textContent = 'Importando...'; btn.classList.add('loading');
+  try {
+    const res = await apiFetch('/api/importar-conta', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ account_id: accountId, nome, chatwoot_url: chatwootUrl, chatwoot_token: chatwootToken, openai_api_key: openaiKey, ia_agent_id: iaAgentId, inboxes })
+    });
+    const data = await res.json();
+    if (!res.ok) { errEl.textContent = `Erro: ${typeof data.detail==='string'?data.detail:JSON.stringify(data.detail)}`; errEl.classList.add('show'); return; }
+    await carregarClientes();
+    clienteAtivo = data.account_id;
+    fecharModal('modal-importar');
+    navTo('config');
+  } catch(e) { errEl.textContent = `Erro: ${e.message}`; errEl.classList.add('show'); }
+  finally { btn.textContent = 'Importar'; btn.classList.remove('loading'); }
+}
+
+// ══════════════════════════════════════════════
 // MODAL: CRIAR CONTA CHATWOOT
 // ══════════════════════════════════════════════
 function abrirModalChatwoot() {
@@ -2501,6 +2857,163 @@ async function audTipoDeletar(id, nome) {
   if (res.ok) {
     await _audCarregarTipos();
     _audRenderTab();
+  }
+}
+
+// ══════════════════════════════════════════════
+// PAGE: USUÁRIOS
+// ══════════════════════════════════════════════
+let _usuariosData = [];
+
+async function renderPageUsuarios() {
+  const el = document.getElementById('page-content');
+  el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:20px 0;">Carregando...</div>';
+  const res = await fetch('/auth/users');
+  if (!res.ok) { el.innerHTML = '<div style="color:var(--red);padding:20px 0;">Erro ao carregar usuários.</div>'; return; }
+  _usuariosData = await res.json();
+  _renderUsuariosTabela();
+}
+
+function _renderUsuariosTabela() {
+  const el = document.getElementById('page-content');
+  const roleLabel = { super_admin: 'Super Admin', admin: 'Admin', moderador: 'Moderador', agente: 'Agente' };
+  el.innerHTML = `
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+        <div><div class="card-title">Usuários do sistema</div><div class="card-sub">${_usuariosData.length} usuário(s)</div></div>
+        <button class="btn btn-primary" style="margin-left:auto;" onclick="abrirModalNovoUsuario()">+ Novo usuário</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Nome</th><th>Email</th><th>Role</th><th>Contas</th><th>Status</th><th></th>
+          </tr></thead>
+          <tbody>
+            ${_usuariosData.map(u => `
+              <tr>
+                <td class="td-name">${u.nome}</td>
+                <td>${u.email}</td>
+                <td><span class="role-badge role-${u.role}">${roleLabel[u.role] || u.role}</span></td>
+                <td>
+                  ${u.role === 'super_admin' ? '<span style="font-size:11px;color:var(--text-muted);">Todas</span>' :
+                    (u.contas && u.contas.length
+                      ? u.contas.map(ac => `<span class="badge badge-purple" style="margin-right:3px;">#${ac}</span>`).join('')
+                      : '<span style="font-size:11px;color:var(--text-muted);">Nenhuma</span>')}
+                </td>
+                <td>${u.ativo ? '<span class="badge badge-green">Ativo</span>' : '<span class="badge badge-gray">Inativo</span>'}</td>
+                <td class="td-actions">
+                  <button class="btn-icon" title="Editar" onclick="abrirModalEditarUsuario('${u.id}')">
+                    <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                  </button>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+// Modal novo usuário
+function abrirModalNovoUsuario() {
+  document.getElementById('mu-id').value = '';
+  document.getElementById('mu-nome').value = '';
+  document.getElementById('mu-email').value = '';
+  document.getElementById('mu-senha').value = '';
+  document.getElementById('mu-role').value = 'admin';
+  document.getElementById('mu-ativo').checked = true;
+  document.getElementById('mu-contas-wrap').innerHTML = '';
+  document.getElementById('mu-modal-title').textContent = 'Novo Usuário';
+  document.getElementById('mu-senha-hint').style.display = 'none';
+  _renderContasCheckboxes(null);
+  abrirModal('modal-usuario');
+}
+
+function abrirModalEditarUsuario(userId) {
+  const u = _usuariosData.find(x => x.id === userId);
+  if (!u) return;
+  document.getElementById('mu-id').value = u.id;
+  document.getElementById('mu-nome').value = u.nome;
+  document.getElementById('mu-email').value = u.email;
+  document.getElementById('mu-senha').value = '';
+  document.getElementById('mu-role').value = u.role;
+  document.getElementById('mu-ativo').checked = u.ativo;
+  document.getElementById('mu-modal-title').textContent = 'Editar Usuário';
+  document.getElementById('mu-senha-hint').style.display = 'block';
+  _renderContasCheckboxes(u.contas || []);
+  abrirModal('modal-usuario');
+}
+
+function _renderContasCheckboxes(contasSelecionadas) {
+  const wrap = document.getElementById('mu-contas-wrap');
+  if (!clientes.length) { wrap.innerHTML = '<span style="font-size:11px;color:var(--text-muted);">Nenhuma conta disponível</span>'; return; }
+  wrap.innerHTML = clientes.map(c => `
+    <label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;cursor:pointer;font-size:13px;">
+      <input type="checkbox" data-account="${c.account_id}"
+             ${contasSelecionadas && contasSelecionadas.includes(c.account_id) ? 'checked' : ''} />
+      <span>#${c.account_id} — ${c.nome}</span>
+    </label>
+  `).join('');
+}
+
+async function salvarUsuario() {
+  const errEl = document.getElementById('mu-error');
+  errEl.classList.remove('show');
+  const userId = document.getElementById('mu-id').value;
+  const nome = document.getElementById('mu-nome').value.trim();
+  const email = document.getElementById('mu-email').value.trim();
+  const senha = document.getElementById('mu-senha').value;
+  const role = document.getElementById('mu-role').value;
+  const ativo = document.getElementById('mu-ativo').checked;
+
+  if (!nome || !email) { errEl.textContent = 'Nome e email são obrigatórios.'; errEl.classList.add('show'); return; }
+  if (!userId && !senha) { errEl.textContent = 'Senha é obrigatória para novos usuários.'; errEl.classList.add('show'); return; }
+
+  const btn = document.getElementById('mu-btn-salvar');
+  btn.textContent = 'Salvando...'; btn.classList.add('loading');
+
+  try {
+    let uid = userId;
+    if (!userId) {
+      // Criar novo
+      const res = await fetch('/auth/users', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ nome, email, senha, role }),
+      });
+      const data = await res.json();
+      if (!res.ok) { errEl.textContent = data.detail || 'Erro ao criar usuário.'; errEl.classList.add('show'); return; }
+      uid = data.id;
+    } else {
+      // Atualizar
+      const payload = { nome, role, ativo };
+      if (senha) payload.senha = senha;
+      const res = await fetch(`/auth/users/${userId}`, {
+        method: 'PUT', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) { const d = await res.json(); errEl.textContent = d.detail || 'Erro.'; errEl.classList.add('show'); return; }
+    }
+
+    // Gerenciar contas (apenas se não for super_admin)
+    if (role !== 'super_admin' && uid) {
+      const checkboxes = document.querySelectorAll('#mu-contas-wrap input[type=checkbox]');
+      const contasAntes = userId ? (_usuariosData.find(x => x.id === userId)?.contas || []) : [];
+      for (const cb of checkboxes) {
+        const ac = parseInt(cb.dataset.account);
+        const estava = contasAntes.includes(ac);
+        if (cb.checked && !estava) await fetch(`/auth/users/${uid}/accounts/${ac}`, { method: 'POST' });
+        if (!cb.checked && estava) await fetch(`/auth/users/${uid}/accounts/${ac}`, { method: 'DELETE' });
+      }
+    }
+
+    fecharModal('modal-usuario');
+    await renderPageUsuarios();
+  } catch(e) {
+    errEl.textContent = `Erro: ${e.message}`; errEl.classList.add('show');
+  } finally {
+    btn.textContent = 'Salvar'; btn.classList.remove('loading');
   }
 }
 
