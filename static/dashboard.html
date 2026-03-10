@@ -450,7 +450,7 @@
       <button onclick="fazerLogout()" style="border:none;background:none;color:var(--text-muted);font-size:11px;cursor:pointer;padding:2px 6px;border-radius:4px;flex-shrink:0;" title="Sair">Sair</button>
     </div>
     <button class="btn-new-account" onclick="abrirModalImportar()" id="btn-importar-conta" style="margin-bottom:6px;display:none;">+ Importar Conta</button>
-    <button class="btn-new-account" onclick="abrirModalChatwoot()" id="btn-criar-chatwoot" style="margin-bottom:6px;display:none;">+ Criar no Chatwoot</button>
+    <button class="btn-new-account" onclick="abrirModalChatwoot()" id="btn-criar-chatwoot" style="margin-bottom:6px;display:none;">+ Criar Conta</button>
     <button class="btn-new-account" onclick="abrirModalUsuarios()" id="btn-criador-usuarios" style="display:none;">+ Criador de Usuários</button>
   </div>
 </aside>
@@ -475,7 +475,7 @@
     <div style="text-align:center;padding:8px 0 16px;">
       <div style="font-size:36px;margin-bottom:12px;">🗑️</div>
       <h3 style="font-size:16px;font-weight:700;margin-bottom:8px;">Remover conta?</h3>
-      <p style="font-size:13px;color:var(--text-secondary);">Isso vai excluir <strong id="deletar-nome"></strong> do Chatwoot e do Supabase.</p>
+      <p style="font-size:13px;color:var(--text-secondary);">Isso vai excluir <strong id="deletar-nome"></strong> permanentemente do sistema.</p>
       <p style="font-size:11px;color:var(--red);margin-top:6px;">Esta ação não pode ser desfeita.</p>
     </div>
     <div class="modal-actions" style="justify-content:center;">
@@ -526,15 +526,15 @@
       <h3>Importar Conta Existente</h3>
       <button class="modal-close" onclick="fecharModal('modal-importar')">×</button>
     </div>
-    <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px;">Informe os dados de conexao e clique em "Buscar" para preencher automaticamente.</p>
+    <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px;">Informe os dados de conexao e clique em "Buscar Dados" para preencher automaticamente.</p>
 
     <div id="imp-form">
       <!-- Etapa 1: conexao -->
       <div id="imp-step1">
         <div class="fields-grid" style="gap:12px;">
-          <div class="field-group full"><label>URL do Chatwoot</label><input type="text" id="imp-chatwoot-url" placeholder="https://app.chatwoot.com" /></div>
-          <div class="field-group full"><label>Token do Chatwoot (admin/agent)</label><input type="password" id="imp-chatwoot-token" placeholder="Token de acesso" /></div>
-          <div class="field-group full"><label>Account ID (do Chatwoot)</label><input type="number" id="imp-account-id" placeholder="Ex: 5" /></div>
+          <div class="field-group full"><label>URL da Plataforma</label><input type="text" id="imp-chatwoot-url" placeholder="https://app.exemplo.com" /></div>
+          <div class="field-group full"><label>Token de API (admin/agent)</label><input type="password" id="imp-chatwoot-token" placeholder="Token de acesso" /></div>
+          <div class="field-group full"><label>Account ID</label><input type="number" id="imp-account-id" placeholder="Ex: 5" /></div>
         </div>
         <div class="modal-error" id="imp-error"></div>
         <div class="modal-actions">
@@ -575,10 +575,10 @@
 <div class="modal-overlay" id="modal-chatwoot">
   <div class="modal" style="width:400px;">
     <div class="modal-header">
-      <h3>Criar Conta no Chatwoot</h3>
+      <h3>Criar Nova Conta</h3>
       <button class="modal-close" onclick="fecharModal('modal-chatwoot')">×</button>
     </div>
-    <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px;">Conta criada em <strong>app.advbrasil.ai</strong>. Senha do admin gerada automaticamente.</p>
+    <p style="font-size:12px;color:var(--text-muted);margin-bottom:16px;">Conta sera criada automaticamente. Senha do admin gerada automaticamente.</p>
 
     <div id="cw-form">
       <div class="fields-grid" style="gap:12px;">
@@ -1130,7 +1130,7 @@ function renderPageContas() {
         <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
       </svg>
       <p>Selecione uma conta na barra lateral</p>
-      <p class="empty-sub">ou crie uma nova clicando em "+ Criar no Chatwoot"</p>
+      <p class="empty-sub">ou crie uma nova clicando em "+ Criar Conta"</p>
     </div>`;
     return;
   }
@@ -1212,19 +1212,19 @@ async function carregarFormConta(id) {
         </div>
       </div>
 
-      <!-- ── CHATWOOT ── -->
+      <!-- ── PLATAFORMA ── -->
       <div class="section-divider" style="justify-content:flex-start;gap:10px;">
-        Chatwoot
+        Plataforma
         <button class="btn btn-ghost" style="font-size:11px;padding:2px 8px;margin-left:auto;"
-          title="Recarregar dados do Chatwoot" onclick="carregarFormConta(${c.account_id})">↻ Recarregar</button>
+          title="Recarregar dados" onclick="carregarFormConta(${c.account_id})">↻ Recarregar</button>
       </div>
       <div class="fields-grid">
         <div class="field-group full">
-          <label>URL do Chatwoot</label>
-          <input type="text" id="f-chatwoot-url" value="${v('chatwoot_url')}" placeholder="https://app.chatwoot.com" />
+          <label>URL da Plataforma</label>
+          <input type="text" id="f-chatwoot-url" value="${v('chatwoot_url')}" placeholder="https://app.exemplo.com" />
         </div>
         <div class="field-group full">
-          <label>Token de API (chatwoot_token)</label>
+          <label>Token de API</label>
           <div class="secret-wrapper">
             <input type="password" id="f-chatwoot-token" value="${v('chatwoot_token')}" placeholder="Token de acesso" />
             <button class="eye-btn" onclick="toggleSecret('f-chatwoot-token')">👁</button>
@@ -1238,7 +1238,7 @@ async function carregarFormConta(id) {
         <div class="field-group">
           <label>Time ${_tag(teamItems.length, 'times')}</label>
           ${_buildSelect('f-team-id', teamItems, v('team_id'), 'Selecione o time')}
-          <span class="field-hint">Time do Chatwoot para atribuição</span>
+          <span class="field-hint">Time para atribuição</span>
         </div>
         <div class="field-group">
           <label>Notificação — Convertido</label>
@@ -1909,7 +1909,7 @@ async function renderPageInatividade() {
         </div>
 
         <div style="display:flex;flex-direction:column;gap:2px;flex:1;min-width:0;">
-          <span style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;">Label Chatwoot</span>
+          <span style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;">Label</span>
           <input type="text" id="inativ-label-${e.stagio}" value="${e.label}"
                  style="padding:5px 8px;font-size:12px;" />
         </div>
