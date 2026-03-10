@@ -444,7 +444,7 @@ async def atualizar_cliente(account_id: int, request: Request, user: dict = Depe
         raise HTTPException(status_code=404, detail="Cliente não encontrado")
     dados = await request.json()
     campos_editaveis = [
-        "ativo", "inatividade_ativa", "chatwoot_url", "chatwoot_token", "openai_api_key", "ia_agent_id",
+        "ativo", "ia_ativa", "transcricao_ativa", "inatividade_ativa", "chatwoot_url", "chatwoot_token", "openai_api_key", "ia_agent_id",
         "team_id", "inbox_id", "email_agenda", "horas_inicial_busca",
         "quantidade_dias_a_buscar", "duracao_agendamento", "disponibilidade",
         "especialidade", "id_notificacao_convertido", "id_notificacao_cliente",
@@ -833,12 +833,12 @@ async def chatwoot_webhook(request: Request):
             except Exception as e:
                 logger.warning(f"Erro ao registrar atividade: {e}")
 
-        ia_ativa = ia_agent_id is not None and assignee_id == ia_agent_id
+        ia_ativa = config.get("ia_ativa", True) and ia_agent_id is not None and assignee_id == ia_agent_id
 
-        # Verificar se é áudio
+        # Verificar se é áudio (só transcreve se transcricao_ativa)
         audio = next((a for a in attachments if a.get("file_type") == "audio"), None)
 
-        if audio:
+        if audio and config.get("transcricao_ativa", True):
             logger.info(f"[{account_id}] Áudio de {nome} ({telefone}) — transcrevendo...")
             try:
                 transcricao = await transcrever_audio(

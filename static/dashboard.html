@@ -414,10 +414,6 @@
       <span class="nav-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
       <span class="nav-label">Inatividade</span>
     </div>
-    <div class="nav-item" id="nav-agentes" onclick="navTo('agentes')">
-      <span class="nav-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M20 21a8 8 0 1 0-16 0"/></svg></span>
-      <span class="nav-label">Agentes IA</span>
-    </div>
     <div class="nav-item" id="nav-relatorios" onclick="navTo('relatorios')">
       <span class="nav-icon"><svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span>
       <span class="nav-label">Relatórios</span>
@@ -1011,13 +1007,13 @@ function aplicarPermissoes() {
   document.getElementById('btn-criador-usuarios').style.display = role === 'super_admin' ? 'block' : 'none';
   // Nav items visíveis por role
   const PERMS = {
-    super_admin: ['templates', 'inatividade', 'agentes', 'relatorios', 'audiencias', 'config', 'usuarios'],
-    admin:       ['templates', 'inatividade', 'agentes', 'relatorios', 'audiencias', 'config'],
+    super_admin: ['templates', 'inatividade', 'relatorios', 'audiencias', 'config', 'usuarios'],
+    admin:       ['templates', 'inatividade', 'relatorios', 'audiencias', 'config'],
     moderador:   ['relatorios', 'audiencias'],
     agente:      ['relatorios'],
   };
   const allowed = PERMS[role] || [];
-  ['templates', 'inatividade', 'agentes', 'relatorios', 'audiencias', 'config'].forEach(s => {
+  ['templates', 'inatividade', 'relatorios', 'audiencias', 'config'].forEach(s => {
     const el = document.getElementById(`nav-${s}`);
     if (el) el.style.display = allowed.includes(s) ? 'flex' : 'none';
   });
@@ -1095,21 +1091,21 @@ function trocarContaTopbar(id) {
 function navTo(secao) {
   secaoAtiva = secao;
   // Update nav highlights (only for non-conta sections)
-  ['templates','inatividade','agentes','relatorios','audiencias','config','usuarios'].forEach(s => {
+  ['templates','inatividade','relatorios','audiencias','config','usuarios'].forEach(s => {
     document.getElementById(`nav-${s}`)?.classList.toggle('active', s === secao);
   });
   renderSidebarAccounts();
 
   const titles = {
     contas: 'Contas', templates: 'Templates Meta',
-    inatividade: 'Inatividade', agentes: 'Agentes IA',
+    inatividade: 'Inatividade',
     relatorios: 'Relatórios', audiencias: 'Aviso de Audiência', config: 'Configurações',
     usuarios: 'Gerenciar Usuários',
   };
   document.getElementById('topbar-title').textContent = titles[secao] || secao;
 
   const pages = { contas: renderPageContas, templates: renderPageTemplates,
-    inatividade: renderPageInatividade, agentes: renderPageAgentes,
+    inatividade: renderPageInatividade,
     relatorios: renderPageRelatorios, audiencias: renderPageAvisoAudiencia, config: renderPageConfig,
     usuarios: renderPageUsuarios };
   (pages[secao] || renderPageContas)();
@@ -1172,15 +1168,25 @@ async function carregarFormConta(id) {
           <div class="card-title">${c.nome}</div>
           <div class="card-sub">account_id: ${c.account_id}</div>
         </div>
-        <div class="toggle-wrapper" style="gap:12px;">
-          <span class="toggle-label">Ativo</span>
+        <div class="toggle-wrapper" style="gap:12px;flex-wrap:wrap;">
+          <span class="toggle-label">IA</span>
           <label class="toggle">
-            <input type="checkbox" id="f-ativo" ${c.ativo ? 'checked' : ''} />
+            <input type="checkbox" id="f-ia-ativa" ${(c.ia_ativa ?? true) ? 'checked' : ''} />
+            <span class="toggle-slider"></span>
+          </label>
+          <span class="toggle-label" style="margin-left:8px;">Transcrição</span>
+          <label class="toggle">
+            <input type="checkbox" id="f-transcricao-ativa" ${(c.transcricao_ativa ?? true) ? 'checked' : ''} />
             <span class="toggle-slider"></span>
           </label>
           <span class="toggle-label" style="margin-left:8px;">Inatividade</span>
           <label class="toggle">
             <input type="checkbox" id="f-inatividade-ativa" ${(c.inatividade_ativa ?? true) ? 'checked' : ''} />
+            <span class="toggle-slider"></span>
+          </label>
+          <span class="toggle-label" style="margin-left:8px;">Ativo</span>
+          <label class="toggle">
+            <input type="checkbox" id="f-ativo" ${c.ativo ? 'checked' : ''} />
             <span class="toggle-slider"></span>
           </label>
           <button class="btn btn-secondary" style="margin-left:8px;padding:7px 10px;color:var(--red);border-color:#fecaca;"
@@ -1433,6 +1439,8 @@ async function salvarConta(id) {
     plano:                      parseInt(document.getElementById('f-plano').value) || 1,
     dia_ciclo:                  parseInt(document.getElementById('f-dia-ciclo').value) || 1,
     ativo:                      document.getElementById('f-ativo').checked,
+    ia_ativa:                   document.getElementById('f-ia-ativa').checked,
+    transcricao_ativa:          document.getElementById('f-transcricao-ativa').checked,
     inatividade_ativa:          document.getElementById('f-inatividade-ativa').checked,
     nome_escritorio:            document.getElementById('f-nome-escritorio').value.trim(),
     nome_completo:              document.getElementById('f-nome-completo').value.trim(),
