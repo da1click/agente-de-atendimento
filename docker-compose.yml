@@ -1,8 +1,13 @@
 services:
   agente-de-atendimento:
     image: da1click/agente-de-atendimento:latest
-    ports:
-      - "8000:8000"
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.agente_atendimento.rule=Host(`dash.advbrasil.ai`)
+      - traefik.http.routers.agente_atendimento.entrypoints=websecure
+      - traefik.http.routers.agente_atendimento.tls=true
+      - traefik.http.routers.agente_atendimento.tls.certresolver=le
+      - traefik.http.services.agente_atendimento.loadbalancer.server.port=8000
     environment:
       - CHATWOOT_URL=${CHATWOOT_URL}
       - CHATWOOT_SUPER_ADMIN_TOKEN=${CHATWOOT_SUPER_ADMIN_TOKEN}
