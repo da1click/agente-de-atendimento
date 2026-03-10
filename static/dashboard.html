@@ -400,14 +400,14 @@
     </div>
   </div>
 
-  <!-- Accounts list inside sidebar -->
-  <div class="nav-section">
+  <!-- Accounts list inside sidebar (visível só quando nenhuma conta selecionada) -->
+  <div class="nav-section" id="sidebar-accounts-section">
     <div class="nav-section-label">Contas</div>
     <div id="sidebar-accounts"></div>
   </div>
 
-  <!-- Main navigation -->
-  <div class="nav-section" style="margin-top:8px;">
+  <!-- Main navigation (visível só quando conta selecionada) -->
+  <div class="nav-section" id="nav-ferramentas" style="margin-top:8px;display:none;">
     <div class="nav-section-label">Ferramentas</div>
     <div class="nav-item" id="nav-templates" onclick="navTo('templates')">
       <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
@@ -1065,32 +1065,53 @@ async function carregarClientes() {
 
 function renderSidebarAccounts() {
   const el = document.getElementById('sidebar-accounts');
+  const accountsSection = document.getElementById('sidebar-accounts-section');
+  const ferramentasSection = document.getElementById('nav-ferramentas');
+
   if (!clientes.length) {
     el.innerHTML = '<div style="font-size:11px;color:var(--text-muted);padding:6px 8px;">Nenhuma conta</div>';
     document.getElementById('topbar-conta-sel').innerHTML = '<option value="">Nenhuma conta</option>';
     return;
   }
+
   el.innerHTML = clientes.map(c => `
-    <div class="account-list-item ${clienteAtivo === c.account_id && secaoAtiva === 'contas' ? 'active' : ''}"
+    <div class="account-list-item ${clienteAtivo === c.account_id ? 'active' : ''}"
          onclick="selecionarConta(${c.account_id})">
       <div class="acl-badge">${c.account_id}</div>
       <div class="acl-name">${c.nome}</div>
       <div class="acl-dot ${c.ativo ? 'on' : 'off'}"></div>
     </div>
   `).join('');
+
   const sel = document.getElementById('topbar-conta-sel');
   sel.innerHTML = '<option value="">Selecione uma conta</option>' +
     clientes.map(c => `<option value="${c.account_id}" ${clienteAtivo === c.account_id ? 'selected' : ''}>${c.nome} (#${c.account_id})</option>`).join('');
+
+  // Quando conta selecionada: esconde lista de contas, mostra ferramentas
+  // Quando nenhuma: mostra lista de contas, esconde ferramentas
+  if (clienteAtivo) {
+    accountsSection.style.display = 'none';
+    ferramentasSection.style.display = '';
+  } else {
+    accountsSection.style.display = '';
+    ferramentasSection.style.display = 'none';
+  }
 }
 
 function trocarContaTopbar(id) {
-  if (!id) return;
+  if (!id) {
+    clienteAtivo = null;
+    renderSidebarAccounts();
+    navTo('contas');
+    return;
+  }
   clienteAtivo = parseInt(id);
   renderSidebarAccounts();
+  if (secaoAtiva === 'contas') secaoAtiva = 'config';
   const pages = { contas: renderPageContas, templates: renderPageTemplates,
     inatividade: renderPageInatividade, agentes: renderPageAgentes,
     relatorios: renderPageRelatorios, audiencias: renderPageAvisoAudiencia, config: renderPageConfig };
-  (pages[secaoAtiva] || renderPageContas)();
+  (pages[secaoAtiva] || renderPageConfig)();
 }
 
 // ══════════════════════════════════════════════
@@ -1141,13 +1162,8 @@ function renderPageContas() {
 
 async function selecionarConta(id) {
   clienteAtivo = id;
-  secaoAtiva = 'contas';
-  ['templates','inatividade','agentes','relatorios','audiencias','config'].forEach(s =>
-    document.getElementById(`nav-${s}`)?.classList.remove('active'));
   renderSidebarAccounts();
-  document.getElementById('topbar-title').textContent = 'Contas';
-  document.getElementById('topbar-sub').textContent = `Conta #${id}`;
-  await carregarFormConta(id);
+  navTo('config');
 }
 
 async function carregarFormConta(id) {
