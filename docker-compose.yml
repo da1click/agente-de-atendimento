@@ -1,6 +1,8 @@
 services:
   agente-de-atendimento:
     image: da1click/agente-de-atendimento:latest
+    ports:
+      - "8000:8000"
     labels:
       - traefik.enable=true
       - traefik.http.routers.agente_atendimento.rule=Host(`dash.advbrasil.ai`)
