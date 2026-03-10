@@ -1,10 +1,21 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, Depends
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from openai import OpenAI
 from ia import agendar_processamento, processar_mensagem, transcrever_audio, enviar_nota_privada
 from db import upsert_lead, salvar_transcricao, deletar_dados_conta
+from db import (
+    super_admin_existe, criar_usuario, get_usuario_por_email, get_usuario_por_id,
+    listar_usuarios_com_contas, atualizar_usuario, get_contas_do_usuario,
+    atribuir_conta_usuario, remover_conta_usuario,
+)
+from db import (
+    carregar_config_cliente as db_carregar_config,
+    salvar_config_cliente as db_salvar_config,
+    listar_configs_clientes, deletar_config_cliente,
+)
+from auth import hash_password, verify_password, create_token, get_current_user, require_super_admin
 from inatividade import registrar_atividade, iniciar_monitoramento
 import httpx
 import json
@@ -21,6 +32,18 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     iniciar_monitoramento()
+    # Cria super_admin inicial se não existir
+    try:
+        if not super_admin_existe():
+            criar_usuario(
+                email="muriloa@gmail.com",
+                password_hash=hash_password("Mu368456*"),
+                nome="Murilo",
+                role="super_admin",
+            )
+            logger.info("Super admin criado: muriloa@gmail.com")
+    except Exception as e:
+        logger.warning(f"Erro ao verificar/criar super admin: {e}")
     yield
 
 
@@ -33,25 +56,13 @@ app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), na
 
 
 def carregar_config_cliente(account_id: int) -> dict | None:
-    """Carrega o config.json do cliente pelo account_id."""
-    for pasta in os.listdir(CLIENTES_DIR):
-        if pasta.startswith(f"{account_id}-"):
-            config_path = os.path.join(CLIENTES_DIR, pasta, "config.json")
-            if os.path.exists(config_path):
-                with open(config_path, encoding="utf-8") as f:
-                    return json.load(f)
-    return None
+    """Carrega o config do cliente pelo account_id (Supabase)."""
+    return db_carregar_config(account_id)
 
 
 def salvar_config_cliente(account_id: int, config: dict):
-    """Salva o config.json do cliente."""
-    for pasta in os.listdir(CLIENTES_DIR):
-        if pasta.startswith(f"{account_id}-"):
-            config_path = os.path.join(CLIENTES_DIR, pasta, "config.json")
-            with open(config_path, "w", encoding="utf-8") as f:
-                json.dump(config, f, indent=2, ensure_ascii=False)
-            return
-    raise FileNotFoundError(f"Cliente {account_id} não encontrado")
+    """Salva o config do cliente (Supabase)."""
+    db_salvar_config(account_id, config)
 
 
 def gerar_senha(tamanho: int = 12) -> str:
@@ -129,19 +140,100 @@ def dashboard():
     return FileResponse(os.path.join(BASE_DIR, "static", "dashboard.html"))
 
 
+# ── AUTH ──────────────────────────────────────────────────────
+
+@app.post("/auth/login")
+async def login(request: Request):
+    dados = await request.json()
+    email = dados.get("email", "").strip().lower()
+    senha = dados.get("senha", "")
+    if not email or not senha:
+        raise HTTPException(status_code=400, detail="Email e senha são obrigatórios")
+    user = get_usuario_por_email(email)
+    if not user or not verify_password(senha, user["password_hash"]):
+        raise HTTPException(status_code=401, detail="Credenciais inválidas")
+    token = create_token(str(user["id"]), user["email"], user["role"])
+    return {
+        "token": token,
+        "user": {"id": user["id"], "email": user["email"], "nome": user["nome"], "role": user["role"]},
+    }
+
+
+@app.get("/auth/me")
+async def me(user: dict = Depends(get_current_user)):
+    u = get_usuario_por_id(user["sub"])
+    if not u or not u.get("ativo"):
+        raise HTTPException(status_code=401, detail="Usuário inativo ou não encontrado")
+    contas = get_contas_do_usuario(u["id"]) if u["role"] != "super_admin" else []
+    return {"id": u["id"], "email": u["email"], "nome": u["nome"], "role": u["role"], "contas": contas}
+
+
+@app.get("/auth/users")
+async def listar_users(user: dict = Depends(get_current_user)):
+    require_super_admin(user)
+    return listar_usuarios_com_contas()
+
+
+@app.post("/auth/users")
+async def criar_user(request: Request, user: dict = Depends(get_current_user)):
+    require_super_admin(user)
+    dados = await request.json()
+    email = dados.get("email", "").strip().lower()
+    senha = dados.get("senha", "").strip()
+    nome = dados.get("nome", "").strip()
+    role = dados.get("role", "admin")
+    if not email or not senha or not nome:
+        raise HTTPException(status_code=400, detail="email, senha e nome são obrigatórios")
+    if role not in ("super_admin", "admin", "moderador", "agente"):
+        raise HTTPException(status_code=400, detail="role inválido")
+    existente = get_usuario_por_email(email)
+    if existente:
+        raise HTTPException(status_code=409, detail="Email já cadastrado")
+    novo = criar_usuario(email=email, password_hash=hash_password(senha), nome=nome, role=role)
+    return {"id": novo["id"], "email": novo["email"], "nome": novo["nome"], "role": novo["role"]}
+
+
+@app.put("/auth/users/{user_id}")
+async def atualizar_user(user_id: str, request: Request, user: dict = Depends(get_current_user)):
+    require_super_admin(user)
+    dados = await request.json()
+    permitidos = {}
+    if "nome" in dados:
+        permitidos["nome"] = dados["nome"]
+    if "role" in dados and dados["role"] in ("super_admin", "admin", "moderador", "agente"):
+        permitidos["role"] = dados["role"]
+    if "ativo" in dados:
+        permitidos["ativo"] = bool(dados["ativo"])
+    if "senha" in dados and dados["senha"]:
+        permitidos["password_hash"] = hash_password(dados["senha"])
+    if permitidos:
+        atualizar_usuario(user_id, permitidos)
+    return {"status": "ok"}
+
+
+@app.post("/auth/users/{user_id}/accounts/{account_id}")
+async def atribuir_conta(user_id: str, account_id: int, user: dict = Depends(get_current_user)):
+    require_super_admin(user)
+    atribuir_conta_usuario(user_id, account_id)
+    return {"status": "ok"}
+
+
+@app.delete("/auth/users/{user_id}/accounts/{account_id}")
+async def remover_conta(user_id: str, account_id: int, user: dict = Depends(get_current_user)):
+    require_super_admin(user)
+    remover_conta_usuario(user_id, account_id)
+    return {"status": "ok"}
+
+
 # ── API CLIENTES ──────────────────────────────────────────────
 
 @app.get("/api/clientes")
 def listar_clientes():
+    rows = listar_configs_clientes()
     clientes = []
-    if not os.path.exists(CLIENTES_DIR):
-        return clientes
-    for pasta in sorted(os.listdir(CLIENTES_DIR)):
-        config_path = os.path.join(CLIENTES_DIR, pasta, "config.json")
-        if os.path.exists(config_path):
-            with open(config_path, encoding="utf-8") as f:
-                c = json.load(f)
-            clientes.append({"account_id": c["account_id"], "nome": c["nome"], "ativo": c.get("ativo", True)})
+    for row in rows:
+        c = row["config"]
+        clientes.append({"account_id": c["account_id"], "nome": c["nome"], "ativo": c.get("ativo", True)})
     return clientes
 
 
@@ -177,15 +269,20 @@ async def deletar_cliente(account_id: int):
     except Exception as e:
         logger.warning(f"Erro ao limpar Supabase para conta {account_id}: {e}")
 
-    # Remover pasta local
+    # Remover config do Supabase
+    try:
+        deletar_config_cliente(account_id)
+    except Exception as e:
+        logger.warning(f"Erro ao remover config Supabase para conta {account_id}: {e}")
+
+    # Remover pasta local (prompts)
     pasta = pasta_cliente(account_id)
     if pasta and os.path.exists(pasta):
         import shutil
         shutil.rmtree(pasta)
-        logger.info(f"Conta {account_id} removida localmente")
-        return {"status": "deletado"}
 
-    raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    logger.info(f"Conta {account_id} removida")
+    return {"status": "deletado"}
 
 
 @app.put("/api/clientes/{account_id}")
@@ -215,8 +312,10 @@ async def criar_cliente(request: Request):
     nome = dados.get("nome", "").strip()
     if not account_id or not nome:
         raise HTTPException(status_code=400, detail="account_id e nome são obrigatórios")
+    # Criar pasta de prompts
     pasta = os.path.join(CLIENTES_DIR, f"{account_id}-{nome}")
     os.makedirs(os.path.join(pasta, "prompt"), exist_ok=True)
+    # Salvar config no Supabase
     config = {
         "account_id": account_id,
         "nome": nome,
@@ -225,8 +324,7 @@ async def criar_cliente(request: Request):
         "chatwoot_url": "",
         "chatwoot_token": ""
     }
-    with open(os.path.join(pasta, "config.json"), "w", encoding="utf-8") as f:
-        json.dump(config, f, indent=2, ensure_ascii=False)
+    salvar_config_cliente(account_id, config)
     return {"status": "criado", "account_id": account_id}
 
 
@@ -341,7 +439,7 @@ async def criar_conta_chatwoot(request: Request):
             except Exception as e:
                 logger.warning(f"Erro ao adicionar admin padrão {email}: {e}")
 
-    # 6. Salvar config local
+    # 6. Salvar config no Supabase + criar pasta de prompts
     nome_pasta = account_name.replace(" ", "_")
     pasta = os.path.join(CLIENTES_DIR, f"{account_id}-{nome_pasta}")
     os.makedirs(os.path.join(pasta, "prompt"), exist_ok=True)
@@ -353,8 +451,7 @@ async def criar_conta_chatwoot(request: Request):
         "chatwoot_url": chatwoot_url,
         "chatwoot_token": super_admin_token,
     }
-    with open(os.path.join(pasta, "config.json"), "w", encoding="utf-8") as f:
-        json.dump(config, f, indent=2, ensure_ascii=False)
+    salvar_config_cliente(account_id, config)
 
     logger.info(f"Conta Chatwoot criada via Platform API: account_id={account_id}, nome={account_name}")
     return {"status": "criado", "account_id": account_id, "admin_email": admin_email, "senha": senha_gerada}
@@ -522,6 +619,27 @@ async def chatwoot_webhook(request: Request):
             logger.info(f"[{account_id}] IA inativa (assignee={assignee_id}, ia_agent_id={ia_agent_id}) — apenas transcrição")
 
     return {"status": "ok"}
+
+
+# ── MIGRAÇÃO CONFIG.JSON → SUPABASE ───────────────────────────
+
+@app.post("/api/migrar-configs")
+def migrar_configs_para_supabase():
+    """Migra todos os config.json locais para o Supabase (usar uma vez)."""
+    migrados = []
+    if not os.path.exists(CLIENTES_DIR):
+        return {"migrados": migrados}
+    for pasta in os.listdir(CLIENTES_DIR):
+        config_path = os.path.join(CLIENTES_DIR, pasta, "config.json")
+        if os.path.exists(config_path):
+            with open(config_path, encoding="utf-8") as f:
+                config = json.load(f)
+            account_id = config.get("account_id")
+            if account_id:
+                salvar_config_cliente(account_id, config)
+                migrados.append({"account_id": account_id, "nome": config.get("nome")})
+                logger.info(f"Config migrado para Supabase: account_id={account_id}")
+    return {"migrados": migrados, "total": len(migrados)}
 
 
 # ── META TEMPLATES ─────────────────────────────────────────────
