@@ -290,9 +290,41 @@ PLANOS = {
 }
 
 
+def _ciclo_mes(dia_ciclo: int, data=None):
+    """Retorna (ciclo_id, data_inicio, data_fim) com base no dia do ciclo.
+    Se dia_ciclo=15 e data=10/mar → ciclo '2026-02' (15/fev a 14/mar).
+    Se dia_ciclo=15 e data=20/mar → ciclo '2026-03' (15/mar a 14/abr).
+    Se dia_ciclo=1 → funciona como mês calendário normal."""
+    from datetime import datetime as _dt, timedelta
+    import calendar
+    if data is None:
+        data = _dt.now()
+    dia_ciclo = max(1, min(28, dia_ciclo))  # limita a 28 para evitar problemas com fev
+
+    if data.day >= dia_ciclo:
+        # Estamos no ciclo que começa neste mês
+        inicio = data.replace(day=dia_ciclo, hour=0, minute=0, second=0, microsecond=0)
+        # Fim = dia_ciclo do próximo mês
+        if data.month == 12:
+            fim = data.replace(year=data.year + 1, month=1, day=dia_ciclo, hour=0, minute=0, second=0, microsecond=0)
+        else:
+            fim = data.replace(month=data.month + 1, day=dia_ciclo, hour=0, minute=0, second=0, microsecond=0)
+        ciclo_id = data.strftime("%Y-%m")
+    else:
+        # Estamos no ciclo que começou no mês passado
+        if data.month == 1:
+            inicio = data.replace(year=data.year - 1, month=12, day=dia_ciclo, hour=0, minute=0, second=0, microsecond=0)
+        else:
+            inicio = data.replace(month=data.month - 1, day=dia_ciclo, hour=0, minute=0, second=0, microsecond=0)
+        fim = data.replace(day=dia_ciclo, hour=0, minute=0, second=0, microsecond=0)
+        ciclo_id = inicio.strftime("%Y-%m")
+
+    return ciclo_id, inicio.isoformat(), fim.isoformat()
+
+
 @app.get("/api/clientes/{account_id}/relatorio")
-def relatorio_conta(account_id: int, mes: str = None, user: dict = Depends(get_current_user)):
-    """Relatório de uso da conta: conversas, leads, agendamentos, etc."""
+def relatorio_conta(account_id: int, user: dict = Depends(get_current_user)):
+    """Relatório de uso da conta baseado no dia do ciclo."""
     if user.get("role") != "super_admin":
         contas_permitidas = get_contas_do_usuario(user["sub"])
         if account_id not in contas_permitidas:
@@ -303,19 +335,12 @@ def relatorio_conta(account_id: int, mes: str = None, user: dict = Depends(get_c
         raise HTTPException(status_code=404, detail="Cliente não encontrado")
 
     from datetime import datetime as _dt, timedelta
-    if not mes:
-        mes = _dt.now().strftime("%Y-%m")
 
-    # Datas do mês para filtros de created_at
-    ano, m = mes.split("-")
-    data_inicio = f"{mes}-01T00:00:00"
-    if int(m) == 12:
-        data_fim = f"{int(ano)+1}-01-01T00:00:00"
-    else:
-        data_fim = f"{ano}-{int(m)+1:02d}-01T00:00:00"
+    dia_ciclo = config.get("dia_ciclo", 1)
+    ciclo_id, data_inicio, data_fim = _ciclo_mes(dia_ciclo)
 
     # Uso mensal (conversas únicas)
-    conversas_mes = contar_uso_mensal(account_id, mes)
+    conversas_mes = contar_uso_mensal(account_id, ciclo_id)
 
     # Leads por status
     leads = contar_leads_por_status(account_id, data_inicio, data_fim)
@@ -331,20 +356,22 @@ def relatorio_conta(account_id: int, mes: str = None, user: dict = Depends(get_c
     excedente = max(0, conversas_mes - limite)
     valor_excedente = round(excedente * plano["excedente_conversa"], 2)
 
-    # Histórico últimos 6 meses
+    # Histórico últimos 6 ciclos
     meses_hist = []
     dt = _dt.now()
     for i in range(5, -1, -1):
-        d = dt.replace(day=1) - timedelta(days=i * 30)
-        meses_hist.append(d.strftime("%Y-%m"))
-    # deduplica e ordena
+        d = dt - timedelta(days=i * 30)
+        cid, _, _ = _ciclo_mes(dia_ciclo, d)
+        meses_hist.append(cid)
     meses_hist = sorted(set(meses_hist))[-6:]
     historico = historico_uso_mensal(account_id, meses_hist)
 
     return {
         "account_id": account_id,
         "nome": config.get("nome", ""),
-        "mes": mes,
+        "ciclo_id": ciclo_id,
+        "dia_ciclo": dia_ciclo,
+        "periodo": {"inicio": data_inicio[:10], "fim": data_fim[:10]},
         "plano": {
             "id": plano_id,
             "nome": plano["nome"],
@@ -787,11 +814,11 @@ async def chatwoot_webhook(request: Request):
         except Exception as e:
             logger.warning(f"Erro ao registrar lead no Supabase: {e}")
 
-        # Registrar uso mensal (1 conversa por mês por conversation_id)
-        from datetime import datetime as _dt
-        mes_atual = _dt.now().strftime("%Y-%m")
+        # Registrar uso mensal (1 conversa por ciclo por conversation_id)
         try:
-            registrar_uso_mensal(account_id, conversation_id, mes_atual)
+            dia_ciclo = config.get("dia_ciclo", 1)
+            ciclo_id, _, _ = _ciclo_mes(dia_ciclo)
+            registrar_uso_mensal(account_id, conversation_id, ciclo_id)
         except Exception as e:
             logger.warning(f"Erro ao registrar uso mensal: {e}")
 

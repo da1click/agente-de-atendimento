@@ -1189,7 +1189,7 @@ async function carregarFormConta(id) {
       </div>
 
       <!-- ── PLANO ── -->
-      <div class="section-divider">Plano</div>
+      <div class="section-divider">Plano e Ciclo de Cobrança</div>
       <div class="fields-grid">
         <div class="field-group">
           <label>Plano Contratado</label>
@@ -1200,6 +1200,11 @@ async function carregarFormConta(id) {
             <option value="4" ${v('plano',1)==4?'selected':''}>Plano 4 — 5.000 conversas (R$ 6.190)</option>
           </select>
           <span class="field-hint">Define o limite mensal de conversas e valor do excedente</span>
+        </div>
+        <div class="field-group">
+          <label>Dia do Ciclo</label>
+          <input type="number" id="f-dia-ciclo" value="${v('dia_ciclo', 1)}" min="1" max="28" placeholder="1" />
+          <span class="field-hint">Dia do mês em que o ciclo de cobrança inicia (1 a 28)</span>
         </div>
       </div>
 
@@ -1424,6 +1429,7 @@ function _readDisponibilidade() {
 async function salvarConta(id) {
   const body = {
     plano:                      parseInt(document.getElementById('f-plano').value) || 1,
+    dia_ciclo:                  parseInt(document.getElementById('f-dia-ciclo').value) || 1,
     ativo:                      document.getElementById('f-ativo').checked,
     inatividade_ativa:          document.getElementById('f-inatividade-ativa').checked,
     nome_escritorio:            document.getElementById('f-nome-escritorio').value.trim(),
@@ -2098,9 +2104,13 @@ async function renderPageRelatorios() {
 
     const pct = Math.min(r.uso.percentual, 100);
     const barColor = r.uso.percentual >= 100 ? 'var(--red)' : r.uso.percentual >= 80 ? 'var(--yellow)' : 'var(--green)';
+
+    const _fmtData = (d) => { const p = d.split('-'); return `${p[2]}/${p[1]}/${p[0]}`; };
+    const periodoLabel = r.periodo ? `${_fmtData(r.periodo.inicio)} a ${_fmtData(r.periodo.fim)}` : r.ciclo_id;
+
     const alertaHtml = r.uso.percentual >= 80 && r.uso.percentual < 100
       ? `<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:13px;color:#92400e;">
-           Atenção: uso em <b>${r.uso.percentual}%</b> do limite mensal. Conversas excedentes serão cobradas a R$ ${r.plano.excedente_por_conversa.toFixed(2)} cada.
+           Atenção: uso em <b>${r.uso.percentual}%</b> do limite. Conversas excedentes serão cobradas a R$ ${r.plano.excedente_por_conversa.toFixed(2)} cada.
          </div>`
       : '';
     const alertaExcedente = r.uso.excedente > 0
@@ -2131,26 +2141,52 @@ async function renderPageRelatorios() {
           <div class="card-icon" style="background:var(--purple-light);color:var(--purple);">$</div>
           <div>
             <div class="card-title">${r.plano.nome}</div>
-            <div class="card-sub">${r.plano.limite_conversas.toLocaleString()} conversas/mês — R$ ${r.plano.valor.toFixed(2)}</div>
+            <div class="card-sub">${r.plano.limite_conversas.toLocaleString()} conversas/ciclo — R$ ${r.plano.valor.toFixed(2)}/mês</div>
+          </div>
+        </div>
+
+        <div style="margin-top:16px;display:flex;gap:16px;flex-wrap:wrap;">
+          <div style="background:var(--bg);border-radius:8px;padding:10px 16px;font-size:12px;">
+            <span style="color:var(--text-muted);">Dia do Ciclo:</span>
+            <span style="font-weight:700;margin-left:4px;">dia ${r.dia_ciclo}</span>
+          </div>
+          <div style="background:var(--bg);border-radius:8px;padding:10px 16px;font-size:12px;">
+            <span style="color:var(--text-muted);">Período atual:</span>
+            <span style="font-weight:700;margin-left:4px;">${periodoLabel}</span>
           </div>
         </div>
 
         <div style="margin-top:20px;">
           <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">
-            <span style="font-size:13px;font-weight:600;">Uso do mês (${r.mes})</span>
+            <span style="font-size:13px;font-weight:600;">Uso do ciclo</span>
             <span style="font-size:13px;font-weight:700;color:${barColor};">${r.uso.conversas.toLocaleString()} / ${r.plano.limite_conversas.toLocaleString()}</span>
           </div>
           <div style="background:var(--bg);border-radius:8px;height:24px;overflow:hidden;position:relative;">
             <div style="background:${barColor};height:100%;width:${pct}%;border-radius:8px;transition:width 0.5s;"></div>
             <span style="position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:11px;font-weight:700;color:var(--text);">${r.uso.percentual}%</span>
           </div>
-          ${r.uso.excedente > 0 ? `<div style="margin-top:6px;font-size:12px;color:var(--red);font-weight:600;">Excedente: ${r.uso.excedente} conversas = R$ ${r.uso.valor_excedente.toFixed(2)}</div>` : ''}
+        </div>
+      </div>
+
+      <!-- Excedente -->
+      <div class="card" style="display:flex;align-items:center;gap:20px;">
+        <div style="flex:1;">
+          <div style="font-size:14px;font-weight:700;margin-bottom:4px;">Excedente</div>
+          <div style="font-size:12px;color:var(--text-muted);">Conversas acima do limite do plano (R$ ${r.plano.excedente_por_conversa.toFixed(2)}/conversa)</div>
+        </div>
+        <div style="text-align:center;min-width:100px;">
+          <div style="font-size:28px;font-weight:800;color:${r.uso.excedente > 0 ? 'var(--red)' : 'var(--green)'};">${r.uso.excedente}</div>
+          <div style="font-size:10px;color:var(--text-muted);">conversas</div>
+        </div>
+        <div style="text-align:center;min-width:120px;">
+          <div style="font-size:28px;font-weight:800;color:${r.uso.excedente > 0 ? 'var(--red)' : 'var(--green)'};">R$ ${r.uso.valor_excedente.toFixed(2)}</div>
+          <div style="font-size:10px;color:var(--text-muted);">valor adicional</div>
         </div>
       </div>
 
       <!-- Detalhamento -->
       <div class="card">
-        <div style="font-size:14px;font-weight:700;margin-bottom:16px;">Detalhamento do Mês</div>
+        <div style="font-size:14px;font-weight:700;margin-bottom:16px;">Detalhamento do Ciclo</div>
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;">
           <div style="background:var(--bg);border-radius:10px;padding:16px;text-align:center;">
             <div style="font-size:24px;font-weight:800;color:var(--purple);">${r.uso.conversas}</div>
@@ -2181,7 +2217,7 @@ async function renderPageRelatorios() {
 
       <!-- Histórico -->
       <div class="card">
-        <div style="font-size:14px;font-weight:700;margin-bottom:16px;">Histórico de Conversas (últimos 6 meses)</div>
+        <div style="font-size:14px;font-weight:700;margin-bottom:16px;">Histórico de Conversas (últimos 6 ciclos)</div>
         <div style="display:flex;align-items:flex-end;justify-content:space-around;gap:8px;min-height:160px;padding-top:10px;">
           ${histBars}
         </div>
