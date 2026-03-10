@@ -228,15 +228,18 @@ def salvar_transcricao(account_id: int, inbox_id: int, conversation_id: int, cha
 
 def carregar_config_cliente(account_id: int) -> dict | None:
     db = get_db()
-    resp = (
-        db.table("ia_clientes_config")
-        .select("config")
-        .eq("account_id", account_id)
-        .maybe_single()
-        .execute()
-    )
-    if resp.data:
-        return resp.data["config"]
+    try:
+        resp = (
+            db.table("ia_clientes_config")
+            .select("config")
+            .eq("account_id", account_id)
+            .maybe_single()
+            .execute()
+        )
+        if resp and resp.data:
+            return resp.data["config"]
+    except Exception:
+        pass
     return None
 
 
