@@ -2173,7 +2173,7 @@ async function buscarDadosChatwoot() {
   const btn = document.getElementById('btn-imp-buscar');
   btn.textContent = 'Buscando...'; btn.classList.add('loading');
   try {
-    const res = await apiFetch('/api/buscar-conta-chatwoot', {
+    const res = await fetch('/api/buscar-conta-chatwoot', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ chatwoot_url: chatwootUrl, chatwoot_token: chatwootToken, account_id: accountId })
     });
@@ -2234,7 +2234,7 @@ async function importarConta() {
   const btn = document.getElementById('btn-imp-criar');
   btn.textContent = 'Importando...'; btn.classList.add('loading');
   try {
-    const res = await apiFetch('/api/importar-conta', {
+    const res = await fetch('/api/importar-conta', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ account_id: accountId, nome, chatwoot_url: chatwootUrl, chatwoot_token: chatwootToken, openai_api_key: openaiKey, ia_agent_id: iaAgentId, inboxes })
     });
