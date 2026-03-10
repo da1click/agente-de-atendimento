@@ -1079,16 +1079,14 @@ function trocarContaTopbar(id) {
   if (!id) {
     clienteAtivo = null;
     renderSidebarAccounts();
-    navTo('contas');
+    document.getElementById('page-content').innerHTML = `<div class="empty-state">
+      <p>Selecione uma conta no menu acima</p></div>`;
     return;
   }
   clienteAtivo = parseInt(id);
   renderSidebarAccounts();
-  if (secaoAtiva === 'contas') secaoAtiva = 'config';
-  const pages = { contas: renderPageContas, templates: renderPageTemplates,
-    inatividade: renderPageInatividade, agentes: renderPageAgentes,
-    relatorios: renderPageRelatorios, audiencias: renderPageAvisoAudiencia, config: renderPageConfig };
-  (pages[secaoAtiva] || renderPageConfig)();
+  // Sempre recarrega a seção atual com os dados da nova conta
+  navTo(secaoAtiva || 'config');
 }
 
 // ══════════════════════════════════════════════
