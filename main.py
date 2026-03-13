@@ -435,7 +435,8 @@ def listar_planos():
 
 
 @app.delete("/api/clientes/{account_id}")
-async def deletar_cliente(account_id: int, apenas_dashboard: bool = False):
+async def deletar_cliente(account_id: int, apenas_dashboard: bool = False, user: dict = Depends(get_current_user)):
+    require_super_admin(user)
     if not apenas_dashboard:
         # Remover conta no Chatwoot via Platform API
         chatwoot_url = os.getenv("CHATWOOT_URL", "").rstrip("/")
