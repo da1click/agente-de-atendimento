@@ -39,7 +39,7 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
-            cd /opt/agente-de-atendimento
+            cd /root/agente-de-atendimento
             docker pull da1click/agente-de-atendimento:latest
             docker compose up -d --force-recreate app
             docker image prune -f
