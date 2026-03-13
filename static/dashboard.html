@@ -1169,7 +1169,7 @@ async function carregarFormConta(id) {
       <div class="card-header">
         <div class="card-icon">${c.account_id}</div>
         <div>
-          <div class="card-title">${c.nome}</div>
+          <input type="text" id="f-nome" value="${c.nome}" style="font-size:15px;font-weight:700;border:1px solid var(--border);border-radius:6px;padding:4px 8px;width:220px;" />
           <div class="card-sub">account_id: ${c.account_id}</div>
         </div>
         <div class="toggle-wrapper" style="gap:12px;flex-wrap:wrap;">
@@ -1440,6 +1440,7 @@ function _readDisponibilidade() {
 
 async function salvarConta(id) {
   const body = {
+    nome:                       document.getElementById('f-nome').value.trim(),
     plano:                      parseInt(document.getElementById('f-plano').value) || 1,
     dia_ciclo:                  parseInt(document.getElementById('f-dia-ciclo').value) || 1,
     ativo:                      document.getElementById('f-ativo').checked,
