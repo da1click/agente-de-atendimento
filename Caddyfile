@@ -1,0 +1,7 @@
+api.advbrasil.ai {
+	reverse_proxy app:8000
+}
+
+logs.advbrasil.ai {
+	reverse_proxy dozzle:8080
+}

@@ -1,25 +1,43 @@
 services:
-  agente-de-atendimento:
+  app:
     image: da1click/agente-de-atendimento:latest
+    container_name: agente-de-atendimento
+    restart: always
+    expose:
+      - "8000"
+    env_file:
+      - .env
+    networks:
+      - web
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy
+    restart: always
     ports:
-      - "8000:8000"
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.agente_atendimento.rule=Host(`dash.advbrasil.ai`)
-      - traefik.http.routers.agente_atendimento.entrypoints=websecure
-      - traefik.http.routers.agente_atendimento.tls=true
-      - traefik.http.routers.agente_atendimento.tls.certresolver=le
-      - traefik.http.services.agente_atendimento.loadbalancer.server.port=8000
-    environment:
-      - CHATWOOT_URL=${CHATWOOT_URL}
-      - CHATWOOT_SUPER_ADMIN_TOKEN=${CHATWOOT_SUPER_ADMIN_TOKEN}
-      - CHATWOOT_PLATFORM_TOKEN=${CHATWOOT_PLATFORM_TOKEN}
-      - CHATWOOT_DEFAULT_ADMINS=${CHATWOOT_DEFAULT_ADMINS}
-      - SUPABASE_URL=${SUPABASE_URL}
-      - SUPABASE_KEY=${SUPABASE_KEY}
-      - SUPABASE_DB_HOST=${SUPABASE_DB_HOST}
-      - SUPABASE_DB_USER=${SUPABASE_DB_USER}
-      - SUPABASE_DB_PASSWORD=${SUPABASE_DB_PASSWORD}
-    deploy:
-      restart_policy:
-        condition: any
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - web
+
+  dozzle:
+    image: amir20/dozzle:latest
+    container_name: dozzle
+    restart: always
+    expose:
+      - "8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - web
+
+volumes:
+  caddy_data:
+  caddy_config:
+
+networks:
+  web:
