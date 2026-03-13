@@ -6,6 +6,9 @@ on:
       - master
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
@@ -28,10 +31,10 @@ jobs:
 
       - name: Commit versão
         run: |
-          git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
           git add version.txt
-          git diff --staged --quiet || git commit -m "v${{ env.VERSION }}"
+          git diff --staged --quiet || git commit -m "[skip ci] v${{ env.VERSION }}"
           git push
 
       - name: Injetar config.json dos clientes
