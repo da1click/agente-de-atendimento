@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Request, HTTPException, Depends
+from fastapi import FastAPI, Request, HTTPException, Depends, UploadFile, File
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from openai import OpenAI
@@ -151,6 +151,34 @@ def get_version():
         with open(version_path) as f:
             return {"version": f.read().strip()}
     return {"version": "0.0"}
+
+
+@app.post("/api/clientes/{account_id}/avatar")
+async def upload_avatar(account_id: int, file: UploadFile = File(...)):
+    avatars_dir = os.path.join(BASE_DIR, "static", "avatars")
+    os.makedirs(avatars_dir, exist_ok=True)
+    ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else "png"
+    if ext not in ("png", "jpg", "jpeg", "webp"):
+        raise HTTPException(status_code=400, detail="Formato não suportado. Use PNG, JPG ou WebP.")
+    path = os.path.join(avatars_dir, f"{account_id}.{ext}")
+    # Remove avatar anterior (pode ter extensão diferente)
+    for old in os.listdir(avatars_dir):
+        if old.startswith(f"{account_id}."):
+            os.remove(os.path.join(avatars_dir, old))
+    content = await file.read()
+    with open(path, "wb") as f:
+        f.write(content)
+    return {"url": f"/static/avatars/{account_id}.{ext}"}
+
+
+@app.get("/api/clientes/{account_id}/avatar")
+def get_avatar(account_id: int):
+    avatars_dir = os.path.join(BASE_DIR, "static", "avatars")
+    for ext in ("png", "jpg", "jpeg", "webp"):
+        path = os.path.join(avatars_dir, f"{account_id}.{ext}")
+        if os.path.exists(path):
+            return {"url": f"/static/avatars/{account_id}.{ext}"}
+    return {"url": None}
 
 
 # ── AUTH ──────────────────────────────────────────────────────

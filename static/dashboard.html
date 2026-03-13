@@ -1167,7 +1167,11 @@ async function carregarFormConta(id) {
   el.innerHTML = `
     <div class="card" style="max-width:720px;">
       <div class="card-header">
-        <div class="card-icon">${c.account_id}</div>
+        <div class="card-icon" id="card-avatar" style="cursor:pointer;overflow:hidden;position:relative;" title="Clique para trocar a foto" onclick="document.getElementById('avatar-upload').click()">
+          <img id="avatar-img" src="" style="width:100%;height:100%;object-fit:cover;display:none;border-radius:inherit;" />
+          <span id="avatar-fallback">${c.account_id}</span>
+          <input type="file" id="avatar-upload" accept="image/png,image/jpeg,image/webp" style="display:none;" onchange="uploadAvatar(${c.account_id}, this)" />
+        </div>
         <div>
           <input type="text" id="f-nome" value="${c.nome}" style="font-size:15px;font-weight:700;border:1px solid var(--border);border-radius:6px;padding:4px 8px;width:220px;" />
           <div class="card-sub">account_id: ${c.account_id}</div>
@@ -1365,6 +1369,32 @@ async function carregarFormConta(id) {
   `;
 
   _buildScheduleWidget('f-disponibilidade', v('disponibilidade'));
+  // Carregar avatar
+  fetch(`/api/clientes/${id}/avatar`).then(r=>r.json()).then(d=>{
+    if(d.url){
+      const img=document.getElementById('avatar-img');
+      img.src=d.url+'?t='+Date.now();
+      img.style.display='block';
+      document.getElementById('avatar-fallback').style.display='none';
+    }
+  }).catch(()=>{});
+}
+
+async function uploadAvatar(accountId, input) {
+  if(!input.files[0]) return;
+  const form = new FormData();
+  form.append('file', input.files[0]);
+  const res = await fetch(`/api/clientes/${accountId}/avatar`, {method:'POST', body:form});
+  if(res.ok){
+    const d = await res.json();
+    const img = document.getElementById('avatar-img');
+    img.src = d.url+'?t='+Date.now();
+    img.style.display = 'block';
+    document.getElementById('avatar-fallback').style.display = 'none';
+  } else {
+    alert('Erro ao enviar imagem');
+  }
+  input.value = '';
 }
 
 function toggleSecret(id) {
