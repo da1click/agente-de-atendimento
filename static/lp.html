@@ -84,6 +84,7 @@
     <div class="hidden md:flex items-center gap-8 text-sm font-medium text-dark-800/70">
       <a href="#problemas" class="hover:text-brand-500 transition-colors">Problemas</a>
       <a href="#solucao" class="hover:text-brand-500 transition-colors">Solução</a>
+      <a href="#demo" class="hover:text-brand-500 transition-colors">Teste ao Vivo</a>
       <a href="#beneficios" class="hover:text-brand-500 transition-colors">Benefícios</a>
       <a href="#funcionalidades" class="hover:text-brand-500 transition-colors">Funcionalidades</a>
     </div>
@@ -248,6 +249,146 @@
     </div>
   </div>
 </section>
+
+<!-- ═══════════════════════════════════════════
+     DEMO AO VIVO
+═══════════════════════════════════════════ -->
+<section id="demo" class="py-20 md:py-28 bg-white">
+  <div class="max-w-6xl mx-auto px-6">
+    <div class="text-center max-w-2xl mx-auto mb-12 reveal">
+      <span class="text-green-500 text-sm font-semibold uppercase tracking-wider">Teste agora</span>
+      <h2 class="font-display text-3xl md:text-4xl heading-tight text-dark-800 mt-3 mb-4">
+        Converse com nossa IA ao vivo
+      </h2>
+      <p class="text-dark-800/60 body-relaxed">Experimente como seria o atendimento no seu escritório. Digite uma mensagem e veja a Camila em ação.</p>
+    </div>
+
+    <!-- Phone mockup -->
+    <div class="flex justify-center reveal">
+      <div class="w-[360px] relative">
+        <!-- Phone frame -->
+        <div class="bg-dark-800 rounded-[3rem] p-3 shadow-elevated" style="box-shadow: 0 8px 40px rgba(26,26,46,0.25), 0 2px 8px rgba(26,26,46,0.15);">
+          <!-- Notch -->
+          <div class="absolute top-0 left-1/2 -translate-x-1/2 w-36 h-7 bg-dark-800 rounded-b-2xl z-10"></div>
+          <!-- Screen -->
+          <div class="bg-white rounded-[2.4rem] overflow-hidden relative" style="height: 580px;">
+            <!-- Header -->
+            <div class="bg-brand-500 px-5 pt-10 pb-3 flex items-center gap-3">
+              <div class="w-9 h-9 bg-white/20 rounded-full flex items-center justify-center">
+                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+              </div>
+              <div>
+                <div class="text-white font-bold text-sm">Camila — AdvBrasil.AI</div>
+                <div class="text-white/70 text-xs flex items-center gap-1">
+                  <span class="w-1.5 h-1.5 bg-green-300 rounded-full"></span>
+                  Online agora
+                </div>
+              </div>
+            </div>
+            <!-- Chat messages -->
+            <div id="demo-messages" class="px-4 py-3 space-y-2.5 overflow-y-auto" style="height: 430px; scroll-behavior: smooth;">
+              <div class="flex justify-start">
+                <div class="bg-gray-100 rounded-2xl rounded-tl-md px-3.5 py-2 text-sm text-dark-800/80 max-w-[80%]">
+                  Olá! 👋 Sou a Camila, assistente virtual da AdvBrasil.AI. Me conta, como posso te ajudar hoje?
+                </div>
+              </div>
+            </div>
+            <!-- Input -->
+            <div class="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-100 px-3 py-2.5 flex items-center gap-2" style="border-radius: 0 0 2.4rem 2.4rem;">
+              <input type="text" id="demo-input" placeholder="Digite sua mensagem..."
+                class="flex-1 text-sm px-3.5 py-2.5 bg-gray-50 rounded-full border border-gray-200 outline-none focus:border-brand-400 transition-colors"
+                onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();enviarDemo()}" />
+              <button onclick="enviarDemo()" id="demo-send-btn"
+                class="w-9 h-9 bg-brand-500 hover:bg-brand-600 rounded-full flex items-center justify-center flex-shrink-0 btn-hover transition-colors">
+                <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M12 5l7 7-7 7"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+        <!-- Decorative glow -->
+        <div class="absolute -bottom-6 left-1/2 -translate-x-1/2 w-48 h-12 bg-brand-400/15 rounded-full blur-xl pointer-events-none"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+const demoMessages = [
+  { role: 'assistant', content: 'Olá! 👋 Sou a Camila, assistente virtual da AdvBrasil.AI. Me conta, como posso te ajudar hoje?' }
+];
+let demoLoading = false;
+
+function addDemoMessage(role, content) {
+  const container = document.getElementById('demo-messages');
+  const wrapper = document.createElement('div');
+  wrapper.className = role === 'user' ? 'flex justify-end' : 'flex justify-start';
+  const bubble = document.createElement('div');
+  if (role === 'user') {
+    bubble.className = 'bg-brand-500 rounded-2xl rounded-tr-md px-3.5 py-2 text-sm text-white max-w-[80%]';
+  } else {
+    bubble.className = 'bg-gray-100 rounded-2xl rounded-tl-md px-3.5 py-2 text-sm text-dark-800/80 max-w-[80%]';
+  }
+  bubble.textContent = content;
+  wrapper.appendChild(bubble);
+  container.appendChild(wrapper);
+  container.scrollTop = container.scrollHeight;
+}
+
+function addTypingIndicator() {
+  const container = document.getElementById('demo-messages');
+  const wrapper = document.createElement('div');
+  wrapper.className = 'flex justify-start';
+  wrapper.id = 'typing-indicator';
+  wrapper.innerHTML = `<div class="bg-gray-100 rounded-2xl rounded-tl-md px-4 py-3 max-w-[80%] flex items-center gap-1">
+    <span class="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style="animation-delay:0s"></span>
+    <span class="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style="animation-delay:0.15s"></span>
+    <span class="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style="animation-delay:0.3s"></span>
+  </div>`;
+  container.appendChild(wrapper);
+  container.scrollTop = container.scrollHeight;
+}
+
+function removeTypingIndicator() {
+  const el = document.getElementById('typing-indicator');
+  if (el) el.remove();
+}
+
+async function enviarDemo() {
+  if (demoLoading) return;
+  const input = document.getElementById('demo-input');
+  const text = input.value.trim();
+  if (!text) return;
+
+  input.value = '';
+  demoMessages.push({ role: 'user', content: text });
+  addDemoMessage('user', text);
+
+  demoLoading = true;
+  document.getElementById('demo-send-btn').style.opacity = '0.5';
+  addTypingIndicator();
+
+  try {
+    const apiMessages = demoMessages.map(m => ({ role: m.role, content: m.content }));
+    const res = await fetch('/api/demo-chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: apiMessages })
+    });
+    const data = await res.json();
+    removeTypingIndicator();
+    if (data.reply) {
+      demoMessages.push({ role: 'assistant', content: data.reply });
+      addDemoMessage('assistant', data.reply);
+    }
+  } catch (e) {
+    removeTypingIndicator();
+    addDemoMessage('assistant', 'Ops, ocorreu um erro. Tente novamente em instantes.');
+  }
+  demoLoading = false;
+  document.getElementById('demo-send-btn').style.opacity = '1';
+  input.focus();
+}
+</script>
 
 <!-- ═══════════════════════════════════════════
      ÁREAS DO DIREITO

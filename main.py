@@ -150,6 +150,46 @@ def landing_page(request: Request):
     return FileResponse(os.path.join(BASE_DIR, "static", "lp.html"))
 
 
+@app.post("/api/demo-chat")
+async def demo_chat(request: Request):
+    """Chat demo para a landing page — usa OpenAI diretamente."""
+    demo_key = os.getenv("OPENAI_DEMO_KEY", "")
+    if not demo_key:
+        raise HTTPException(status_code=503, detail="Demo indisponível")
+    body = await request.json()
+    messages = body.get("messages", [])
+    if not messages:
+        raise HTTPException(status_code=400, detail="Mensagens vazias")
+    system_prompt = {
+        "role": "system",
+        "content": (
+            "Você é a Camila, assistente virtual da AdvBrasil.AI — uma solução de IA para escritórios de advocacia. "
+            "Esta é uma DEMONSTRAÇÃO ao vivo no site. Seu objetivo é mostrar ao visitante como a IA funciona na prática. "
+            "Seja simpática, profissional e objetiva. Responda em português brasileiro. "
+            "Mostre como você faria a triagem de um caso jurídico: pergunte sobre o tipo de problema (acidente de trabalho, "
+            "questão previdenciária, consumidor, etc.), faça perguntas de qualificação (tem laudo? recebe benefício do INSS? "
+            "quanto tempo faz?), e ao final diga que o caso parece viável e que pode agendar uma consulta gratuita. "
+            "Mantenha as respostas curtas (máximo 2-3 frases). Seja natural e conversacional como no WhatsApp. "
+            "Se o visitante perguntar sobre o sistema/produto, explique brevemente o que a AdvBrasil.AI faz: "
+            "atendimento automatizado via WhatsApp, triagem inteligente, agendamento automático, disponível 24/7. "
+            "Não invente dados reais. Isso é apenas uma demonstração."
+        )
+    }
+    try:
+        client = OpenAI(api_key=demo_key)
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[system_prompt] + messages[-10:],
+            max_tokens=200,
+            temperature=0.7,
+        )
+        reply = resp.choices[0].message.content
+        return {"reply": reply}
+    except Exception as e:
+        logger.error(f"Erro no demo-chat: {e}")
+        raise HTTPException(status_code=500, detail="Erro ao processar mensagem")
+
+
 @app.get("/api/version")
 def get_version():
     version_path = os.path.join(BASE_DIR, "version.txt")
