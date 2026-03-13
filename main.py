@@ -134,8 +134,8 @@ def pasta_cliente(account_id: int) -> str | None:
 
 
 
-@app.get("/")
-def root():
+@app.get("/health")
+def health():
     return {"status": "online", "service": "Agente de Atendimento Da1Click"}
 
 
