@@ -398,22 +398,22 @@ def listar_planos():
 
 
 @app.delete("/api/clientes/{account_id}")
-async def deletar_cliente(account_id: int):
-    chatwoot_url = os.getenv("CHATWOOT_URL", "").rstrip("/")
-    platform_token = os.getenv("CHATWOOT_PLATFORM_TOKEN", "")
-
-    # Remover conta no Chatwoot via Platform API
-    if chatwoot_url and platform_token:
-        async with httpx.AsyncClient(timeout=30) as client:
-            try:
-                r = await client.delete(
-                    f"{chatwoot_url}/platform/api/v1/accounts/{account_id}",
-                    headers={"api_access_token": platform_token},
-                )
-                if r.status_code not in (200, 204):
-                    logger.warning(f"Falha ao deletar conta {account_id} no Chatwoot: {r.status_code} {r.text}")
-            except Exception as e:
-                logger.warning(f"Erro ao deletar conta {account_id} no Chatwoot: {e}")
+async def deletar_cliente(account_id: int, apenas_dashboard: bool = False):
+    if not apenas_dashboard:
+        # Remover conta no Chatwoot via Platform API
+        chatwoot_url = os.getenv("CHATWOOT_URL", "").rstrip("/")
+        platform_token = os.getenv("CHATWOOT_PLATFORM_TOKEN", "")
+        if chatwoot_url and platform_token:
+            async with httpx.AsyncClient(timeout=30) as client:
+                try:
+                    r = await client.delete(
+                        f"{chatwoot_url}/platform/api/v1/accounts/{account_id}",
+                        headers={"api_access_token": platform_token},
+                    )
+                    if r.status_code not in (200, 204):
+                        logger.warning(f"Falha ao deletar conta {account_id} no Chatwoot: {r.status_code} {r.text}")
+                except Exception as e:
+                    logger.warning(f"Erro ao deletar conta {account_id} no Chatwoot: {e}")
 
     # Remover dados do Supabase
     try:
@@ -433,7 +433,7 @@ async def deletar_cliente(account_id: int):
         import shutil
         shutil.rmtree(pasta)
 
-    logger.info(f"Conta {account_id} removida")
+    logger.info(f"Conta {account_id} removida (apenas_dashboard={apenas_dashboard})")
     return {"status": "deletado"}
 
 
@@ -444,7 +444,7 @@ async def atualizar_cliente(account_id: int, request: Request, user: dict = Depe
         raise HTTPException(status_code=404, detail="Cliente não encontrado")
     dados = await request.json()
     campos_editaveis = [
-        "ativo", "ia_ativa", "transcricao_ativa", "inatividade_ativa", "chatwoot_url", "chatwoot_token", "openai_api_key", "ia_agent_id",
+        "nome", "ativo", "ia_ativa", "transcricao_ativa", "inatividade_ativa", "chatwoot_url", "chatwoot_token", "openai_api_key", "ia_agent_id",
         "team_id", "inbox_id", "email_agenda", "horas_inicial_busca",
         "quantidade_dias_a_buscar", "duracao_agendamento", "disponibilidade",
         "especialidade", "id_notificacao_convertido", "id_notificacao_cliente",

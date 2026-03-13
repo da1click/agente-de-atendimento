@@ -319,7 +319,7 @@
     #login-screen { position: fixed; inset: 0; background: var(--bg); z-index: 2000; display: flex; align-items: center; justify-content: center; }
     .login-box { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 40px; width: 360px; box-shadow: 0 20px 60px rgba(0,0,0,0.08); }
     .login-logo { text-align: center; margin-bottom: 28px; }
-    .login-logo-text { font-size: 22px; font-weight: 800; color: var(--text); }
+    .login-logo img { max-width: 180px; height: auto; }
     .login-logo-sub { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
 
     /* ── USER TABLE ── */
@@ -337,7 +337,7 @@
   <!-- LOGIN -->
   <div class="login-box" id="login-box">
     <div class="login-logo">
-      <div class="login-logo-text">Da1<span style="color:var(--purple);">Click</span></div>
+      <img src="/static/logo.png" alt="Da1Click">
       <div class="login-logo-sub">Painel Admin</div>
     </div>
     <div class="field-group" style="margin-bottom:14px;">
@@ -359,7 +359,7 @@
   <!-- CADASTRO -->
   <div class="login-box" id="cadastro-box" style="display:none;">
     <div class="login-logo">
-      <div class="login-logo-text">Da1<span style="color:var(--purple);">Click</span></div>
+      <img src="/static/logo.png" alt="Da1Click">
       <div class="login-logo-sub">Criar Conta</div>
     </div>
     <div class="field-group" style="margin-bottom:14px;">
@@ -466,15 +466,18 @@
 
 <!-- CONFIRMAR EXCLUSÃO CONTA -->
 <div class="modal-overlay" id="modal-deletar">
-  <div class="modal" style="width:340px;">
+  <div class="modal" style="width:380px;">
     <div style="text-align:center;padding:8px 0 16px;">
       <div style="font-size:36px;margin-bottom:12px;">🗑️</div>
       <h3 style="font-size:16px;font-weight:700;margin-bottom:8px;">Remover conta?</h3>
-      <p style="font-size:13px;color:var(--text-secondary);">Isso vai excluir <strong id="deletar-nome"></strong> permanentemente do sistema.</p>
-      <p style="font-size:11px;color:var(--red);margin-top:6px;">Esta ação não pode ser desfeita.</p>
+      <p style="font-size:13px;color:var(--text-secondary);margin-bottom:14px;">O que deseja fazer com <strong id="deletar-nome"></strong>?</p>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <button class="btn btn-danger" style="width:100%;" onclick="confirmarDeletar(true)">Remover do dashboard e do Chatwoot</button>
+        <button class="btn btn-secondary" style="width:100%;border-color:var(--red);color:var(--red);" onclick="confirmarDeletar(false)">Remover apenas do dashboard</button>
+      </div>
+      <p style="font-size:11px;color:var(--red);margin-top:10px;">Esta ação não pode ser desfeita.</p>
     </div>
-    <div class="modal-actions" style="justify-content:center;">
-      <button class="btn btn-danger" id="btn-confirmar-delete" onclick="confirmarDeletar()">Sim, remover</button>
+    <div class="modal-actions" style="justify-content:center;margin-top:8px;">
       <button class="btn btn-secondary" onclick="fecharModal('modal-deletar')">Cancelar</button>
     </div>
   </div>
@@ -2290,16 +2293,16 @@ function abrirModalDeletar(id, nome) {
   abrirModal('modal-deletar');
 }
 
-async function confirmarDeletar() {
+async function confirmarDeletar(deletarChatwoot) {
   if (!_deletarId) return;
-  const btn = document.getElementById('btn-confirmar-delete');
-  btn.textContent = 'Removendo...'; btn.disabled = true;
-  await fetch(`/api/clientes/${_deletarId}`, { method: 'DELETE' });
+  const url = deletarChatwoot
+    ? `/api/clientes/${_deletarId}`
+    : `/api/clientes/${_deletarId}?apenas_dashboard=true`;
+  await fetch(url, { method: 'DELETE' });
   fecharModal('modal-deletar');
   clienteAtivo = null;
   await carregarClientes();
   navTo('contas');
-  btn.textContent = 'Sim, remover'; btn.disabled = false;
 }
 
 // ══════════════════════════════════════════════
