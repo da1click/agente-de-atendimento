@@ -391,7 +391,7 @@
 <aside class="sidebar" id="sidebar">
   <div class="sidebar-logo">
     <img src="/static/logo.png" alt="Da1Click">
-    <div class="sidebar-logo-sub">Painel Admin 2</div>
+    <div class="sidebar-logo-sub">Painel Admin</div>
     <div style="margin-top:10px;">
       <select id="topbar-conta-sel" class="topbar-account-sel" onchange="trocarContaTopbar(this.value)">
         <option value="">Selecione uma conta</option>
@@ -440,6 +440,7 @@
   </div>
 
   <div class="sidebar-footer">
+    <div id="sidebar-version" style="text-align:center;font-size:9px;color:var(--text-muted);padding:0 4px 6px;letter-spacing:0.5px;"></div>
     <div style="font-size:11px;color:var(--text-muted);padding:2px 4px 10px;display:flex;align-items:center;justify-content:space-between;">
       <span id="sidebar-user-info" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;"></span>
       <button onclick="fazerLogout()" style="border:none;background:none;color:var(--text-muted);font-size:11px;cursor:pointer;padding:2px 6px;border-radius:4px;flex-shrink:0;" title="Sair">Sair</button>
@@ -1026,6 +1027,7 @@ async function _iniciarDashboard() {
   document.getElementById('sidebar').style.display = 'flex';
   document.querySelector('.main').style.display = 'block';
   document.getElementById('sidebar-user-info').textContent = `${currentUser.nome} (${currentUser.role})`;
+  fetch('/api/version').then(r=>r.json()).then(d=>{document.getElementById('sidebar-version').textContent=`v${d.version}`;}).catch(()=>{});
   aplicarPermissoes();
   await carregarClientes();
   navTo('contas');

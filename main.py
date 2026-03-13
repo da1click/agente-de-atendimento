@@ -144,6 +144,15 @@ def dashboard():
     return FileResponse(os.path.join(BASE_DIR, "static", "dashboard.html"))
 
 
+@app.get("/api/version")
+def get_version():
+    version_path = os.path.join(BASE_DIR, "version.txt")
+    if os.path.exists(version_path):
+        with open(version_path) as f:
+            return {"version": f.read().strip()}
+    return {"version": "0.0"}
+
+
 # ── AUTH ──────────────────────────────────────────────────────
 
 @app.post("/auth/login")
