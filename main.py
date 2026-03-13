@@ -56,6 +56,9 @@ app = FastAPI(title="Agente de Atendimento - Da1Click", lifespan=lifespan)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CLIENTES_DIR = os.path.join(BASE_DIR, "clientes")
 
+# Set para deduplicação de transcrições de áudio (evita loop)
+_transcricoes_processadas: set[int] = set()
+
 app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
 
 
@@ -951,36 +954,45 @@ async def chatwoot_webhook(request: Request):
         audio = next((a for a in attachments if a.get("file_type") == "audio"), None)
 
         if audio and config.get("transcricao_ativa", True):
-            logger.info(f"[{account_id}] Áudio de {nome} ({telefone}) — transcrevendo...")
-            try:
-                transcricao = await transcrever_audio(
-                    url_audio=audio["data_url"],
-                    openai_api_key=config["openai_api_key"],
-                )
-                logger.info(f"[{account_id}] Transcrição: {transcricao}")
-
-                nota = f"🎙️ Transcrição de áudio de {nome}:\n\n{transcricao}"
-                await enviar_nota_privada(
-                    chatwoot_url=config["chatwoot_url"],
-                    chatwoot_token=config["chatwoot_token"],
-                    account_id=account_id,
-                    conversation_id=conversation_id,
-                    texto=nota,
-                )
-                # Salvar transcrição no Supabase
+            msg_id = msg.get("id")
+            # Deduplicação: evitar transcrever o mesmo áudio múltiplas vezes (loop)
+            if msg_id in _transcricoes_processadas:
+                logger.info(f"[{account_id}] Áudio msg_id={msg_id} já transcrito — ignorando")
+            else:
+                _transcricoes_processadas.add(msg_id)
+                # Limitar tamanho do set para não consumir memória indefinidamente
+                if len(_transcricoes_processadas) > 10000:
+                    _transcricoes_processadas.clear()
+                logger.info(f"[{account_id}] Áudio de {nome} ({telefone}) — transcrevendo...")
                 try:
-                    salvar_transcricao(
-                        account_id=account_id,
-                        inbox_id=inbox_id,
-                        conversation_id=conversation_id,
-                        chatwoot_message_id=msg.get("id"),
-                        transcription=transcricao,
-                        audio_url=audio.get("data_url", ""),
+                    transcricao = await transcrever_audio(
+                        url_audio=audio["data_url"],
+                        openai_api_key=config["openai_api_key"],
                     )
+                    logger.info(f"[{account_id}] Transcrição: {transcricao}")
+
+                    nota = f"🎙️ Transcrição de áudio de {nome}:\n\n{transcricao}"
+                    await enviar_nota_privada(
+                        chatwoot_url=config["chatwoot_url"],
+                        chatwoot_token=config["chatwoot_token"],
+                        account_id=account_id,
+                        conversation_id=conversation_id,
+                        texto=nota,
+                    )
+                    # Salvar transcrição no Supabase
+                    try:
+                        salvar_transcricao(
+                            account_id=account_id,
+                            inbox_id=inbox_id,
+                            conversation_id=conversation_id,
+                            chatwoot_message_id=msg_id,
+                            transcription=transcricao,
+                            audio_url=audio.get("data_url", ""),
+                        )
+                    except Exception as e:
+                        logger.warning(f"Erro ao salvar transcrição no Supabase: {e}")
                 except Exception as e:
-                    logger.warning(f"Erro ao salvar transcrição no Supabase: {e}")
-            except Exception as e:
-                logger.error(f"Erro ao transcrever áudio: {e}")
+                    logger.error(f"Erro ao transcrever áudio: {e}")
 
         if ia_ativa:
             logger.info(f"[{account_id}] IA ativa — agendando processamento de {nome}: {texto or '[áudio]'}")
