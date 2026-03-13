@@ -144,6 +144,12 @@ def dashboard():
     return FileResponse(os.path.join(BASE_DIR, "static", "dashboard.html"))
 
 
+@app.get("/lp")
+@app.get("/")
+def landing_page(request: Request):
+    return FileResponse(os.path.join(BASE_DIR, "static", "lp.html"))
+
+
 @app.get("/api/version")
 def get_version():
     version_path = os.path.join(BASE_DIR, "version.txt")
