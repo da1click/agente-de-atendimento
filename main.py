@@ -950,6 +950,15 @@ async def chatwoot_webhook(request: Request):
 
         ia_ativa = config.get("ia_ativa", True) and ia_agent_id is not None and assignee_id == ia_agent_id
 
+        # Log da mensagem recebida
+        logger.info(f"━━━ WEBHOOK [{account_id}] conv={conversation_id} ━━━")
+        logger.info(f"📩 Cliente: {nome} ({telefone})")
+        logger.info(f"💬 Mensagem: {texto[:300] if texto else '[sem texto]'}")
+        if attachments:
+            tipos = [a.get('file_type', '?') for a in attachments]
+            logger.info(f"📎 Anexos: {tipos}")
+        logger.info(f"🤖 IA ativa: {ia_ativa} (assignee={assignee_id}, ia_agent={ia_agent_id})")
+
         # Verificar se é áudio (só transcreve se transcricao_ativa)
         audio = next((a for a in attachments if a.get("file_type") == "audio"), None)
 

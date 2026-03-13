@@ -408,15 +408,18 @@ def chamar_supervisor(config: dict, historico_texto: str) -> str:
         .replace("{conversa}", historico_texto)
     )
     client = OpenAI(api_key=config["openai_api_key"])
+    logger.info(f"🧠 Supervisor: enviando prompt ({len(prompt)} chars) ao gpt-4o-mini")
     resp = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[{"role": "user", "content": prompt}],
         temperature=0,
         response_format={"type": "json_object"},
     )
-    data = json.loads(resp.choices[0].message.content.strip())
+    raw_response = resp.choices[0].message.content.strip()
+    logger.info(f"🧠 Supervisor resposta bruta: {raw_response}")
+    data = json.loads(raw_response)
     fase = data.get("proxima_fase", "identificacao")
-    logger.info(f"Supervisor → fase: {fase}")
+    logger.info(f"🧠 Supervisor → fase decidida: {fase}")
     return fase
 
 
@@ -429,8 +432,11 @@ async def chamar_agente(config: dict, fase: str, messages_openai: list, conversa
     client = OpenAI(api_key=config["openai_api_key"])
     msgs = [{"role": "system", "content": prompt}, *messages_openai]
 
+    logger.info(f"🤖 Agente [{fase}]: prompt sistema ({len(prompt)} chars) + {len(messages_openai)} msgs do histórico")
+
     # Loop de tool calling
-    for _ in range(5):  # máximo 5 rodadas para evitar loop infinito
+    for rodada in range(5):  # máximo 5 rodadas para evitar loop infinito
+        logger.info(f"🤖 Agente [{fase}]: chamando gpt-4o-mini (rodada {rodada+1})")
         resp = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=msgs,
@@ -444,7 +450,10 @@ async def chamar_agente(config: dict, fase: str, messages_openai: list, conversa
         # Sem tool call → resposta final
         if not msg.tool_calls:
             resposta = (msg.content or "").strip()
-            logger.info(f"Agente [{fase}] → {resposta[:120]}...")
+            logger.info(f"🤖 Agente [{fase}] → resposta final ({len(resposta)} chars):")
+            # Log da resposta completa (dividida em linhas para legibilidade)
+            for linha in resposta.splitlines():
+                logger.info(f"   💬 {linha}")
             return resposta
 
         # Executar cada tool chamada
@@ -484,15 +493,23 @@ def agendar_processamento(config: dict, account_id: int, conversation_id: int, i
 # ── FLUXO PRINCIPAL ───────────────────────────────────────────
 
 async def processar_mensagem(config: dict, account_id: int, conversation_id: int, inbox_id: int | None = None):
+    logger.info(f"═══ PROCESSANDO [{account_id}] conv={conversation_id} ═══")
+
     historico = await buscar_historico_chatwoot(
         chatwoot_url=config["chatwoot_url"],
         chatwoot_token=config["chatwoot_token"],
         account_id=account_id,
         conversation_id=conversation_id,
     )
+    logger.info(f"📜 Histórico: {len(historico)} mensagens carregadas")
 
     historico_texto = formatar_conversa_texto(historico)
     historico_openai = formatar_conversa_openai(historico)
+
+    # Log das últimas mensagens do histórico para contexto
+    linhas = historico_texto.strip().splitlines()
+    ultimas = linhas[-5:] if len(linhas) > 5 else linhas
+    logger.info(f"📜 Últimas mensagens:\n" + "\n".join(f"   {l}" for l in ultimas))
 
     fase = chamar_supervisor(config, historico_texto)
 
@@ -537,6 +554,9 @@ async def processar_mensagem(config: dict, account_id: int, conversation_id: int
             inbox_id=inbox_id,
             inatividade_ativa=config.get("inatividade_ativa", True),
         )
+        logger.info(f"✅ Resposta enviada com sucesso — conv={conversation_id}")
+    else:
+        logger.warning(f"⚠️ Agente não retornou resposta — conv={conversation_id}")
 
 
 # ── TRANSCRIÇÃO DE ÁUDIO ──────────────────────────────────────
