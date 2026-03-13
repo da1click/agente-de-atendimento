@@ -37,9 +37,8 @@
       padding: 20px 16px 16px;
       border-bottom: 1px solid var(--border);
     }
-    .sidebar-logo-text { font-size: 15px; font-weight: 800; color: var(--text); letter-spacing: -0.3px; }
-    .sidebar-logo-text span { color: var(--purple); }
-    .sidebar-logo-sub { font-size: 10px; color: var(--text-muted); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.6px; }
+    .sidebar-logo img { max-width: 140px; height: auto; }
+    .sidebar-logo-sub { font-size: 10px; color: var(--text-muted); margin-top: 6px; text-transform: uppercase; letter-spacing: 0.6px; }
 
     .nav-section { padding: 16px 8px 4px; }
     .nav-section-label { font-size: 9px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.9px; padding: 0 8px; margin-bottom: 4px; }
@@ -391,7 +390,7 @@
 <!-- ── SIDEBAR ── -->
 <aside class="sidebar" id="sidebar">
   <div class="sidebar-logo">
-    <div class="sidebar-logo-text">Da1<span>Click</span></div>
+    <img src="/static/logo.png" alt="Da1Click">
     <div class="sidebar-logo-sub">Painel Admin</div>
     <div style="margin-top:10px;">
       <select id="topbar-conta-sel" class="topbar-account-sel" onchange="trocarContaTopbar(this.value)">
