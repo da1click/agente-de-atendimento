@@ -3396,10 +3396,9 @@ async function salvarUsuario() {
 // PAGE: TERMINAL IA
 // ══════════════════════════════════════════════
 let _terminalWs = null;
-let _terminalBuffer = '';
+let _terminalProcessando = false;
 
 function renderPageTerminal() {
-  // Fecha conexão anterior se existir
   if (_terminalWs) { try { _terminalWs.close(); } catch(e){} _terminalWs = null; }
 
   const el = document.getElementById('page-content');
@@ -3410,7 +3409,11 @@ function renderPageTerminal() {
         <span class="terminal-dot yellow"></span>
         <span class="terminal-dot green"></span>
         <span class="terminal-toolbar-title">Claude Code — Terminal</span>
-        <span class="terminal-status connecting" id="terminal-status">Conectando...</span>
+        <div style="margin-left:auto;display:flex;align-items:center;gap:8px;">
+          <button onclick="_terminalNovaConversa()" style="background:#414868;border:none;color:#a9b1d6;padding:4px 10px;border-radius:5px;font-size:11px;cursor:pointer;font-family:monospace;">+ Nova Conversa</button>
+          <button onclick="_terminalRestart()" style="background:#f7768e22;border:1px solid #f7768e44;color:#f7768e;padding:4px 10px;border-radius:5px;font-size:11px;cursor:pointer;font-family:monospace;">Reiniciar App</button>
+          <span class="terminal-status connecting" id="terminal-status">Conectando...</span>
+        </div>
       </div>
       <div class="terminal-body" id="terminal-output">
         <pre id="terminal-pre"></pre>
@@ -3440,8 +3443,6 @@ function _terminalConectar() {
   const url = `${proto}//${location.host}/ws/terminal?token=${encodeURIComponent(token)}`;
 
   const statusEl = document.getElementById('terminal-status');
-  const pre = document.getElementById('terminal-pre');
-
   _terminalWs = new WebSocket(url);
 
   _terminalWs.onopen = () => {
@@ -3451,25 +3452,27 @@ function _terminalConectar() {
   };
 
   _terminalWs.onmessage = (e) => {
-    _terminalAppend(e.data, 'ai');
+    const data = e.data;
+    // Detecta fim do processamento
+    if (data.includes('✅ Pronto.')) {
+      _terminalProcessando = false;
+      document.getElementById('terminal-send').disabled = false;
+      document.getElementById('terminal-input').disabled = false;
+      document.getElementById('terminal-input').focus();
+    }
+    _terminalAppend(data, 'ai');
     const body = document.getElementById('terminal-output');
     if (body) body.scrollTop = body.scrollHeight;
   };
 
-  _terminalWs.onclose = (e) => {
-    if (statusEl) {
-      statusEl.textContent = 'Desconectado';
-      statusEl.className = 'terminal-status offline';
-    }
+  _terminalWs.onclose = () => {
+    if (statusEl) { statusEl.textContent = 'Desconectado'; statusEl.className = 'terminal-status offline'; }
     _terminalAppend('\n[Conexão encerrada]\n', 'system');
     _terminalWs = null;
   };
 
   _terminalWs.onerror = () => {
-    if (statusEl) {
-      statusEl.textContent = 'Erro';
-      statusEl.className = 'terminal-status offline';
-    }
+    if (statusEl) { statusEl.textContent = 'Erro'; statusEl.className = 'terminal-status offline'; }
   };
 }
 
@@ -3485,14 +3488,31 @@ function _terminalAppend(text, type) {
 function _terminalEnviar() {
   const input = document.getElementById('terminal-input');
   const msg = input.value.trim();
-  if (!msg || !_terminalWs || _terminalWs.readyState !== WebSocket.OPEN) return;
+  if (!msg || !_terminalWs || _terminalWs.readyState !== WebSocket.OPEN || _terminalProcessando) return;
 
   _terminalAppend('\n❯ ' + msg + '\n', 'user');
-  _terminalWs.send(msg + '\n');
+  _terminalWs.send(msg);
   input.value = '';
+  _terminalProcessando = true;
+  document.getElementById('terminal-send').disabled = true;
+  input.disabled = true;
 
   const body = document.getElementById('terminal-output');
   if (body) body.scrollTop = body.scrollHeight;
+}
+
+function _terminalNovaConversa() {
+  if (!_terminalWs || _terminalWs.readyState !== WebSocket.OPEN) return;
+  _terminalWs.send('__NEW_CONVERSATION__');
+  const pre = document.getElementById('terminal-pre');
+  if (pre) pre.innerHTML = '';
+  _terminalAppend('🔄 Nova conversa iniciada.\n', 'system');
+}
+
+function _terminalRestart() {
+  if (!confirm('Reiniciar a aplicação? Isso aplica as alterações feitas pelo Claude.')) return;
+  if (!_terminalWs || _terminalWs.readyState !== WebSocket.OPEN) return;
+  _terminalWs.send('__RESTART_APP__');
 }
 
 // ══════════════════════════════════════════════

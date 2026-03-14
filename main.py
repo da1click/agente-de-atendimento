@@ -1801,9 +1801,33 @@ async def websocket_terminal(ws: WebSocket):
     await ws.accept()
     await ws.send_text("Claude Code pronto. Digite seu prompt.\n")
 
+    has_history = False  # Controla se já tem conversa ativa
+
     try:
         while True:
             msg = await ws.receive_text()
+
+            # Comando especial: nova conversa
+            if msg.strip() == "__NEW_CONVERSATION__":
+                has_history = False
+                await ws.send_text("\n🔄 Nova conversa iniciada.\n")
+                continue
+
+            # Comando especial: reiniciar app
+            if msg.strip() == "__RESTART_APP__":
+                await ws.send_text("\n🔄 Reiniciando aplicação...\n")
+                try:
+                    restart_proc = await asyncio.create_subprocess_exec(
+                        "kill", "-HUP", "1",
+                        stdout=asyncio.subprocess.PIPE,
+                        stderr=asyncio.subprocess.STDOUT,
+                    )
+                    await restart_proc.wait()
+                    await ws.send_text("✅ Sinal de reinício enviado. A app vai reiniciar em instantes.\n")
+                except Exception as e:
+                    await ws.send_text(f"[ERRO] {str(e)}\n")
+                continue
+
             prompt = msg.strip()
             if not prompt:
                 continue
@@ -1811,8 +1835,12 @@ async def websocket_terminal(ws: WebSocket):
             await ws.send_text("\n⏳ Processando...\n")
 
             try:
+                cmd = ["claude", "-p", prompt]
+                if has_history:
+                    cmd.append("--continue")
+
                 proc = await asyncio.create_subprocess_exec(
-                    "claude", "-p", prompt,
+                    *cmd,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.STDOUT,
                     cwd="/app",
@@ -1827,6 +1855,7 @@ async def websocket_terminal(ws: WebSocket):
                     await ws.send_text(chunk.decode("utf-8", errors="replace"))
 
                 await proc.wait()
+                has_history = True  # A partir de agora usa --continue
                 await ws.send_text("\n\n✅ Pronto.\n")
 
             except FileNotFoundError:
@@ -1836,3 +1865,12 @@ async def websocket_terminal(ws: WebSocket):
 
     except WebSocketDisconnect:
         pass
+
+
+@app.post("/api/restart")
+async def restart_app(user=Depends(get_current_user)):
+    """Reinicia a aplicação (super_admin only)."""
+    require_super_admin(user)
+    import signal
+    os.kill(1, signal.SIGHUP)
+    return {"status": "ok", "message": "Reiniciando..."}
