@@ -351,6 +351,53 @@
       .td-actions { gap: 2px; }
       .modal { width: 92vw !important; max-height: 85vh; overflow-y: auto; }
     }
+
+    /* ── TERMINAL IA ── */
+    .terminal-container {
+      background: #1a1b26; border-radius: 12px; overflow: hidden;
+      border: 1px solid var(--border); height: calc(100vh - 130px);
+      display: flex; flex-direction: column;
+    }
+    .terminal-toolbar {
+      background: #24283b; padding: 8px 16px;
+      display: flex; align-items: center; gap: 10px;
+      border-bottom: 1px solid #414868;
+    }
+    .terminal-dot { width: 10px; height: 10px; border-radius: 50%; }
+    .terminal-dot.red { background: #f7768e; }
+    .terminal-dot.yellow { background: #e0af68; }
+    .terminal-dot.green { background: #9ece6a; }
+    .terminal-toolbar-title { color: #a9b1d6; font-size: 12px; margin-left: 8px; font-family: monospace; }
+    .terminal-status { margin-left: auto; font-size: 11px; font-family: monospace; padding: 2px 8px; border-radius: 4px; }
+    .terminal-status.online { color: #9ece6a; background: rgba(158,206,106,0.1); }
+    .terminal-status.offline { color: #f7768e; background: rgba(247,118,142,0.1); }
+    .terminal-status.connecting { color: #e0af68; background: rgba(224,175,104,0.1); }
+    .terminal-body {
+      flex: 1; padding: 16px; overflow-y: auto; font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+      font-size: 14px; line-height: 1.6; color: #c0caf5;
+    }
+    .terminal-body pre { margin: 0; white-space: pre-wrap; word-wrap: break-word; }
+    .terminal-input-row {
+      display: flex; align-items: center; padding: 10px 16px;
+      background: #1a1b26; border-top: 1px solid #414868;
+    }
+    .terminal-prompt { color: #7aa2f7; font-family: monospace; font-size: 14px; margin-right: 8px; white-space: nowrap; }
+    .terminal-input {
+      flex: 1; background: transparent; border: none; outline: none;
+      color: #c0caf5; font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+      font-size: 14px; caret-color: #7aa2f7;
+    }
+    .terminal-input::placeholder { color: #565f89; }
+    .terminal-send-btn {
+      background: #7aa2f7; border: none; color: #1a1b26; padding: 6px 14px;
+      border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer;
+      font-family: inherit; margin-left: 8px; transition: background 0.15s;
+    }
+    .terminal-send-btn:hover { background: #89b4fa; }
+    .terminal-send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .terminal-line-ai { color: #9ece6a; }
+    .terminal-line-user { color: #7aa2f7; }
+    .terminal-line-system { color: #565f89; font-style: italic; }
   </style>
 </head>
 <body>
@@ -461,6 +508,10 @@
     <div class="nav-item" id="nav-usuarios" onclick="navTo('usuarios')">
       <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
       <span class="nav-label">Usuários</span>
+    </div>
+    <div class="nav-item" id="nav-terminal" onclick="navTo('terminal')">
+      <span class="nav-icon"><svg viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></span>
+      <span class="nav-label">Terminal IA</span>
     </div>
   </div>
 
@@ -1121,7 +1172,7 @@ function navTo(secao) {
   closeSidebarMobile();
   secaoAtiva = secao;
   // Update nav highlights (only for non-conta sections)
-  ['templates','inatividade','relatorios','audiencias','config','usuarios'].forEach(s => {
+  ['templates','inatividade','relatorios','audiencias','config','usuarios','terminal'].forEach(s => {
     document.getElementById(`nav-${s}`)?.classList.toggle('active', s === secao);
   });
   renderSidebarAccounts();
@@ -1130,14 +1181,14 @@ function navTo(secao) {
     contas: 'Contas', templates: 'Templates Meta',
     inatividade: 'Inatividade',
     relatorios: 'Relatórios', audiencias: 'Aviso de Audiência', config: 'Configurações',
-    usuarios: 'Gerenciar Usuários',
+    usuarios: 'Gerenciar Usuários', terminal: 'Terminal IA',
   };
   document.getElementById('topbar-title').textContent = titles[secao] || secao;
 
   const pages = { contas: renderPageContas, templates: renderPageTemplates,
     inatividade: renderPageInatividade,
     relatorios: renderPageRelatorios, audiencias: renderPageAvisoAudiencia, config: renderPageConfig,
-    usuarios: renderPageUsuarios };
+    usuarios: renderPageUsuarios, terminal: renderPageTerminal };
   (pages[secao] || renderPageContas)();
 }
 
@@ -3339,6 +3390,109 @@ async function salvarUsuario() {
   } finally {
     btn.textContent = 'Salvar'; btn.classList.remove('loading');
   }
+}
+
+// ══════════════════════════════════════════════
+// PAGE: TERMINAL IA
+// ══════════════════════════════════════════════
+let _terminalWs = null;
+let _terminalBuffer = '';
+
+function renderPageTerminal() {
+  // Fecha conexão anterior se existir
+  if (_terminalWs) { try { _terminalWs.close(); } catch(e){} _terminalWs = null; }
+
+  const el = document.getElementById('page-content');
+  el.innerHTML = `
+    <div class="terminal-container">
+      <div class="terminal-toolbar">
+        <span class="terminal-dot red"></span>
+        <span class="terminal-dot yellow"></span>
+        <span class="terminal-dot green"></span>
+        <span class="terminal-toolbar-title">Claude Code — Terminal</span>
+        <span class="terminal-status connecting" id="terminal-status">Conectando...</span>
+      </div>
+      <div class="terminal-body" id="terminal-output">
+        <pre id="terminal-pre"></pre>
+      </div>
+      <div class="terminal-input-row">
+        <span class="terminal-prompt">❯</span>
+        <input class="terminal-input" id="terminal-input" type="text"
+               placeholder="Digite seu prompt para o Claude..."
+               autocomplete="off" spellcheck="false" />
+        <button class="terminal-send-btn" id="terminal-send" onclick="_terminalEnviar()">Enviar</button>
+      </div>
+    </div>
+  `;
+
+  const input = document.getElementById('terminal-input');
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); _terminalEnviar(); }
+  });
+
+  _terminalConectar();
+  input.focus();
+}
+
+function _terminalConectar() {
+  const token = localStorage.getItem('da1click_token');
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const url = `${proto}//${location.host}/ws/terminal?token=${encodeURIComponent(token)}`;
+
+  const statusEl = document.getElementById('terminal-status');
+  const pre = document.getElementById('terminal-pre');
+
+  _terminalWs = new WebSocket(url);
+
+  _terminalWs.onopen = () => {
+    statusEl.textContent = 'Online';
+    statusEl.className = 'terminal-status online';
+    _terminalAppend('[Conectado ao Claude Code]\n', 'system');
+  };
+
+  _terminalWs.onmessage = (e) => {
+    _terminalAppend(e.data, 'ai');
+    const body = document.getElementById('terminal-output');
+    if (body) body.scrollTop = body.scrollHeight;
+  };
+
+  _terminalWs.onclose = (e) => {
+    if (statusEl) {
+      statusEl.textContent = 'Desconectado';
+      statusEl.className = 'terminal-status offline';
+    }
+    _terminalAppend('\n[Conexão encerrada]\n', 'system');
+    _terminalWs = null;
+  };
+
+  _terminalWs.onerror = () => {
+    if (statusEl) {
+      statusEl.textContent = 'Erro';
+      statusEl.className = 'terminal-status offline';
+    }
+  };
+}
+
+function _terminalAppend(text, type) {
+  const pre = document.getElementById('terminal-pre');
+  if (!pre) return;
+  const span = document.createElement('span');
+  span.className = type === 'system' ? 'terminal-line-system' : type === 'user' ? 'terminal-line-user' : 'terminal-line-ai';
+  span.textContent = text;
+  pre.appendChild(span);
+}
+
+function _terminalEnviar() {
+  const input = document.getElementById('terminal-input');
+  const msg = input.value.trim();
+  if (!msg || !_terminalWs || _terminalWs.readyState !== WebSocket.OPEN) return;
+
+  _terminalAppend('\n❯ ' + msg + '\n', 'user');
+  _terminalWs.send(msg + '\n');
+  input.value = '';
+
+  const body = document.getElementById('terminal-output');
+  if (body) body.scrollTop = body.scrollHeight;
 }
 
 // ══════════════════════════════════════════════
