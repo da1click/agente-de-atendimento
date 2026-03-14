@@ -12,6 +12,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Instalar Claude Code globalmente
 RUN npm install -g @anthropic-ai/claude-code
 
+# Criar usuário não-root para Claude Code
+RUN useradd -m -s /bin/bash claude && \
+    mkdir -p /home/claude/.claude && \
+    chown -R claude:claude /home/claude
+
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 

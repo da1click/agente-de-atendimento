@@ -1799,6 +1799,17 @@ async def websocket_terminal(ws: WebSocket):
         return
 
     await ws.accept()
+
+    # Garantir que o usuário claude tem acesso ao /repo
+    try:
+        fix_perms = await asyncio.create_subprocess_exec(
+            "chown", "-R", "claude:claude", "/repo",
+            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+        )
+        await fix_perms.wait()
+    except Exception:
+        pass
+
     await ws.send_text("Claude Code pronto. Digite seu prompt.\n")
 
     has_history = False  # Controla se já tem conversa ativa
@@ -1835,16 +1846,18 @@ async def websocket_terminal(ws: WebSocket):
             await ws.send_text("\n⏳ Processando...\n")
 
             try:
-                cmd = ["claude", "-p", prompt, "--dangerously-skip-permissions"]
+                cmd = ["su", "-s", "/bin/bash", "claude", "-c"]
+                claude_cmd = f'claude -p "{prompt.replace(chr(34), chr(92)+chr(34))}" --dangerously-skip-permissions'
                 if has_history:
-                    cmd.append("--continue")
+                    claude_cmd += " --continue"
+                cmd.append(claude_cmd)
 
                 proc = await asyncio.create_subprocess_exec(
                     *cmd,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.STDOUT,
                     cwd="/repo",
-                    env={**os.environ, "NO_COLOR": "1"},
+                    env={**os.environ, "NO_COLOR": "1", "HOME": "/home/claude"},
                 )
 
                 # Stream da resposta em tempo real
