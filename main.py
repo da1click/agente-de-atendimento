@@ -1835,7 +1835,7 @@ async def websocket_terminal(ws: WebSocket):
             await ws.send_text("\n⏳ Processando...\n")
 
             try:
-                cmd = ["claude", "-p", prompt]
+                cmd = ["claude", "-p", prompt, "--dangerously-skip-permissions"]
                 if has_history:
                     cmd.append("--continue")
 
