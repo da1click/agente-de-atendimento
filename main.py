@@ -1843,7 +1843,7 @@ async def websocket_terminal(ws: WebSocket):
                     *cmd,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.STDOUT,
-                    cwd="/app",
+                    cwd="/repo",
                     env={**os.environ, "NO_COLOR": "1"},
                 )
 

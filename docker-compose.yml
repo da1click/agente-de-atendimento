@@ -9,6 +9,7 @@ services:
       - .env
     volumes:
       - claude_auth:/root/.claude
+      - /root/agente-de-atendimento:/repo
     networks:
       - web
 
