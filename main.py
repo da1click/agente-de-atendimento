@@ -1799,48 +1799,40 @@ async def websocket_terminal(ws: WebSocket):
         return
 
     await ws.accept()
-
-    try:
-        project_dir = "/app"
-        proc = await asyncio.create_subprocess_exec(
-            "claude",
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-            cwd=project_dir,
-            env={**os.environ, "TERM": "dumb", "NO_COLOR": "1"},
-        )
-    except FileNotFoundError:
-        await ws.send_text("\r\n[ERRO] Claude Code não encontrado na VPS. Instale com: npm install -g @anthropic-ai/claude-code\r\n")
-        await ws.close()
-        return
-
-    async def read_stdout():
-        """Lê stdout do processo e envia ao WebSocket."""
-        try:
-            while True:
-                data = await proc.stdout.read(4096)
-                if not data:
-                    break
-                await ws.send_text(data.decode("utf-8", errors="replace"))
-        except Exception:
-            pass
-
-    reader_task = asyncio.create_task(read_stdout())
+    await ws.send_text("Claude Code pronto. Digite seu prompt.\n")
 
     try:
         while True:
             msg = await ws.receive_text()
-            if proc.stdin and not proc.stdin.is_closing():
-                proc.stdin.write(msg.encode("utf-8"))
-                await proc.stdin.drain()
+            prompt = msg.strip()
+            if not prompt:
+                continue
+
+            await ws.send_text("\n⏳ Processando...\n")
+
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    "claude", "-p", prompt,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.STDOUT,
+                    cwd="/app",
+                    env={**os.environ, "NO_COLOR": "1"},
+                )
+
+                # Stream da resposta em tempo real
+                while True:
+                    chunk = await proc.stdout.read(1024)
+                    if not chunk:
+                        break
+                    await ws.send_text(chunk.decode("utf-8", errors="replace"))
+
+                await proc.wait()
+                await ws.send_text("\n\n✅ Pronto.\n")
+
+            except FileNotFoundError:
+                await ws.send_text("\n[ERRO] Claude Code não instalado na VPS.\n")
+            except Exception as e:
+                await ws.send_text(f"\n[ERRO] {str(e)}\n")
+
     except WebSocketDisconnect:
         pass
-    finally:
-        reader_task.cancel()
-        if proc.returncode is None:
-            proc.terminate()
-            try:
-                await asyncio.wait_for(proc.wait(), timeout=5)
-            except asyncio.TimeoutError:
-                proc.kill()
