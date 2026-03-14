@@ -1800,13 +1800,14 @@ async def websocket_terminal(ws: WebSocket):
 
     await ws.accept()
 
-    # Garantir que o usuário claude tem acesso ao /repo
+    # Garantir que o usuário claude tem acesso ao /repo e ao .claude
     try:
-        fix_perms = await asyncio.create_subprocess_exec(
-            "chown", "-R", "claude:claude", "/repo",
-            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
-        )
-        await fix_perms.wait()
+        for path in ["/repo", "/home/claude/.claude"]:
+            fix_perms = await asyncio.create_subprocess_exec(
+                "chown", "-R", "claude:claude", path,
+                stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+            )
+            await fix_perms.wait()
     except Exception:
         pass
 
