@@ -1776,6 +1776,60 @@ async def _enviar_nota_privada_http(http: httpx.AsyncClient, chatwoot_url: str, 
 
 
 # ══════════════════════════════════════════════
+# TERMINAL - EXPLORADOR DE ARQUIVOS
+# ══════════════════════════════════════════════
+
+REPO_DIR = "/repo"
+EXCLUDED_DIRS = {".git", "node_modules", "__pycache__", ".env", ".venv", "venv"}
+
+def _scan_dir(base: str, rel: str = "") -> list:
+    """Varre diretório recursivamente e retorna árvore de arquivos."""
+    result = []
+    full = os.path.join(base, rel) if rel else base
+    try:
+        entries = sorted(os.listdir(full), key=lambda x: (not os.path.isdir(os.path.join(full, x)), x.lower()))
+    except PermissionError:
+        return result
+    for name in entries:
+        if name in EXCLUDED_DIRS:
+            continue
+        entry_path = os.path.join(rel, name) if rel else name
+        full_path = os.path.join(full, name)
+        if os.path.isdir(full_path):
+            children = _scan_dir(base, entry_path)
+            result.append({"name": name, "type": "dir", "path": entry_path, "children": children})
+        else:
+            result.append({"name": name, "type": "file", "path": entry_path})
+    return result
+
+@app.get("/api/terminal/files")
+async def terminal_list_files(user=Depends(require_super_admin)):
+    """Lista arquivos do /repo em árvore (exclui .git, node_modules, etc.)."""
+    if not os.path.isdir(REPO_DIR):
+        raise HTTPException(404, "Diretório /repo não encontrado")
+    tree = _scan_dir(REPO_DIR)
+    return tree
+
+@app.get("/api/terminal/file")
+async def terminal_read_file(path: str, user=Depends(require_super_admin)):
+    """Retorna conteúdo de um arquivo do /repo (somente leitura, max 500KB)."""
+    if ".." in path:
+        raise HTTPException(400, "Path inválido")
+    full_path = os.path.join(REPO_DIR, path)
+    if not os.path.isfile(full_path):
+        raise HTTPException(404, "Arquivo não encontrado")
+    size = os.path.getsize(full_path)
+    if size > 500 * 1024:
+        raise HTTPException(413, f"Arquivo muito grande ({size // 1024}KB). Limite: 500KB")
+    try:
+        with open(full_path, "r", encoding="utf-8", errors="replace") as f:
+            content = f.read()
+    except Exception as e:
+        raise HTTPException(500, f"Erro ao ler arquivo: {e}")
+    return {"path": path, "content": content, "size": size}
+
+
+# ══════════════════════════════════════════════
 # TERMINAL CLAUDE CODE (WebSocket)
 # ══════════════════════════════════════════════
 

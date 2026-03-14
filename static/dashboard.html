@@ -398,6 +398,73 @@
     .terminal-line-ai { color: #9ece6a; }
     .terminal-line-user { color: #7aa2f7; }
     .terminal-line-system { color: #565f89; font-style: italic; }
+
+    /* ── EXPLORADOR DE ARQUIVOS ── */
+    .terminal-layout {
+      display: flex; height: calc(100vh - 130px); gap: 0;
+    }
+    .file-explorer {
+      width: 250px; min-width: 200px; background: #1a1b26;
+      border: 1px solid var(--border); border-radius: 12px 0 0 12px;
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .file-explorer-header {
+      background: #24283b; padding: 8px 14px;
+      border-bottom: 1px solid #414868;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .file-explorer-header span {
+      color: #a9b1d6; font-size: 12px; font-family: monospace; font-weight: 600;
+    }
+    .file-explorer-header .fe-refresh {
+      margin-left: auto; background: none; border: none; color: #565f89;
+      cursor: pointer; font-size: 14px; padding: 2px 6px; border-radius: 4px;
+    }
+    .file-explorer-header .fe-refresh:hover { color: #a9b1d6; background: #414868; }
+    .file-explorer-tree {
+      flex: 1; overflow-y: auto; padding: 6px 0; font-family: monospace; font-size: 13px;
+    }
+    .file-explorer-tree::-webkit-scrollbar { width: 6px; }
+    .file-explorer-tree::-webkit-scrollbar-thumb { background: #414868; border-radius: 3px; }
+    .fe-item {
+      display: flex; align-items: center; padding: 3px 10px; cursor: pointer;
+      color: #a9b1d6; white-space: nowrap; user-select: none;
+    }
+    .fe-item:hover { background: #24283b; }
+    .fe-item.active { background: #364a82; color: #c0caf5; }
+    .fe-arrow {
+      width: 16px; text-align: center; font-size: 10px; color: #565f89;
+      flex-shrink: 0; transition: transform 0.15s;
+    }
+    .fe-arrow.open { transform: rotate(90deg); }
+    .fe-icon { width: 18px; text-align: center; flex-shrink: 0; font-size: 13px; margin-right: 6px; }
+    .fe-icon.dir { color: #e0af68; }
+    .fe-icon.file { color: #7aa2f7; }
+    .fe-icon.file-py { color: #9ece6a; }
+    .fe-icon.file-js { color: #e0af68; }
+    .fe-icon.file-html { color: #f7768e; }
+    .fe-icon.file-css { color: #bb9af7; }
+    .fe-icon.file-json { color: #e0af68; }
+    .fe-name { overflow: hidden; text-overflow: ellipsis; }
+    .fe-children { display: none; }
+    .fe-children.open { display: block; }
+    .fe-loading { color: #565f89; padding: 16px; text-align: center; font-family: monospace; font-size: 12px; }
+
+    .terminal-container.with-explorer {
+      border-radius: 0 12px 12px 0; border-left: none; height: auto; flex: 1;
+    }
+
+    .fe-file-viewer-bar {
+      background: #24283b; padding: 4px 12px; display: flex; align-items: center;
+      border-bottom: 1px solid #414868; gap: 8px;
+    }
+    .fe-file-viewer-bar span { color: #a9b1d6; font-size: 12px; font-family: monospace; }
+    .fe-file-viewer-bar button {
+      margin-left: auto; background: #f7768e22; border: 1px solid #f7768e44;
+      color: #f7768e; padding: 2px 8px; border-radius: 4px; font-size: 11px;
+      cursor: pointer; font-family: monospace;
+    }
+    .fe-file-viewer-bar button:hover { background: #f7768e33; }
   </style>
 </head>
 <body>
@@ -3398,32 +3465,52 @@ async function salvarUsuario() {
 let _terminalWs = null;
 let _terminalProcessando = false;
 
+let _fileTree = [];
+let _openDirs = {};
+let _activeFile = null;
+let _viewingFile = false;
+
 function renderPageTerminal() {
   if (_terminalWs) { try { _terminalWs.close(); } catch(e){} _terminalWs = null; }
 
   const el = document.getElementById('page-content');
   el.innerHTML = `
-    <div class="terminal-container">
-      <div class="terminal-toolbar">
-        <span class="terminal-dot red"></span>
-        <span class="terminal-dot yellow"></span>
-        <span class="terminal-dot green"></span>
-        <span class="terminal-toolbar-title">Claude Code — Terminal</span>
-        <div style="margin-left:auto;display:flex;align-items:center;gap:8px;">
-          <button onclick="_terminalNovaConversa()" style="background:#414868;border:none;color:#a9b1d6;padding:4px 10px;border-radius:5px;font-size:11px;cursor:pointer;font-family:monospace;">+ Nova Conversa</button>
-          <button onclick="_terminalRestart()" style="background:#f7768e22;border:1px solid #f7768e44;color:#f7768e;padding:4px 10px;border-radius:5px;font-size:11px;cursor:pointer;font-family:monospace;">Reiniciar App</button>
-          <span class="terminal-status connecting" id="terminal-status">Conectando...</span>
+    <div class="terminal-layout">
+      <div class="file-explorer">
+        <div class="file-explorer-header">
+          <span>📁 Arquivos</span>
+          <button class="fe-refresh" onclick="_loadFileTree()" title="Atualizar">↻</button>
+        </div>
+        <div class="file-explorer-tree" id="file-tree">
+          <div class="fe-loading">Carregando...</div>
         </div>
       </div>
-      <div class="terminal-body" id="terminal-output">
-        <pre id="terminal-pre"></pre>
-      </div>
-      <div class="terminal-input-row">
-        <span class="terminal-prompt">❯</span>
-        <input class="terminal-input" id="terminal-input" type="text"
-               placeholder="Digite seu prompt para o Claude..."
-               autocomplete="off" spellcheck="false" />
-        <button class="terminal-send-btn" id="terminal-send" onclick="_terminalEnviar()">Enviar</button>
+      <div class="terminal-container with-explorer">
+        <div class="terminal-toolbar">
+          <span class="terminal-dot red"></span>
+          <span class="terminal-dot yellow"></span>
+          <span class="terminal-dot green"></span>
+          <span class="terminal-toolbar-title">Claude Code — Terminal</span>
+          <div style="margin-left:auto;display:flex;align-items:center;gap:8px;">
+            <button onclick="_terminalNovaConversa()" style="background:#414868;border:none;color:#a9b1d6;padding:4px 10px;border-radius:5px;font-size:11px;cursor:pointer;font-family:monospace;">+ Nova Conversa</button>
+            <button onclick="_terminalRestart()" style="background:#f7768e22;border:1px solid #f7768e44;color:#f7768e;padding:4px 10px;border-radius:5px;font-size:11px;cursor:pointer;font-family:monospace;">Reiniciar App</button>
+            <span class="terminal-status connecting" id="terminal-status">Conectando...</span>
+          </div>
+        </div>
+        <div id="file-viewer-bar" class="fe-file-viewer-bar" style="display:none;">
+          <span id="file-viewer-path"></span>
+          <button onclick="_closeFileViewer()">✕ Fechar</button>
+        </div>
+        <div class="terminal-body" id="terminal-output">
+          <pre id="terminal-pre"></pre>
+        </div>
+        <div class="terminal-input-row">
+          <span class="terminal-prompt">❯</span>
+          <input class="terminal-input" id="terminal-input" type="text"
+                 placeholder="Digite seu prompt para o Claude..."
+                 autocomplete="off" spellcheck="false" />
+          <button class="terminal-send-btn" id="terminal-send" onclick="_terminalEnviar()">Enviar</button>
+        </div>
       </div>
     </div>
   `;
@@ -3434,7 +3521,114 @@ function renderPageTerminal() {
   });
 
   _terminalConectar();
+  _loadFileTree();
   input.focus();
+}
+
+function _loadFileTree() {
+  const tree = document.getElementById('file-tree');
+  if (!tree) return;
+  tree.innerHTML = '<div class="fe-loading">Carregando...</div>';
+  const token = localStorage.getItem('da1click_token');
+  fetch('/api/terminal/files', { headers: { 'Authorization': 'Bearer ' + token } })
+    .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(data => {
+      _fileTree = data;
+      tree.innerHTML = _renderTree(data, 0);
+    })
+    .catch(e => {
+      tree.innerHTML = '<div class="fe-loading">Erro ao carregar arquivos</div>';
+    });
+}
+
+function _getFileIconClass(name) {
+  const ext = name.split('.').pop().toLowerCase();
+  const map = { py: 'file-py', js: 'file-js', html: 'file-html', css: 'file-css', json: 'file-json' };
+  return map[ext] || 'file';
+}
+
+function _getFileIcon(name) {
+  const ext = name.split('.').pop().toLowerCase();
+  const icons = { py: '🐍', js: '📜', html: '🌐', css: '🎨', json: '{}', md: '📝', txt: '📄', yml: '⚙️', yaml: '⚙️', toml: '⚙️', cfg: '⚙️', ini: '⚙️', sh: '⚡', env: '🔒', sql: '🗃️' };
+  return icons[ext] || '📄';
+}
+
+function _renderTree(items, depth) {
+  let html = '';
+  for (const item of items) {
+    const pad = depth * 16;
+    if (item.type === 'dir') {
+      const isOpen = _openDirs[item.path];
+      html += `<div class="fe-item" style="padding-left:${10 + pad}px" onclick="_toggleDir('${item.path}')">
+        <span class="fe-arrow ${isOpen ? 'open' : ''}">▶</span>
+        <span class="fe-icon dir">📁</span>
+        <span class="fe-name">${item.name}</span>
+      </div>`;
+      html += `<div class="fe-children ${isOpen ? 'open' : ''}" id="fe-dir-${item.path.replace(/[\/\\\.]/g, '-')}">`;
+      if (item.children && item.children.length > 0) {
+        html += _renderTree(item.children, depth + 1);
+      }
+      html += '</div>';
+    } else {
+      const iconCls = _getFileIconClass(item.name);
+      const icon = _getFileIcon(item.name);
+      const activeClass = _activeFile === item.path ? ' active' : '';
+      html += `<div class="fe-item${activeClass}" style="padding-left:${10 + pad + 16}px" onclick="_openFile('${item.path}')">
+        <span class="fe-icon ${iconCls}">${icon}</span>
+        <span class="fe-name">${item.name}</span>
+      </div>`;
+    }
+  }
+  return html;
+}
+
+function _toggleDir(path) {
+  _openDirs[path] = !_openDirs[path];
+  const tree = document.getElementById('file-tree');
+  if (tree) tree.innerHTML = _renderTree(_fileTree, 0);
+}
+
+function _openFile(path) {
+  _activeFile = path;
+  // Re-render tree to update active state
+  const tree = document.getElementById('file-tree');
+  if (tree) tree.innerHTML = _renderTree(_fileTree, 0);
+
+  const pre = document.getElementById('terminal-pre');
+  const bar = document.getElementById('file-viewer-bar');
+  const pathEl = document.getElementById('file-viewer-path');
+  if (!pre) return;
+
+  pre.innerHTML = '<span class="terminal-line-system">Carregando arquivo...</span>';
+  bar.style.display = 'flex';
+  pathEl.textContent = '📄 ' + path;
+  _viewingFile = true;
+
+  const token = localStorage.getItem('da1click_token');
+  fetch('/api/terminal/file?path=' + encodeURIComponent(path), {
+    headers: { 'Authorization': 'Bearer ' + token }
+  })
+    .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(data => {
+      const escaped = data.content.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      pre.innerHTML = `<span style="color:#565f89;font-size:12px;">── ${data.path} (${(data.size/1024).toFixed(1)}KB) ──</span>\n<span style="color:#c0caf5;">${escaped}</span>`;
+    })
+    .catch(e => {
+      pre.innerHTML = `<span class="terminal-line-system">Erro ao carregar: ${path}</span>`;
+    });
+}
+
+function _closeFileViewer() {
+  _viewingFile = false;
+  _activeFile = null;
+  const bar = document.getElementById('file-viewer-bar');
+  if (bar) bar.style.display = 'none';
+  const pre = document.getElementById('terminal-pre');
+  if (pre) pre.innerHTML = '';
+  _terminalAppend('[Terminal restaurado]\n', 'system');
+  // Re-render tree to clear active
+  const tree = document.getElementById('file-tree');
+  if (tree) tree.innerHTML = _renderTree(_fileTree, 0);
 }
 
 function _terminalConectar() {
