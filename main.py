@@ -1803,7 +1803,7 @@ async def websocket_terminal(ws: WebSocket):
     try:
         project_dir = "/app"
         proc = await asyncio.create_subprocess_exec(
-            "claude", "--no-update-check",
+            "claude",
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
