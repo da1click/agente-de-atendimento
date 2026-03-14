@@ -1801,11 +1801,13 @@ async def websocket_terminal(ws: WebSocket):
     await ws.accept()
 
     try:
+        project_dir = "/app"
         proc = await asyncio.create_subprocess_exec(
             "claude", "--no-update-check",
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
+            cwd=project_dir,
             env={**os.environ, "TERM": "dumb", "NO_COLOR": "1"},
         )
     except FileNotFoundError:
