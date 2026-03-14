@@ -1847,6 +1847,15 @@ async def websocket_terminal(ws: WebSocket):
             await ws.send_text("\n⏳ Processando...\n")
 
             try:
+                # Restaurar .claude.json se necessário
+                restore = await asyncio.create_subprocess_shell(
+                    'BACKUP=$(ls -t /home/claude/.claude/backups/.claude.json.backup.* 2>/dev/null | head -1); '
+                    '[ -n "$BACKUP" ] && [ ! -f /home/claude/.claude.json ] && cp "$BACKUP" /home/claude/.claude.json; '
+                    'chown claude:claude /home/claude/.claude.json 2>/dev/null; true',
+                    stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+                )
+                await restore.wait()
+
                 cmd = ["su", "-s", "/bin/bash", "claude", "-c"]
                 claude_cmd = f'claude -p "{prompt.replace(chr(34), chr(92)+chr(34))}" --dangerously-skip-permissions'
                 if has_history:
