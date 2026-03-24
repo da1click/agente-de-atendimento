@@ -2,6 +2,8 @@
 
 Agente de atendimento inteligente desenvolvido pela Da1Click.
 
+<!-- teste de push automático via Claude Code -->
+
 ## Sobre
 
 Sistema de IA para automacao de atendimento ao cliente.
