@@ -1,0 +1,1113 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Onboarding — Da1Click</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --purple: #6c63ff;
+      --purple-light: #eeecff;
+      --purple-dark: #5a52e0;
+      --bg: #f5f6fa;
+      --surface: #ffffff;
+      --border: #e8eaf0;
+      --text: #1a1a2e;
+      --text-secondary: #6b7280;
+      --text-muted: #b0b3c6;
+      --green: #22c55e;
+      --red: #ef4444;
+      --yellow: #f59e0b;
+    }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* ── HEADER ── */
+    .ob-header {
+      width: 100%;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+    }
+    .ob-header-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--purple);
+    }
+    .ob-header-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* ── STEPPER ── */
+    .stepper {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      padding: 24px 20px 8px;
+      max-width: 800px;
+      width: 100%;
+      overflow-x: auto;
+    }
+    .step-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      padding: 6px 10px;
+      border-radius: 8px;
+      transition: background 0.15s;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .step-item:hover { background: var(--purple-light); }
+    .step-num {
+      width: 26px; height: 26px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 700;
+      background: var(--border);
+      color: var(--text-muted);
+      transition: all 0.2s;
+      flex-shrink: 0;
+    }
+    .step-item.active .step-num { background: var(--purple); color: #fff; }
+    .step-item.done .step-num { background: var(--green); color: #fff; }
+    .step-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      transition: color 0.2s;
+    }
+    .step-item.active .step-label { color: var(--purple); }
+    .step-item.done .step-label { color: var(--green); }
+    .step-sep {
+      width: 20px; height: 2px;
+      background: var(--border);
+      flex-shrink: 0;
+      margin: 0 2px;
+    }
+
+    /* ── CONTAINER ── */
+    .ob-container {
+      max-width: 800px;
+      width: 100%;
+      padding: 16px 20px 40px;
+    }
+
+    /* ── CARD ── */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 28px;
+    }
+    .card-title {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .card-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 24px;
+      line-height: 1.5;
+    }
+
+    /* ── FIELDS ── */
+    .fields-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .field-group { display: flex; flex-direction: column; gap: 5px; }
+    .field-group.full { grid-column: 1 / -1; }
+    label { font-size: 11px; font-weight: 600; color: var(--text-secondary); letter-spacing: 0.2px; }
+    input[type="text"], input[type="email"], input[type="number"], input[type="tel"], select, textarea {
+      padding: 10px 12px;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      font-size: 13px;
+      color: var(--text);
+      background: #fafafa;
+      outline: none;
+      transition: border-color 0.15s, background 0.15s;
+      width: 100%;
+      font-family: inherit;
+    }
+    textarea { resize: vertical; min-height: 80px; }
+    input:focus, select:focus, textarea:focus { border-color: var(--purple); background: #fff; }
+    .field-hint { font-size: 11px; color: var(--text-muted); }
+
+    .section-divider {
+      margin: 24px 0 16px;
+      font-size: 10px; font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .section-divider::after { content: ''; flex: 1; height: 1px; background: #f0f0f5; }
+
+    /* ── ADVOGADO CARD ── */
+    .adv-card {
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 14px;
+      position: relative;
+      background: #fafbff;
+    }
+    .adv-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .adv-card-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--purple);
+    }
+    .adv-remove {
+      background: none;
+      border: none;
+      color: var(--red);
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 8px;
+      border-radius: 6px;
+      transition: background 0.15s;
+    }
+    .adv-remove:hover { background: #fef2f2; }
+
+    /* ── SCHEDULE WIDGET ── */
+    .sched-grid {
+      display: grid;
+      grid-template-columns: 50px 1fr;
+      gap: 6px 10px;
+      align-items: center;
+    }
+    .sched-day {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+    .sched-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .sched-input {
+      width: 70px !important;
+      text-align: center;
+      padding: 6px 4px !important;
+      font-size: 12px !important;
+    }
+    .sched-to {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+    .sched-check {
+      width: 16px; height: 16px;
+      accent-color: var(--purple);
+      cursor: pointer;
+    }
+
+    /* ── AD THEME CARD ── */
+    .ad-card {
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 10px;
+      background: #fafbff;
+    }
+
+    /* ── BUTTONS ── */
+    .btn {
+      padding: 10px 22px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: all 0.15s;
+      font-family: inherit;
+    }
+    .btn-primary { background: var(--purple); color: #fff; }
+    .btn-primary:hover { background: var(--purple-dark); }
+    .btn-secondary { background: transparent; border: 1.5px solid var(--border); color: var(--text-secondary); }
+    .btn-secondary:hover { border-color: #d1d5db; background: #f9fafb; }
+    .btn-success { background: var(--green); color: #fff; }
+    .btn-success:hover { background: #16a34a; }
+    .btn-ghost { background: transparent; border: none; color: var(--purple); padding: 6px 12px; font-size: 12px; }
+    .btn-ghost:hover { background: var(--purple-light); border-radius: 6px; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .card-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 28px;
+      padding-top: 20px;
+      border-top: 1px solid #f0f0f5;
+    }
+    .card-actions-right { margin-left: auto; display: flex; gap: 8px; }
+
+    .save-indicator {
+      font-size: 11px;
+      color: var(--text-muted);
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    .save-indicator.show { opacity: 1; }
+
+    /* ── MODAL ── */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-overlay.active { display: flex; }
+    .modal {
+      background: var(--surface);
+      border-radius: 16px;
+      padding: 36px;
+      max-width: 500px;
+      width: 90%;
+      text-align: center;
+    }
+    .modal-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+    .modal-title {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+    .modal-text {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      margin-bottom: 28px;
+    }
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+    }
+
+    /* ── SUBMITTED STATE ── */
+    .submitted-screen {
+      text-align: center;
+      padding: 60px 20px;
+    }
+    .submitted-icon {
+      font-size: 64px;
+      margin-bottom: 20px;
+    }
+    .submitted-title {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--green);
+      margin-bottom: 12px;
+    }
+    .submitted-text {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+
+    /* ── ERROR STATE ── */
+    .error-screen {
+      text-align: center;
+      padding: 60px 20px;
+    }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 600px) {
+      .fields-grid { grid-template-columns: 1fr; }
+      .stepper { padding: 16px 10px 4px; gap: 0; }
+      .step-label { display: none; }
+      .card { padding: 20px 16px; }
+      .ob-container { padding: 12px 10px 30px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <div class="ob-header">
+    <div>
+      <div class="ob-header-title">Da1Click — Onboarding</div>
+      <div class="ob-header-sub" id="header-account-name"></div>
+    </div>
+  </div>
+
+  <!-- STEPPER -->
+  <div class="stepper" id="stepper"></div>
+
+  <!-- CONTAINER -->
+  <div class="ob-container" id="main-container">
+    <div style="text-align:center;padding:60px 20px;color:var(--text-muted);">Carregando...</div>
+  </div>
+
+  <!-- MODAL CONFIRMACAO -->
+  <div class="modal-overlay" id="modal-confirm">
+    <div class="modal">
+      <div class="modal-icon">&#9888;&#65039;</div>
+      <div class="modal-title">Confirmar envio</div>
+      <div class="modal-text">
+        Ao enviar, suas respostas serao processadas e <strong>voce nao podera mais editar este formulario</strong>.<br><br>
+        Tem certeza que deseja enviar?
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="fecharModal()">Voltar e revisar</button>
+        <button class="btn btn-success" onclick="confirmarEnvio()">Sim, enviar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL SUCESSO -->
+  <div class="modal-overlay" id="modal-success">
+    <div class="modal">
+      <div class="modal-icon">&#9989;</div>
+      <div class="modal-title" style="color:var(--green);">Enviado com sucesso!</div>
+      <div class="modal-text">
+        Suas informacoes foram recebidas. Nossa equipe vai configurar tudo e entrar em contato em breve.<br><br>
+        Voce ja pode fechar esta pagina.
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" onclick="window.close()">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+// ── STATE ──
+const STEPS = [
+  { id: 'escritorio', label: 'Escritorio', icon: '1' },
+  { id: 'responsavel', label: 'Responsavel', icon: '2' },
+  { id: 'advogados', label: 'Advogados', icon: '3' },
+  { id: 'personalidade', label: 'Personalidade IA', icon: '4' },
+  { id: 'comportamento', label: 'Comportamento', icon: '5' },
+  { id: 'anuncios', label: 'Anuncios', icon: '6' },
+  { id: 'regras', label: 'Regras', icon: '7' },
+];
+
+const DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
+
+let currentStep = 0;
+let token = null;
+let formData = {};
+let accountId = null;
+let saving = false;
+
+// ── INIT ──
+document.addEventListener('DOMContentLoaded', async () => {
+  const params = new URLSearchParams(window.location.search);
+  token = params.get('token');
+  if (!token) {
+    showError('Link invalido', 'Este link de onboarding nao e valido. Verifique com a equipe Da1Click.');
+    return;
+  }
+  try {
+    const resp = await fetch(`/api/onboarding/${token}`);
+    if (!resp.ok) {
+      if (resp.status === 404) {
+        showError('Link invalido', 'Este link de onboarding nao existe ou expirou.');
+      } else {
+        showError('Erro', 'Erro ao carregar o formulario. Tente novamente mais tarde.');
+      }
+      return;
+    }
+    const data = await resp.json();
+    accountId = data.account_id;
+    formData = data.form_data || {};
+
+    if (data.nome_escritorio) {
+      document.getElementById('header-account-name').textContent = data.nome_escritorio;
+    } else if (data.nome_conta) {
+      document.getElementById('header-account-name').textContent = data.nome_conta;
+    }
+
+    if (data.status === 'submitted') {
+      showSubmitted();
+      return;
+    }
+
+    // Garantir estrutura basica no formData
+    if (!formData.escritorio) formData.escritorio = {};
+    if (!formData.responsavel) formData.responsavel = {};
+    if (!formData.advogados) formData.advogados = [criarAdvogadoVazio()];
+    if (!formData.personalidade) formData.personalidade = {};
+    if (!formData.comportamento) formData.comportamento = {};
+    if (!formData.anuncios) formData.anuncios = { usa_meta: false, temas: [] };
+    if (!formData.regras) formData.regras = {};
+
+    renderStepper();
+    renderStep();
+  } catch (e) {
+    showError('Erro de conexao', 'Nao foi possivel conectar ao servidor. Verifique sua internet.');
+  }
+});
+
+function criarAdvogadoVazio() {
+  return {
+    nome: '', especialidade: '', duracao_agendamento: 30,
+    horas_inicial_busca: 2, quantidade_dias_a_buscar: 14,
+    email_calendar: '',
+    disponibilidade: {
+      '0': [], '1': [{ start: '08:00', end: '18:00' }],
+      '2': [{ start: '08:00', end: '18:00' }], '3': [{ start: '08:00', end: '18:00' }],
+      '4': [{ start: '08:00', end: '18:00' }], '5': [{ start: '08:00', end: '18:00' }],
+      '6': []
+    }
+  };
+}
+
+// ── STEPPER ──
+function renderStepper() {
+  const el = document.getElementById('stepper');
+  el.innerHTML = STEPS.map((s, i) => {
+    const cls = i === currentStep ? 'active' : (i < currentStep ? 'done' : '');
+    return `
+      <div class="step-item ${cls}" onclick="goToStep(${i})">
+        <div class="step-num">${i < currentStep ? '&#10003;' : (i + 1)}</div>
+        <div class="step-label">${s.label}</div>
+      </div>
+      ${i < STEPS.length - 1 ? '<div class="step-sep"></div>' : ''}
+    `;
+  }).join('');
+}
+
+function goToStep(i) {
+  collectCurrentStep();
+  currentStep = i;
+  renderStepper();
+  renderStep();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ── RENDER STEPS ──
+function renderStep() {
+  const container = document.getElementById('main-container');
+  switch (STEPS[currentStep].id) {
+    case 'escritorio': container.innerHTML = renderEscritorio(); break;
+    case 'responsavel': container.innerHTML = renderResponsavel(); break;
+    case 'advogados': container.innerHTML = renderAdvogados(); break;
+    case 'personalidade': container.innerHTML = renderPersonalidade(); break;
+    case 'comportamento': container.innerHTML = renderComportamento(); break;
+    case 'anuncios': container.innerHTML = renderAnuncios(); break;
+    case 'regras': container.innerHTML = renderRegras(); break;
+  }
+}
+
+function navButtons() {
+  const isFirst = currentStep === 0;
+  const isLast = currentStep === STEPS.length - 1;
+  return `
+    <div class="card-actions">
+      ${!isFirst ? `<button class="btn btn-secondary" onclick="prevStep()">&#8592; Anterior</button>` : '<div></div>'}
+      <span class="save-indicator" id="save-ind">Rascunho salvo</span>
+      <div class="card-actions-right">
+        <button class="btn btn-secondary" onclick="salvarRascunho()">Salvar rascunho</button>
+        ${isLast
+          ? `<button class="btn btn-success" onclick="abrirModalEnvio()">Enviar &#10148;</button>`
+          : `<button class="btn btn-primary" onclick="nextStep()">Proximo &#8594;</button>`
+        }
+      </div>
+    </div>
+  `;
+}
+
+function nextStep() {
+  collectCurrentStep();
+  if (currentStep < STEPS.length - 1) {
+    currentStep++;
+    renderStepper();
+    renderStep();
+    autoSave();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+}
+function prevStep() {
+  collectCurrentStep();
+  if (currentStep > 0) {
+    currentStep--;
+    renderStepper();
+    renderStep();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+}
+
+// ── STEP 1: ESCRITORIO ──
+function renderEscritorio() {
+  const d = formData.escritorio;
+  return `<div class="card">
+    <div class="card-title">Dados do Escritorio</div>
+    <div class="card-desc">Informacoes basicas sobre o escritorio de advocacia.</div>
+    <div class="fields-grid">
+      <div class="field-group full">
+        <label>Nome do Escritorio *</label>
+        <input type="text" id="f-esc-nome" value="${esc(d.nome)}" placeholder="Ex: Pinheiro Advocacia" />
+      </div>
+      <div class="field-group full">
+        <label>Endereco completo</label>
+        <input type="text" id="f-esc-endereco" value="${esc(d.endereco)}" placeholder="Ex: Rua das Flores, 123 - Belo Horizonte, MG" />
+      </div>
+      <div class="field-group">
+        <label>Telefone oficial</label>
+        <input type="tel" id="f-esc-telefone" value="${esc(d.telefone)}" placeholder="Ex: (62) 99999-9999" />
+      </div>
+      <div class="field-group">
+        <label>Cidade-base e Estado</label>
+        <input type="text" id="f-esc-cidade" value="${esc(d.cidade)}" placeholder="Ex: Goiania - GO" />
+      </div>
+      <div class="field-group">
+        <label>Area de atendimento</label>
+        <select id="f-esc-area">
+          <option value="" ${!d.area_atendimento?'selected':''}>-- Selecione --</option>
+          <option value="online" ${d.area_atendimento==='online'?'selected':''}>Somente online</option>
+          <option value="presencial" ${d.area_atendimento==='presencial'?'selected':''}>Somente presencial</option>
+          <option value="ambos" ${d.area_atendimento==='ambos'?'selected':''}>Online e presencial</option>
+        </select>
+      </div>
+      <div class="field-group">
+        <label>Regiao de atuacao</label>
+        <input type="text" id="f-esc-regiao" value="${esc(d.regiao)}" placeholder="Ex: Brasil todo, Estado de SP, etc." />
+      </div>
+    </div>
+    ${navButtons()}
+  </div>`;
+}
+
+function collectEscritorio() {
+  formData.escritorio = {
+    nome: val('f-esc-nome'),
+    endereco: val('f-esc-endereco'),
+    telefone: val('f-esc-telefone'),
+    cidade: val('f-esc-cidade'),
+    area_atendimento: val('f-esc-area'),
+    regiao: val('f-esc-regiao'),
+  };
+}
+
+// ── STEP 2: RESPONSAVEL ──
+function renderResponsavel() {
+  const d = formData.responsavel;
+  return `<div class="card">
+    <div class="card-title">Responsavel e Testes</div>
+    <div class="card-desc">Quem sera o responsavel pelo acompanhamento e testes da IA?</div>
+    <div class="fields-grid">
+      <div class="field-group full">
+        <label>Nome do responsavel pelos testes *</label>
+        <input type="text" id="f-resp-nome" value="${esc(d.nome)}" placeholder="Ex: Dr. Josinaldo" />
+      </div>
+      <div class="field-group full">
+        <label>Numeros de WhatsApp para testes</label>
+        <textarea id="f-resp-numeros" placeholder="Um numero por linha. Ex:&#10;5562999999999&#10;5511988887777">${esc(d.numeros_teste)}</textarea>
+        <span class="field-hint">Esses numeros vao receber respostas da IA durante os testes</span>
+      </div>
+    </div>
+    ${navButtons()}
+  </div>`;
+}
+
+function collectResponsavel() {
+  formData.responsavel = {
+    nome: val('f-resp-nome'),
+    numeros_teste: val('f-resp-numeros'),
+  };
+}
+
+// ── STEP 3: ADVOGADOS ──
+function renderAdvogados() {
+  const advs = formData.advogados;
+  let html = `<div class="card">
+    <div class="card-title">Advogados</div>
+    <div class="card-desc">Cadastre os advogados que vao atender. A IA usara essas informacoes para agendar consultas.</div>
+    <div id="advogados-list">`;
+
+  advs.forEach((adv, i) => {
+    html += renderAdvCard(adv, i);
+  });
+
+  html += `</div>
+    <button class="btn btn-ghost" onclick="addAdvogado()" style="margin-top:10px;">+ Adicionar advogado</button>
+    ${navButtons()}
+  </div>`;
+  return html;
+}
+
+function renderAdvCard(adv, i) {
+  const disp = adv.disponibilidade || {};
+  let schedHtml = '';
+  DIAS_SEMANA.forEach((dia, d) => {
+    const slots = disp[String(d)] || [];
+    const hasSlot = slots.length > 0;
+    const start = hasSlot ? slots[0].start : '08:00';
+    const end = hasSlot ? slots[0].end : '18:00';
+    schedHtml += `
+      <div class="sched-day">${dia}</div>
+      <div class="sched-row">
+        <input type="checkbox" class="sched-check" id="sched-${i}-${d}" ${hasSlot ? 'checked' : ''} onchange="toggleSchedDay(${i},${d})" />
+        <input type="text" class="sched-input" id="sched-${i}-${d}-start" value="${start}" placeholder="08:00" ${!hasSlot?'disabled':''} />
+        <span class="sched-to">ate</span>
+        <input type="text" class="sched-input" id="sched-${i}-${d}-end" value="${end}" placeholder="18:00" ${!hasSlot?'disabled':''} />
+      </div>`;
+  });
+
+  return `
+    <div class="adv-card" data-adv-idx="${i}">
+      <div class="adv-card-header">
+        <div class="adv-card-title">Advogado ${i + 1}</div>
+        ${formData.advogados.length > 1 ? `<button class="adv-remove" onclick="removeAdvogado(${i})">Remover</button>` : ''}
+      </div>
+      <div class="fields-grid">
+        <div class="field-group">
+          <label>Nome *</label>
+          <input type="text" id="adv-${i}-nome" value="${esc(adv.nome)}" placeholder="Ex: Dr. Josinaldo" />
+        </div>
+        <div class="field-group">
+          <label>Especialidade(s)</label>
+          <input type="text" id="adv-${i}-esp" value="${esc(adv.especialidade)}" placeholder="Ex: Trabalhista, Previdenciario" />
+          <span class="field-hint">Separe por virgula se tiver mais de uma</span>
+        </div>
+        <div class="field-group">
+          <label>Duracao da consulta (min)</label>
+          <input type="number" id="adv-${i}-duracao" value="${adv.duracao_agendamento || 30}" min="10" max="180" />
+        </div>
+        <div class="field-group">
+          <label>Antecedencia minima (horas)</label>
+          <input type="number" id="adv-${i}-antec" value="${adv.horas_inicial_busca || 2}" min="0" max="72" />
+          <span class="field-hint">Quantas horas antes do horario a IA pode agendar</span>
+        </div>
+        <div class="field-group">
+          <label>Dias a frente para agendar</label>
+          <input type="number" id="adv-${i}-dias" value="${adv.quantidade_dias_a_buscar || 14}" min="1" max="60" />
+        </div>
+        <div class="field-group">
+          <label>E-mail do Google Calendar</label>
+          <input type="email" id="adv-${i}-email" value="${esc(adv.email_calendar)}" placeholder="agenda@gmail.com" />
+          <span class="field-hint">Calendario onde a IA vai criar os agendamentos</span>
+        </div>
+      </div>
+      <div class="section-divider">Horarios de atendimento</div>
+      <div class="sched-grid">${schedHtml}</div>
+    </div>`;
+}
+
+function toggleSchedDay(advIdx, day) {
+  const checked = document.getElementById(`sched-${advIdx}-${day}`).checked;
+  document.getElementById(`sched-${advIdx}-${day}-start`).disabled = !checked;
+  document.getElementById(`sched-${advIdx}-${day}-end`).disabled = !checked;
+}
+
+function addAdvogado() {
+  collectAdvogados();
+  formData.advogados.push(criarAdvogadoVazio());
+  renderStep();
+}
+
+function removeAdvogado(idx) {
+  collectAdvogados();
+  formData.advogados.splice(idx, 1);
+  renderStep();
+}
+
+function collectAdvogados() {
+  formData.advogados = formData.advogados.map((adv, i) => {
+    const nomeEl = document.getElementById(`adv-${i}-nome`);
+    if (!nomeEl) return adv;
+    const disp = {};
+    DIAS_SEMANA.forEach((_, d) => {
+      const checked = document.getElementById(`sched-${i}-${d}`)?.checked;
+      if (checked) {
+        disp[String(d)] = [{
+          start: document.getElementById(`sched-${i}-${d}-start`)?.value || '08:00',
+          end: document.getElementById(`sched-${i}-${d}-end`)?.value || '18:00',
+        }];
+      } else {
+        disp[String(d)] = [];
+      }
+    });
+    return {
+      nome: nomeEl.value.trim(),
+      especialidade: document.getElementById(`adv-${i}-esp`)?.value.trim() || '',
+      duracao_agendamento: parseInt(document.getElementById(`adv-${i}-duracao`)?.value) || 30,
+      horas_inicial_busca: parseInt(document.getElementById(`adv-${i}-antec`)?.value) || 0,
+      quantidade_dias_a_buscar: parseInt(document.getElementById(`adv-${i}-dias`)?.value) || 14,
+      email_calendar: document.getElementById(`adv-${i}-email`)?.value.trim() || '',
+      disponibilidade: disp,
+    };
+  });
+}
+
+// ── STEP 4: PERSONALIDADE ──
+function renderPersonalidade() {
+  const d = formData.personalidade;
+  return `<div class="card">
+    <div class="card-title">Personalidade da IA</div>
+    <div class="card-desc">Como a IA deve se comportar e se apresentar ao conversar com seus leads?</div>
+    <div class="fields-grid">
+      <div class="field-group">
+        <label>Nome da IA *</label>
+        <input type="text" id="f-pers-nome" value="${esc(d.nome_ia)}" placeholder="Ex: Clara, Ana, Julia" />
+        <span class="field-hint">O nome que a IA vai usar para se apresentar</span>
+      </div>
+      <div class="field-group">
+        <label>Tom de conversa</label>
+        <select id="f-pers-tom">
+          <option value="" ${!d.tom?'selected':''}>-- Selecione --</option>
+          <option value="humano" ${d.tom==='humano'?'selected':''}>Humano e descontraido</option>
+          <option value="profissional" ${d.tom==='profissional'?'selected':''}>Profissional e formal</option>
+          <option value="equilibrado" ${d.tom==='equilibrado'?'selected':''}>Equilibrado (meio-termo)</option>
+        </select>
+      </div>
+      <div class="field-group full">
+        <label>Como a IA deve se apresentar?</label>
+        <textarea id="f-pers-apresentacao" placeholder="Ex: Aqui e a Clara, da equipe do Dr. Josinaldo. Como posso te ajudar?">${esc(d.apresentacao)}</textarea>
+        <span class="field-hint">Escreva exemplos de como gostaria que a IA abrisse a conversa</span>
+      </div>
+      <div class="field-group full">
+        <label>A IA deve usar o nome do escritorio ou do advogado?</label>
+        <select id="f-pers-referencia">
+          <option value="" ${!d.referencia?'selected':''}>-- Selecione --</option>
+          <option value="escritorio" ${d.referencia==='escritorio'?'selected':''}>Nome do escritorio (ex: Escritorio Pinheiro)</option>
+          <option value="advogado" ${d.referencia==='advogado'?'selected':''}>Nome do advogado (ex: equipe do Dr. Josinaldo)</option>
+          <option value="nenhum" ${d.referencia==='nenhum'?'selected':''}>Nao precisa mencionar</option>
+        </select>
+      </div>
+      <div class="field-group full">
+        <label>Exemplos de abordagem inicial</label>
+        <textarea id="f-pers-exemplos" rows="5" placeholder="Cole aqui exemplos de mensagens de abertura que voce gostaria que a IA usasse.&#10;&#10;Ex:&#10;Bom dia! Tudo bem? Me conta o que aconteceu no seu trabalho pra eu te ajudar melhor.&#10;&#10;Ola, muito obrigado pelo contato! Me explica o que esta acontecendo.">${esc(d.exemplos_abertura)}</textarea>
+      </div>
+    </div>
+    ${navButtons()}
+  </div>`;
+}
+
+function collectPersonalidade() {
+  formData.personalidade = {
+    nome_ia: val('f-pers-nome'),
+    tom: val('f-pers-tom'),
+    apresentacao: val('f-pers-apresentacao'),
+    referencia: val('f-pers-referencia'),
+    exemplos_abertura: val('f-pers-exemplos'),
+  };
+}
+
+// ── STEP 5: COMPORTAMENTO ──
+function renderComportamento() {
+  const d = formData.comportamento;
+  return `<div class="card">
+    <div class="card-title">Comportamento da IA</div>
+    <div class="card-desc">Regras de como a IA deve conduzir a conversa com os leads.</div>
+    <div class="fields-grid">
+      <div class="field-group full">
+        <label>A IA deve ser mais direta ou investigar antes de agendar?</label>
+        <select id="f-comp-ritmo">
+          <option value="" ${!d.ritmo?'selected':''}>-- Selecione --</option>
+          <option value="investigar" ${d.ritmo==='investigar'?'selected':''}>Investigar o caso com calma antes de propor agendamento</option>
+          <option value="direto" ${d.ritmo==='direto'?'selected':''}>Ir direto ao agendamento o mais rapido possivel</option>
+          <option value="equilibrado" ${d.ritmo==='equilibrado'?'selected':''}>Equilibrado — investigar um pouco e depois agendar</option>
+        </select>
+      </div>
+      <div class="field-group full">
+        <label>Palavras ou expressoes que a IA NAO deve usar</label>
+        <textarea id="f-comp-proibidas" placeholder="Ex: gratuita, sem compromisso, gratis&#10;(uma por linha)">${esc(d.palavras_proibidas)}</textarea>
+        <span class="field-hint">A IA vai evitar essas palavras em todas as conversas</span>
+      </div>
+      <div class="field-group full">
+        <label>Palavras substitutas</label>
+        <textarea id="f-comp-substitutas" placeholder="Ex: No lugar de 'gratuita' usar 'sem custo'&#10;No lugar de 'gratis' usar 'sem custo para voce'&#10;(uma substituicao por linha)">${esc(d.palavras_substitutas)}</textarea>
+      </div>
+      <div class="field-group full">
+        <label>A consulta/reuniao tem custo? Como explicar isso?</label>
+        <textarea id="f-comp-custo" placeholder="Ex: A reuniao por video nao tem custo. E a oportunidade de analisar os direitos e explicar como podemos ajudar.">${esc(d.explicacao_custo)}</textarea>
+      </div>
+      <div class="field-group full">
+        <label>Quando o lead responde so "entendi" ou "obrigado", o que a IA deve fazer?</label>
+        <textarea id="f-comp-dead-end" placeholder="Ex: Nao se contentar com um 'entendi'. Manter a conversa ativa, explicar sobre possiveis direitos e como funciona a reuniao.">${esc(d.resposta_dead_end)}</textarea>
+      </div>
+      <div class="field-group full">
+        <label>Outras instrucoes de comportamento</label>
+        <textarea id="f-comp-outras" rows="4" placeholder="Qualquer outra instrucao que voce queira dar a IA sobre como se comportar.">${esc(d.outras_instrucoes)}</textarea>
+      </div>
+    </div>
+    ${navButtons()}
+  </div>`;
+}
+
+function collectComportamento() {
+  formData.comportamento = {
+    ritmo: val('f-comp-ritmo'),
+    palavras_proibidas: val('f-comp-proibidas'),
+    palavras_substitutas: val('f-comp-substitutas'),
+    explicacao_custo: val('f-comp-custo'),
+    resposta_dead_end: val('f-comp-dead-end'),
+    outras_instrucoes: val('f-comp-outras'),
+  };
+}
+
+// ── STEP 6: ANUNCIOS ──
+function renderAnuncios() {
+  const d = formData.anuncios;
+  let temasHtml = '';
+  (d.temas || []).forEach((t, i) => {
+    temasHtml += `
+      <div class="ad-card" data-tema-idx="${i}">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+          <span style="font-size:12px;font-weight:700;color:var(--purple);">Tema ${i + 1}</span>
+          <button class="adv-remove" onclick="removeTema(${i})">Remover</button>
+        </div>
+        <div class="fields-grid">
+          <div class="field-group">
+            <label>Nome do tema *</label>
+            <input type="text" id="tema-${i}-nome" value="${esc(t.nome)}" placeholder="Ex: Rescisao Indireta" />
+          </div>
+          <div class="field-group full">
+            <label>Mensagem de abertura para esse tema</label>
+            <textarea id="tema-${i}-msg" rows="3" placeholder="Ex: Vi que voce veio pelo tema de rescisao indireta. O que esta acontecendo ai na empresa?">${esc(t.mensagem)}</textarea>
+          </div>
+        </div>
+      </div>`;
+  });
+
+  return `<div class="card">
+    <div class="card-title">Origem dos Leads (Anuncios)</div>
+    <div class="card-desc">Se voce usa anuncios no Facebook/Instagram, a IA pode adaptar a abordagem de acordo com o tema do anuncio.</div>
+    <div class="fields-grid">
+      <div class="field-group full">
+        <label>Os leads vem de anuncios do Meta (Facebook/Instagram)?</label>
+        <select id="f-anun-usa" onchange="toggleTemas()">
+          <option value="nao" ${!d.usa_meta?'selected':''}>Nao</option>
+          <option value="sim" ${d.usa_meta?'selected':''}>Sim</option>
+        </select>
+      </div>
+    </div>
+    <div id="temas-section" style="display:${d.usa_meta ? 'block' : 'none'};">
+      <div class="section-divider">Temas dos anuncios</div>
+      <div id="temas-list">${temasHtml}</div>
+      <button class="btn btn-ghost" onclick="addTema()">+ Adicionar tema</button>
+      <div class="field-group full" style="margin-top:16px;">
+        <label>A IA deve reconhecer de qual anuncio o lead veio?</label>
+        <select id="f-anun-reconhecer">
+          <option value="sim" ${d.reconhecer_anuncio !== false ?'selected':''}>Sim, adaptar abordagem ao tema</option>
+          <option value="nao" ${d.reconhecer_anuncio === false ?'selected':''}>Nao, usar abordagem padrao</option>
+        </select>
+      </div>
+    </div>
+    ${navButtons()}
+  </div>`;
+}
+
+function toggleTemas() {
+  const usa = document.getElementById('f-anun-usa').value === 'sim';
+  document.getElementById('temas-section').style.display = usa ? 'block' : 'none';
+}
+
+function addTema() {
+  collectAnuncios();
+  formData.anuncios.temas.push({ nome: '', mensagem: '' });
+  renderStep();
+}
+
+function removeTema(idx) {
+  collectAnuncios();
+  formData.anuncios.temas.splice(idx, 1);
+  renderStep();
+}
+
+function collectAnuncios() {
+  const usa = document.getElementById('f-anun-usa')?.value === 'sim';
+  const temas = (formData.anuncios.temas || []).map((t, i) => {
+    const nomeEl = document.getElementById(`tema-${i}-nome`);
+    if (!nomeEl) return t;
+    return {
+      nome: nomeEl.value.trim(),
+      mensagem: document.getElementById(`tema-${i}-msg`)?.value.trim() || '',
+    };
+  });
+  formData.anuncios = {
+    usa_meta: usa,
+    temas: temas,
+    reconhecer_anuncio: document.getElementById('f-anun-reconhecer')?.value !== 'nao',
+  };
+}
+
+// ── STEP 7: REGRAS ──
+function renderRegras() {
+  const d = formData.regras;
+  return `<div class="card">
+    <div class="card-title">Regras Especificas</div>
+    <div class="card-desc">Instrucoes adicionais para personalizar ainda mais o atendimento da IA.</div>
+    <div class="fields-grid">
+      <div class="field-group full">
+        <label>Perguntas que a IA SEMPRE deve fazer</label>
+        <textarea id="f-reg-perguntas" rows="4" placeholder="Ex:&#10;- Trabalhou de carteira assinada?&#10;- Qual o tempo de contrato?&#10;- Qual a funcao na empresa?">${esc(d.perguntas_obrigatorias)}</textarea>
+        <span class="field-hint">A IA vai incluir essas perguntas em todas as conversas</span>
+      </div>
+      <div class="field-group full">
+        <label>Assuntos que precisam de tratamento especial</label>
+        <textarea id="f-reg-especiais" rows="4" placeholder="Ex: Quando o assunto for insalubridade, perguntar funcao e atividades do dia a dia ao inves de listar agentes insalubres.">${esc(d.assuntos_especiais)}</textarea>
+      </div>
+      <div class="field-group full">
+        <label>Valores que precisam estar atualizados</label>
+        <textarea id="f-reg-valores" rows="3" placeholder="Ex:&#10;Salario minimo: R$ 1.621,00&#10;Adicional insalubridade grau maximo: R$ 648,40">${esc(d.valores_atualizados)}</textarea>
+      </div>
+      <div class="field-group full">
+        <label>Coisas que a IA NAO deve repetir na conversa</label>
+        <textarea id="f-reg-nao-repetir" rows="3" placeholder="Ex: Nao ficar pedindo documentos mais de uma vez. Nao repetir a apresentacao.">${esc(d.nao_repetir)}</textarea>
+      </div>
+      <div class="field-group full">
+        <label>Outras observacoes</label>
+        <textarea id="f-reg-obs" rows="4" placeholder="Qualquer outra informacao que ajude a configurar a IA do jeito que voce quer.">${esc(d.observacoes)}</textarea>
+      </div>
+    </div>
+    ${navButtons()}
+  </div>`;
+}
+
+function collectRegras() {
+  formData.regras = {
+    perguntas_obrigatorias: val('f-reg-perguntas'),
+    assuntos_especiais: val('f-reg-especiais'),
+    valores_atualizados: val('f-reg-valores'),
+    nao_repetir: val('f-reg-nao-repetir'),
+    observacoes: val('f-reg-obs'),
+  };
+}
+
+// ── COLLECT CURRENT STEP ──
+function collectCurrentStep() {
+  switch (STEPS[currentStep].id) {
+    case 'escritorio': collectEscritorio(); break;
+    case 'responsavel': collectResponsavel(); break;
+    case 'advogados': collectAdvogados(); break;
+    case 'personalidade': collectPersonalidade(); break;
+    case 'comportamento': collectComportamento(); break;
+    case 'anuncios': collectAnuncios(); break;
+    case 'regras': collectRegras(); break;
+  }
+}
+
+// ── SAVE / SUBMIT ──
+let autoSaveTimer = null;
+function autoSave() {
+  clearTimeout(autoSaveTimer);
+  autoSaveTimer = setTimeout(() => salvarRascunho(true), 1500);
+}
+
+async function salvarRascunho(silent) {
+  if (saving) return;
+  saving = true;
+  collectCurrentStep();
+  try {
+    const resp = await fetch(`/api/onboarding/${token}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ form_data: formData }),
+    });
+    if (resp.ok) {
+      const ind = document.getElementById('save-ind');
+      if (ind) {
+        ind.textContent = 'Rascunho salvo';
+        ind.style.color = 'var(--green)';
+        ind.classList.add('show');
+        setTimeout(() => ind.classList.remove('show'), 2000);
+      }
+    }
+  } catch (e) {
+    if (!silent) alert('Erro ao salvar. Verifique sua conexao.');
+  }
+  saving = false;
+}
+
+function abrirModalEnvio() {
+  collectCurrentStep();
+  document.getElementById('modal-confirm').classList.add('active');
+}
+
+function fecharModal() {
+  document.getElementById('modal-confirm').classList.remove('active');
+}
+
+async function confirmarEnvio() {
+  fecharModal();
+  // Salvar antes de submeter
+  collectCurrentStep();
+  try {
+    await fetch(`/api/onboarding/${token}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ form_data: formData }),
+    });
+    const resp = await fetch(`/api/onboarding/${token}/submit`, { method: 'POST' });
+    if (resp.ok) {
+      document.getElementById('modal-success').classList.add('active');
+      // Esconder form
+      document.getElementById('stepper').style.display = 'none';
+      document.getElementById('main-container').innerHTML = '';
+    } else {
+      const err = await resp.json();
+      alert('Erro ao enviar: ' + (err.detail || 'Tente novamente'));
+    }
+  } catch (e) {
+    alert('Erro de conexao. Verifique sua internet e tente novamente.');
+  }
+}
+
+// ── HELPERS ──
+function val(id) {
+  const el = document.getElementById(id);
+  return el ? el.value.trim() : '';
+}
+
+function esc(v) {
+  if (!v) return '';
+  return String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function showError(title, msg) {
+  document.getElementById('stepper').style.display = 'none';
+  document.getElementById('main-container').innerHTML = `
+    <div class="error-screen">
+      <div style="font-size:48px;margin-bottom:16px;">&#128683;</div>
+      <div style="font-size:20px;font-weight:700;margin-bottom:12px;">${title}</div>
+      <div style="font-size:14px;color:var(--text-secondary);line-height:1.6;">${msg}</div>
+    </div>`;
+}
+
+function showSubmitted() {
+  document.getElementById('stepper').style.display = 'none';
+  document.getElementById('main-container').innerHTML = `
+    <div class="submitted-screen">
+      <div class="submitted-icon">&#9989;</div>
+      <div class="submitted-title">Formulario ja enviado</div>
+      <div class="submitted-text">
+        Suas informacoes ja foram recebidas e estao sendo processadas pela nossa equipe.<br>
+        Nao e possivel editar apos o envio. Se precisar alterar algo, entre em contato com a equipe Da1Click.
+      </div>
+    </div>`;
+}
+</script>
+</body>
+</html>

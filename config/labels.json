@@ -1,0 +1,16 @@
+[
+  { "title": "google",                "description": "Lead captado via Google Ads" },
+  { "title": "aguardando-atendimento","description": "Lead aguardando primeiro atendimento" },
+  { "title": "andamento-de-processo", "description": "Processo em andamento com o escritorio" },
+  { "title": "aguardando-documento",  "description": "Cliente com documentacao pendente" },
+  { "title": "atencao-com-cliente",   "description": "Cliente requer atencao especial da equipe" },
+  { "title": "audiencia-agendada",    "description": "Audiencia ja agendada" },
+  { "title": "desqualificado",        "description": "Lead desqualificado apos triagem" },
+  { "title": "financeiro",            "description": "Assunto financeiro pendente" },
+  { "title": "necessita_atencao",     "description": "Lead Precisa de Atenção" },
+  { "title": "remarketing",           "description": "Remarketing" },
+  { "title": "inatividade",           "description": "Cliente sem resposta ha algum tempo" },
+  { "title": "inatividade-2",         "description": "Inatividade estagio 2" },
+  { "title": "inatividade-3",         "description": "Inatividade estagio 3" },
+  { "title": "inatividade-4",         "description": "Inatividade estagio 4" }
+]

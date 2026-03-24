@@ -1,0 +1,93 @@
+services:
+  app:
+    image: da1click/agente-de-atendimento:latest
+    container_name: agente-de-atendimento
+    restart: always
+    expose:
+      - "8000"
+    env_file:
+      - .env
+    volumes:
+      - claude_auth:/home/claude/.claude
+      - /root/agente-de-atendimento:/repo
+    networks:
+      - web
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - web
+
+  dozzle:
+    image: amir20/dozzle:latest
+    container_name: dozzle
+    restart: always
+    expose:
+      - "8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - web
+
+  # ============================================
+  # MONITORAMENTO (Loki + Promtail + VibeLog)
+  # ============================================
+  loki:
+    image: grafana/loki:3.0.0
+    container_name: loki
+    restart: unless-stopped
+    expose:
+      - "3100"
+    volumes:
+      - loki-data:/loki
+      - ./monitoring/loki-config.yml:/etc/loki/local-config.yaml
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - web
+
+  promtail:
+    image: grafana/promtail:3.0.0
+    container_name: promtail
+    restart: unless-stopped
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./monitoring/promtail-config.yml:/etc/promtail/config.yml
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+    networks:
+      - web
+
+  vibelog:
+    image: ghcr.io/muriloorama/vibelog:latest
+    container_name: vibelog
+    restart: unless-stopped
+    expose:
+      - "3000"
+    env_file:
+      - ./envs/vibelog.env
+    depends_on:
+      - loki
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+    networks:
+      - web
+
+volumes:
+  caddy_data:
+  caddy_config:
+  claude_auth:
+  loki-data:
+
+networks:
+  web:

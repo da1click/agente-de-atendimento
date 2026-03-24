@@ -1,0 +1,44 @@
+[
+  {
+    "id": 1,
+    "nome": "Audiência de Conciliação Presencial",
+    "descricao": "Audiência de Conciliação Presencial",
+    "ativo": true,
+    "mensagens": []
+  },
+  {
+    "id": 2,
+    "nome": "Audiência de Conciliação Tele",
+    "descricao": "Audiência de Conciliação Tele",
+    "ativo": true,
+    "mensagens": []
+  },
+  {
+    "id": 3,
+    "nome": "Audiência de Instrução Presencial",
+    "descricao": "Audiência de Instrução Presencial",
+    "ativo": true,
+    "mensagens": []
+  },
+  {
+    "id": 4,
+    "nome": "Audiência de Instrução Tele",
+    "descricao": "Audiência de Instrução Tele",
+    "ativo": true,
+    "mensagens": []
+  },
+  {
+    "id": 5,
+    "nome": "Pericia Medica",
+    "descricao": "Pericia Tecnica",
+    "ativo": true,
+    "mensagens": []
+  },
+  {
+    "id": 6,
+    "nome": "Pericia Tecnica",
+    "descricao": "Pericia Tecnica",
+    "ativo": true,
+    "mensagens": []
+  }
+]

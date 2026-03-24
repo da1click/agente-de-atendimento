@@ -1,0 +1,46 @@
+# ============================================
+# MONITORAMENTO (Loki + Promtail + VibeLog)
+# Adicionar estes servicos ao docker-compose.yml existente
+# ============================================
+
+# Adicionar na secao "services:":
+
+  loki:
+    image: grafana/loki:3.0.0
+    container_name: loki
+    restart: unless-stopped
+    expose:
+      - "3100"
+    volumes:
+      - loki-data:/loki
+      - ./monitoring/loki-config.yml:/etc/loki/local-config.yaml
+    command: -config.file=/etc/loki/local-config.yaml
+
+  promtail:
+    image: grafana/promtail:3.0.0
+    container_name: promtail
+    restart: unless-stopped
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./monitoring/promtail-config.yml:/etc/promtail/config.yml
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+
+  vibelog:
+    image: ghcr.io/muriloorama/vibelog:latest
+    container_name: vibelog
+    restart: unless-stopped
+    expose:
+      - "3000"
+    env_file:
+      - ./envs/vibelog.env
+    depends_on:
+      - loki
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+
+# Adicionar na secao "volumes:":
+
+  loki-data:

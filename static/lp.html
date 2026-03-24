@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AdvBrasil.AI — IA de Atendimento para Escritórios de Advocacia</title>
+  <meta name="description" content="Sistema inteligente que atende, qualifica e agenda clientes para seu escritório de advocacia. Feche até 60% mais contratos com IA." />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=DM+Serif+Display&display=swap" rel="stylesheet" />
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: { 50:'#EEF2FF', 100:'#DAE2FD', 200:'#B3C4FB', 300:'#7A9AF7', 400:'#4A72F0', 500:'#3563E9', 600:'#1E4FD6', 700:'#1A3FA8', 800:'#15327A', 900:'#0E2254' },
+            gold:  { 50:'#FDF8EB', 100:'#F9ECC6', 200:'#F2D88E', 300:'#E8BF4D', 400:'#D4A520', 500:'#B8960C', 600:'#8F7309', 700:'#665207', 800:'#3D3104', 900:'#1F1902' },
+            dark:  { 800:'#1A1A2E', 900:'#0F0F1A' },
+          },
+          fontFamily: {
+            display: ['"DM Serif Display"', 'Georgia', 'serif'],
+            body:    ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
+          },
+        }
+      }
+    }
+  </script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { font-family: 'Plus Jakarta Sans', system-ui, sans-serif; color: #1A1A2E; overflow-x: hidden; }
+
+    /* Grain overlay */
+    .grain::before {
+      content: ''; position: absolute; inset: 0; opacity: 0.03; pointer-events: none;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+
+    /* Layered shadows */
+    .shadow-elevated { box-shadow: 0 1px 2px rgba(53,99,233,0.04), 0 4px 12px rgba(53,99,233,0.06), 0 16px 40px rgba(53,99,233,0.08); }
+    .shadow-card     { box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 6px 16px rgba(53,99,233,0.06); }
+    .shadow-gold     { box-shadow: 0 4px 20px rgba(184,150,12,0.15), 0 8px 32px rgba(184,150,12,0.1); }
+
+    /* Smooth transitions */
+    .btn-hover { transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1), box-shadow 0.2s ease; }
+    .btn-hover:hover { transform: translateY(-2px); }
+    .btn-hover:active { transform: translateY(0); }
+
+    /* Heading tracking */
+    .heading-tight { letter-spacing: -0.03em; }
+    .body-relaxed  { line-height: 1.7; }
+
+    /* Gradient mesh hero */
+    .hero-gradient {
+      background:
+        radial-gradient(ellipse 80% 60% at 20% 80%, rgba(53,99,233,0.12) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 50% at 80% 20%, rgba(184,150,12,0.08) 0%, transparent 50%),
+        radial-gradient(ellipse 90% 70% at 50% 50%, rgba(53,99,233,0.04) 0%, transparent 70%),
+        linear-gradient(180deg, #FAFBFF 0%, #FFFFFF 100%);
+    }
+
+    /* Animated float */
+    @keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+    .animate-float { animation: float 4s ease-in-out infinite; }
+
+    /* Scroll reveal */
+    .reveal { opacity: 0; transform: translateY(24px); transition: opacity 0.6s ease, transform 0.6s cubic-bezier(0.25,0.46,0.45,0.94); }
+    .reveal.visible { opacity: 1; transform: translateY(0); }
+
+    /* Focus visible */
+    a:focus-visible, button:focus-visible { outline: 2px solid #3563E9; outline-offset: 2px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════
+     NAVBAR
+═══════════════════════════════════════════ -->
+<nav class="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-lg border-b border-brand-100/50">
+  <div class="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+    <a href="#" class="flex items-center gap-2">
+      <img src="/static/logo-advbrasil.png" alt="AdvBrasil.AI" class="h-10" onerror="this.onerror=null;this.src='logo-advbrasil.png'" />
+    </a>
+    <div class="hidden md:flex items-center gap-8 text-sm font-medium text-dark-800/70">
+      <a href="#problemas" class="hover:text-brand-500 transition-colors">Problemas</a>
+      <a href="#solucao" class="hover:text-brand-500 transition-colors">Solução</a>
+      <a href="#demo" class="hover:text-brand-500 transition-colors">Teste ao Vivo</a>
+      <a href="#beneficios" class="hover:text-brand-500 transition-colors">Benefícios</a>
+      <a href="#funcionalidades" class="hover:text-brand-500 transition-colors">Funcionalidades</a>
+    </div>
+    <a href="https://wa.me/5562981669999?text=Ol%C3%A1,%20vim%20do%20site%20e%20quero%20saber%20mais" target="_blank" rel="noopener"
+       class="bg-brand-500 text-white text-sm font-semibold px-5 py-2.5 rounded-xl btn-hover shadow-elevated hover:shadow-lg hover:bg-brand-600 focus-visible:ring-2">
+      Falar com Especialista
+    </a>
+  </div>
+</nav>
+
+<!-- ═══════════════════════════════════════════
+     HERO
+═══════════════════════════════════════════ -->
+<section class="hero-gradient grain relative pt-28 pb-20 md:pt-36 md:pb-28">
+  <div class="max-w-6xl mx-auto px-6">
+    <div class="max-w-3xl mx-auto text-center">
+      <div class="inline-flex items-center gap-2 bg-gold-50 border border-gold-200 text-gold-600 text-xs font-semibold px-4 py-1.5 rounded-full mb-6 tracking-wide uppercase">
+        <span class="w-1.5 h-1.5 bg-gold-400 rounded-full animate-pulse"></span>
+        Inteligência Artificial para Advocacia
+      </div>
+      <h1 class="font-display text-4xl md:text-5xl lg:text-6xl heading-tight text-dark-800 mb-6 leading-[1.1]">
+        Seu escritório está <span class="text-brand-500">deixando contratos</span> na mesa
+      </h1>
+      <p class="text-lg md:text-xl text-dark-800/60 body-relaxed max-w-2xl mx-auto mb-10">
+        Os maiores escritórios do Brasil já usam IA para atender, qualificar e agendar clientes automaticamente — fechando até <strong class="text-dark-800 font-semibold">60% mais contratos</strong> todo mês.
+      </p>
+      <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
+        <a href="https://wa.me/5562981669999?text=Ol%C3%A1,%20vim%20do%20site%20e%20quero%20saber%20mais" target="_blank" rel="noopener"
+           class="bg-brand-500 text-white font-semibold px-8 py-4 rounded-2xl text-base btn-hover shadow-elevated hover:shadow-lg hover:bg-brand-600 inline-flex items-center gap-2">
+          <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.555 4.126 1.528 5.861L.06 23.487a.5.5 0 00.613.613l5.626-1.468A11.937 11.937 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.82c-1.97 0-3.867-.548-5.508-1.56l-.395-.236-3.34.871.892-3.258-.259-.41A9.78 9.78 0 012.18 12C2.18 6.58 6.58 2.18 12 2.18S21.82 6.58 21.82 12 17.42 21.82 12 21.82z"/></svg>
+          Conheça a Solução
+        </a>
+        <a href="#solucao" class="text-brand-500 font-semibold text-base hover:text-brand-700 transition-colors inline-flex items-center gap-1.5">
+          Saiba mais
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+        </a>
+      </div>
+    </div>
+  </div>
+  <!-- Decorative orbs -->
+  <div class="absolute top-20 left-10 w-72 h-72 bg-brand-400/5 rounded-full blur-3xl pointer-events-none"></div>
+  <div class="absolute bottom-10 right-10 w-96 h-96 bg-gold-400/5 rounded-full blur-3xl pointer-events-none"></div>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     PROBLEMAS
+═══════════════════════════════════════════ -->
+<section id="problemas" class="py-20 md:py-28 bg-white">
+  <div class="max-w-6xl mx-auto px-6">
+    <div class="text-center max-w-2xl mx-auto mb-16 reveal">
+      <span class="text-brand-500 text-sm font-semibold uppercase tracking-wider">O problema</span>
+      <h2 class="font-display text-3xl md:text-4xl heading-tight text-dark-800 mt-3 mb-4">
+        Seu escritório enfrenta estes problemas?
+      </h2>
+      <p class="text-dark-800/60 body-relaxed">A maioria dos escritórios perde clientes e dinheiro por não ter uma estrutura comercial eficiente.</p>
+    </div>
+    <div class="grid md:grid-cols-3 gap-6">
+      <!-- Card 1 -->
+      <div class="reveal group bg-white border border-brand-100/60 rounded-2xl p-8 shadow-card hover:shadow-elevated transition-shadow duration-300">
+        <div class="w-12 h-12 bg-red-50 rounded-xl flex items-center justify-center mb-5 group-hover:scale-110 transition-transform duration-300">
+          <svg class="w-6 h-6 text-red-500" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg>
+        </div>
+        <h3 class="font-bold text-lg text-dark-800 mb-2">Perde clientes por falta de estrutura</h3>
+        <p class="text-dark-800/55 text-sm body-relaxed">Leads chegam pelo WhatsApp e ficam sem resposta. Sem triagem, sem follow-up — o cliente vai para o concorrente.</p>
+      </div>
+      <!-- Card 2 -->
+      <div class="reveal group bg-white border border-brand-100/60 rounded-2xl p-8 shadow-card hover:shadow-elevated transition-shadow duration-300" style="transition-delay:0.1s">
+        <div class="w-12 h-12 bg-amber-50 rounded-xl flex items-center justify-center mb-5 group-hover:scale-110 transition-transform duration-300">
+          <svg class="w-6 h-6 text-amber-500" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        </div>
+        <h3 class="font-bold text-lg text-dark-800 mb-2">Equipe presa em tarefas repetitivas</h3>
+        <p class="text-dark-800/55 text-sm body-relaxed">Sua equipe gasta horas respondendo as mesmas perguntas, qualificando leads manualmente e agendando consultas.</p>
+      </div>
+      <!-- Card 3 -->
+      <div class="reveal group bg-white border border-brand-100/60 rounded-2xl p-8 shadow-card hover:shadow-elevated transition-shadow duration-300" style="transition-delay:0.2s">
+        <div class="w-12 h-12 bg-orange-50 rounded-xl flex items-center justify-center mb-5 group-hover:scale-110 transition-transform duration-300">
+          <svg class="w-6 h-6 text-orange-500" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        </div>
+        <h3 class="font-bold text-lg text-dark-800 mb-2">Gasta com tráfego sem retorno</h3>
+        <p class="text-dark-800/55 text-sm body-relaxed">Investe em anúncios, mas os leads não convertem porque não há estrutura para atendê-los com rapidez e qualidade.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     SOLUÇÃO
+═══════════════════════════════════════════ -->
+<section id="solucao" class="py-20 md:py-28 grain relative" style="background: linear-gradient(180deg, #F7F8FC 0%, #FFFFFF 100%);">
+  <div class="max-w-6xl mx-auto px-6">
+    <div class="grid md:grid-cols-2 gap-16 items-center">
+      <div class="reveal">
+        <span class="text-brand-500 text-sm font-semibold uppercase tracking-wider">A solução</span>
+        <h2 class="font-display text-3xl md:text-4xl heading-tight text-dark-800 mt-3 mb-6">
+          Uma IA que atende, qualifica e agenda para você
+        </h2>
+        <p class="text-dark-800/60 body-relaxed mb-8">
+          O AdvBrasil.AI conecta ao WhatsApp do seu escritório e cuida de todo o atendimento inicial: identifica o cliente, faz a triagem jurídica, tira dúvidas e agenda a consulta — tudo automaticamente, 24 horas por dia.
+        </p>
+        <div class="space-y-4">
+          <div class="flex items-start gap-3">
+            <div class="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+              <svg class="w-3.5 h-3.5 text-green-600" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+            </div>
+            <p class="text-dark-800/70 text-sm"><strong class="text-dark-800">Atendimento humanizado</strong> — responde como um profissional real, com linguagem natural</p>
+          </div>
+          <div class="flex items-start gap-3">
+            <div class="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+              <svg class="w-3.5 h-3.5 text-green-600" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+            </div>
+            <p class="text-dark-800/70 text-sm"><strong class="text-dark-800">Triagem inteligente</strong> — qualifica o lead e separa viáveis de inviáveis automaticamente</p>
+          </div>
+          <div class="flex items-start gap-3">
+            <div class="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+              <svg class="w-3.5 h-3.5 text-green-600" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+            </div>
+            <p class="text-dark-800/70 text-sm"><strong class="text-dark-800">Disponível 24/7</strong> — nunca perde um lead por falta de atendimento, mesmo fora do horário</p>
+          </div>
+          <div class="flex items-start gap-3">
+            <div class="w-6 h-6 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+              <svg class="w-3.5 h-3.5 text-green-600" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+            </div>
+            <p class="text-dark-800/70 text-sm"><strong class="text-dark-800">Todas as áreas do direito</strong> — trabalhista, cível, consumidor, INSS, aéreo e mais</p>
+          </div>
+        </div>
+      </div>
+      <!-- Mockup visual -->
+      <div class="reveal flex justify-center" style="transition-delay:0.15s">
+        <div class="relative">
+          <div class="w-80 bg-white rounded-3xl shadow-elevated border border-brand-100/40 p-6 animate-float">
+            <div class="flex items-center gap-3 mb-5 pb-4 border-b border-gray-100">
+              <div class="w-10 h-10 rounded-full bg-brand-500 flex items-center justify-center">
+                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+              </div>
+              <div>
+                <div class="text-sm font-bold text-dark-800">Camila — IA</div>
+                <div class="text-xs text-green-500 font-medium">Online agora</div>
+              </div>
+            </div>
+            <div class="space-y-3">
+              <div class="bg-gray-50 rounded-2xl rounded-tl-md px-4 py-2.5 text-sm text-dark-800/70 max-w-[85%]">
+                Olá! Sofreu um acidente de trabalho e quer saber seus direitos?
+              </div>
+              <div class="bg-brand-500 rounded-2xl rounded-tr-md px-4 py-2.5 text-sm text-white max-w-[85%] ml-auto">
+                Sim, faz 3 meses que sofri o acidente
+              </div>
+              <div class="bg-gray-50 rounded-2xl rounded-tl-md px-4 py-2.5 text-sm text-dark-800/70 max-w-[85%]">
+                Entendi! Você tem laudo médico do acidente? E está recebendo algum benefício do INSS?
+              </div>
+              <div class="bg-brand-500 rounded-2xl rounded-tr-md px-4 py-2.5 text-sm text-white max-w-[70%] ml-auto">
+                Tenho sim! Estou no auxílio-doença
+              </div>
+              <div class="bg-gray-50 rounded-2xl rounded-tl-md px-4 py-2.5 text-sm text-dark-800/70 max-w-[85%]">
+                Ótimo! Seu caso é viável. Vou agendar uma consulta gratuita para você. Qual o melhor horário?
+              </div>
+            </div>
+          </div>
+          <div class="absolute -bottom-4 -right-4 w-32 h-32 bg-gold-400/10 rounded-full blur-2xl pointer-events-none"></div>
+          <div class="absolute -top-4 -left-4 w-24 h-24 bg-brand-400/10 rounded-full blur-2xl pointer-events-none"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     DEMO AO VIVO
+═══════════════════════════════════════════ -->
+<section id="demo" class="py-20 md:py-28 bg-white">
+  <div class="max-w-6xl mx-auto px-6">
+    <div class="text-center max-w-2xl mx-auto mb-12 reveal">
+      <span class="text-green-500 text-sm font-semibold uppercase tracking-wider">Teste agora</span>
+      <h2 class="font-display text-3xl md:text-4xl heading-tight text-dark-800 mt-3 mb-4">
+        Converse com nossa IA ao vivo
+      </h2>
+      <p class="text-dark-800/60 body-relaxed">Experimente como seria o atendimento no seu escritório. Digite uma mensagem e veja a Camila em ação.</p>
+    </div>
+
+    <!-- Phone mockup -->
+    <div class="flex justify-center reveal">
+      <div class="w-[360px] relative">
+        <!-- Phone frame -->
+        <div class="bg-dark-800 rounded-[3rem] p-3 shadow-elevated" style="box-shadow: 0 8px 40px rgba(26,26,46,0.25), 0 2px 8px rgba(26,26,46,0.15);">
+          <!-- Notch -->
+          <div class="absolute top-0 left-1/2 -translate-x-1/2 w-36 h-7 bg-dark-800 rounded-b-2xl z-10"></div>
+          <!-- Screen -->
+          <div class="bg-white rounded-[2.4rem] overflow-hidden relative" style="height: 580px;">
+            <!-- Header -->
+            <div class="bg-brand-500 px-5 pt-10 pb-3 flex items-center gap-3">
+              <div class="w-9 h-9 bg-white/20 rounded-full flex items-center justify-center">
+                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+              </div>
+              <div>
+                <div class="text-white font-bold text-sm">Camila — AdvBrasil Advogados</div>
+                <div class="text-white/70 text-xs flex items-center gap-1">
+                  <span class="w-1.5 h-1.5 bg-green-300 rounded-full"></span>
+                  Online agora
+                </div>
+              </div>
+            </div>
+            <!-- Chat messages -->
+            <div id="demo-messages" class="px-4 py-3 space-y-2.5 overflow-y-auto" style="height: 430px; scroll-behavior: smooth;">
+              <div class="flex justify-start">
+                <div class="bg-gray-100 rounded-2xl rounded-tl-md px-3.5 py-2 text-sm text-dark-800/80 max-w-[80%]">
+                  Olá! 👋 Sou a Camila, responsável pelo atendimento aqui na AdvBrasil Advogados. Me conta, como posso te ajudar?
+                </div>
+              </div>
+            </div>
+            <!-- Input -->
+            <div class="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-100 px-3 py-2.5 flex items-center gap-2" style="border-radius: 0 0 2.4rem 2.4rem;">
+              <input type="text" id="demo-input" placeholder="Digite sua mensagem..."
+                class="flex-1 text-sm px-3.5 py-2.5 bg-gray-50 rounded-full border border-gray-200 outline-none focus:border-brand-400 transition-colors"
+                onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();enviarDemo()}" />
+              <button onclick="enviarDemo()" id="demo-send-btn"
+                class="w-9 h-9 bg-brand-500 hover:bg-brand-600 rounded-full flex items-center justify-center flex-shrink-0 btn-hover transition-colors">
+                <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M12 5l7 7-7 7"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+        <!-- Decorative glow -->
+        <div class="absolute -bottom-6 left-1/2 -translate-x-1/2 w-48 h-12 bg-brand-400/15 rounded-full blur-xl pointer-events-none"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+const demoMessages = [
+  { role: 'assistant', content: 'Olá! 👋 Sou a Camila, responsável pelo atendimento aqui na AdvBrasil Advogados. Me conta, como posso te ajudar?' }
+];
+let demoLoading = false;
+
+function addDemoMessage(role, content) {
+  const container = document.getElementById('demo-messages');
+  const wrapper = document.createElement('div');
+  wrapper.className = role === 'user' ? 'flex justify-end' : 'flex justify-start';
+  const bubble = document.createElement('div');
+  if (role === 'user') {
+    bubble.className = 'bg-brand-500 rounded-2xl rounded-tr-md px-3.5 py-2 text-sm text-white max-w-[80%]';
+  } else {
+    bubble.className = 'bg-gray-100 rounded-2xl rounded-tl-md px-3.5 py-2 text-sm text-dark-800/80 max-w-[80%]';
+  }
+  bubble.textContent = content;
+  wrapper.appendChild(bubble);
+  container.appendChild(wrapper);
+  container.scrollTop = container.scrollHeight;
+}
+
+function addTypingIndicator() {
+  const container = document.getElementById('demo-messages');
+  const wrapper = document.createElement('div');
+  wrapper.className = 'flex justify-start';
+  wrapper.id = 'typing-indicator';
+  wrapper.innerHTML = `<div class="bg-gray-100 rounded-2xl rounded-tl-md px-4 py-3 max-w-[80%] flex items-center gap-1">
+    <span class="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style="animation-delay:0s"></span>
+    <span class="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style="animation-delay:0.15s"></span>
+    <span class="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style="animation-delay:0.3s"></span>
+  </div>`;
+  container.appendChild(wrapper);
+  container.scrollTop = container.scrollHeight;
+}
+
+function removeTypingIndicator() {
+  const el = document.getElementById('typing-indicator');
+  if (el) el.remove();
+}
+
+async function enviarDemo() {
+  if (demoLoading) return;
+  const input = document.getElementById('demo-input');
+  const text = input.value.trim();
+  if (!text) return;
+
+  input.value = '';
+  demoMessages.push({ role: 'user', content: text });
+  addDemoMessage('user', text);
+
+  demoLoading = true;
+  document.getElementById('demo-send-btn').style.opacity = '0.5';
+  addTypingIndicator();
+
+  try {
+    const apiMessages = demoMessages.map(m => ({ role: m.role, content: m.content }));
+    const res = await fetch('/api/demo-chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: apiMessages })
+    });
+    const data = await res.json();
+    removeTypingIndicator();
+    if (data.reply) {
+      demoMessages.push({ role: 'assistant', content: data.reply });
+      addDemoMessage('assistant', data.reply);
+    }
+  } catch (e) {
+    removeTypingIndicator();
+    addDemoMessage('assistant', 'Ops, ocorreu um erro. Tente novamente em instantes.');
+  }
+  demoLoading = false;
+  document.getElementById('demo-send-btn').style.opacity = '1';
+  input.focus();
+}
+</script>
+
+<!-- ═══════════════════════════════════════════
+     ÁREAS DO DIREITO
+═══════════════════════════════════════════ -->
+<section class="py-16 bg-white">
+  <div class="max-w-6xl mx-auto px-6">
+    <div class="reveal bg-gradient-to-r from-brand-500 to-brand-700 rounded-3xl p-10 md:p-14 text-center text-white relative overflow-hidden grain">
+      <h2 class="font-display text-2xl md:text-3xl heading-tight mb-4">Aplicável para todas as áreas do direito</h2>
+      <p class="text-white/80 max-w-2xl mx-auto mb-8 body-relaxed">
+        Escritório full service ou especializado — nossa IA se adapta ao seu nicho e ao seu fluxo de atendimento.
+      </p>
+      <div class="flex flex-wrap justify-center gap-3">
+        <span class="bg-white/15 backdrop-blur border border-white/20 text-white text-sm font-medium px-4 py-2 rounded-full">Trabalhista</span>
+        <span class="bg-white/15 backdrop-blur border border-white/20 text-white text-sm font-medium px-4 py-2 rounded-full">Previdenciário</span>
+        <span class="bg-white/15 backdrop-blur border border-white/20 text-white text-sm font-medium px-4 py-2 rounded-full">Cível</span>
+        <span class="bg-white/15 backdrop-blur border border-white/20 text-white text-sm font-medium px-4 py-2 rounded-full">Consumidor</span>
+        <span class="bg-white/15 backdrop-blur border border-white/20 text-white text-sm font-medium px-4 py-2 rounded-full">Aéreo</span>
+        <span class="bg-white/15 backdrop-blur border border-white/20 text-white text-sm font-medium px-4 py-2 rounded-full">Médico</span>
+        <span class="bg-white/15 backdrop-blur border border-white/20 text-white text-sm font-medium px-4 py-2 rounded-full">Agrário</span>
+        <span class="bg-white/15 backdrop-blur border border-white/20 text-white text-sm font-medium px-4 py-2 rounded-full">Tributário</span>
+        <span class="bg-white/15 backdrop-blur border border-white/20 text-white text-sm font-medium px-4 py-2 rounded-full">Familiar</span>
+      </div>
+      <div class="absolute -bottom-20 -right-20 w-60 h-60 bg-white/5 rounded-full blur-2xl"></div>
+      <div class="absolute -top-10 -left-10 w-40 h-40 bg-gold-400/10 rounded-full blur-2xl"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     BENEFÍCIOS
+═══════════════════════════════════════════ -->
+<section id="beneficios" class="py-20 md:py-28" style="background: linear-gradient(180deg, #FFFFFF 0%, #F7F8FC 100%);">
+  <div class="max-w-6xl mx-auto px-6">
+    <div class="text-center max-w-2xl mx-auto mb-16 reveal">
+      <span class="text-gold-500 text-sm font-semibold uppercase tracking-wider">Resultados reais</span>
+      <h2 class="font-display text-3xl md:text-4xl heading-tight text-dark-800 mt-3 mb-4">
+        O que nossa solução entrega
+      </h2>
+    </div>
+    <div class="grid md:grid-cols-3 gap-8">
+      <!-- Eficiência -->
+      <div class="reveal text-center">
+        <div class="w-16 h-16 bg-brand-50 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-card">
+          <svg class="w-8 h-8 text-brand-500" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z"/></svg>
+        </div>
+        <h3 class="font-bold text-xl text-dark-800 mb-3">Eficiência</h3>
+        <ul class="space-y-2.5 text-sm text-dark-800/60 body-relaxed text-left max-w-xs mx-auto">
+          <li class="flex items-start gap-2"><span class="text-brand-500 mt-1">&#10003;</span> Atendimento autônomo e humanizado</li>
+          <li class="flex items-start gap-2"><span class="text-brand-500 mt-1">&#10003;</span> Disponível 24 horas, 7 dias por semana</li>
+          <li class="flex items-start gap-2"><span class="text-brand-500 mt-1">&#10003;</span> Triagem e qualificação inteligente</li>
+          <li class="flex items-start gap-2"><span class="text-brand-500 mt-1">&#10003;</span> Remarketing e recuperação de leads</li>
+        </ul>
+      </div>
+      <!-- Redução de Custo -->
+      <div class="reveal text-center" style="transition-delay:0.1s">
+        <div class="w-16 h-16 bg-green-50 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-card">
+          <svg class="w-8 h-8 text-green-500" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941"/></svg>
+        </div>
+        <h3 class="font-bold text-xl text-dark-800 mb-3">Redução de Custo</h3>
+        <ul class="space-y-2.5 text-sm text-dark-800/60 body-relaxed text-left max-w-xs mx-auto">
+          <li class="flex items-start gap-2"><span class="text-green-500 mt-1">&#10003;</span> Feche mais contratos com menos equipe</li>
+          <li class="flex items-start gap-2"><span class="text-green-500 mt-1">&#10003;</span> Sem margem para erros humanos</li>
+          <li class="flex items-start gap-2"><span class="text-green-500 mt-1">&#10003;</span> Redução do custo por aquisição</li>
+          <li class="flex items-start gap-2"><span class="text-green-500 mt-1">&#10003;</span> Sem custos trabalhistas adicionais</li>
+        </ul>
+      </div>
+      <!-- Lucro -->
+      <div class="reveal text-center" style="transition-delay:0.2s">
+        <div class="w-16 h-16 bg-gold-50 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-gold">
+          <svg class="w-8 h-8 text-gold-500" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        </div>
+        <h3 class="font-bold text-xl text-dark-800 mb-3">Mais Lucro</h3>
+        <ul class="space-y-2.5 text-sm text-dark-800/60 body-relaxed text-left max-w-xs mx-auto">
+          <li class="flex items-start gap-2"><span class="text-gold-500 mt-1">&#10003;</span> Aumento de 30% a 60% em novos contratos</li>
+          <li class="flex items-start gap-2"><span class="text-gold-500 mt-1">&#10003;</span> Mais contratos, menos esforço</li>
+          <li class="flex items-start gap-2"><span class="text-gold-500 mt-1">&#10003;</span> Ganho de 70% de tempo nas tarefas</li>
+          <li class="flex items-start gap-2"><span class="text-gold-500 mt-1">&#10003;</span> Aumento de produtividade e faturamento</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     FUNCIONALIDADES
+═══════════════════════════════════════════ -->
+<section id="funcionalidades" class="py-20 md:py-28 bg-white">
+  <div class="max-w-6xl mx-auto px-6">
+    <div class="text-center max-w-2xl mx-auto mb-16 reveal">
+      <span class="text-brand-500 text-sm font-semibold uppercase tracking-wider">Funcionalidades</span>
+      <h2 class="font-display text-3xl md:text-4xl heading-tight text-dark-800 mt-3 mb-4">
+        Gestão completa do seu escritório
+      </h2>
+      <p class="text-dark-800/60 body-relaxed">Informações centralizadas, decisões estratégicas e visão completa do que funciona.</p>
+    </div>
+    <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div class="reveal group bg-white border border-brand-100/50 rounded-2xl p-7 shadow-card hover:shadow-elevated transition-shadow duration-300">
+        <div class="w-11 h-11 bg-brand-50 rounded-xl flex items-center justify-center mb-4 group-hover:bg-brand-100 transition-colors duration-300">
+          <svg class="w-5.5 h-5.5 text-brand-500" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        </div>
+        <h3 class="font-bold text-dark-800 mb-1.5">CRM de Clientes</h3>
+        <p class="text-sm text-dark-800/55 body-relaxed">Gestão completa de leads com status, histórico e acompanhamento em tempo real.</p>
+      </div>
+      <div class="reveal group bg-white border border-brand-100/50 rounded-2xl p-7 shadow-card hover:shadow-elevated transition-shadow duration-300" style="transition-delay:0.07s">
+        <div class="w-11 h-11 bg-green-50 rounded-xl flex items-center justify-center mb-4 group-hover:bg-green-100 transition-colors duration-300">
+          <svg class="w-5.5 h-5.5 text-green-500" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+        </div>
+        <h3 class="font-bold text-dark-800 mb-1.5">Recuperação de Leads</h3>
+        <p class="text-sm text-dark-800/55 body-relaxed">Remarketing automático para leads que não responderam ou abandonaram a conversa.</p>
+      </div>
+      <div class="reveal group bg-white border border-brand-100/50 rounded-2xl p-7 shadow-card hover:shadow-elevated transition-shadow duration-300" style="transition-delay:0.14s">
+        <div class="w-11 h-11 bg-amber-50 rounded-xl flex items-center justify-center mb-4 group-hover:bg-amber-100 transition-colors duration-300">
+          <svg class="w-5.5 h-5.5 text-amber-500" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        </div>
+        <h3 class="font-bold text-dark-800 mb-1.5">Agendamentos</h3>
+        <p class="text-sm text-dark-800/55 body-relaxed">Agendamento automático de consultas com avisos e acompanhamento integrado.</p>
+      </div>
+      <div class="reveal group bg-white border border-brand-100/50 rounded-2xl p-7 shadow-card hover:shadow-elevated transition-shadow duration-300" style="transition-delay:0.21s">
+        <div class="w-11 h-11 bg-purple-50 rounded-xl flex items-center justify-center mb-4 group-hover:bg-purple-100 transition-colors duration-300">
+          <svg class="w-5.5 h-5.5 text-purple-500" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        </div>
+        <h3 class="font-bold text-dark-800 mb-1.5">Relatórios</h3>
+        <p class="text-sm text-dark-800/55 body-relaxed">Dashboards com métricas de leads por rede social, conversões e desempenho.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     CTA FINAL
+═══════════════════════════════════════════ -->
+<section class="py-20 md:py-28 grain relative" style="background: linear-gradient(135deg, #0E2254 0%, #1A3FA8 50%, #3563E9 100%);">
+  <div class="max-w-3xl mx-auto px-6 text-center reveal">
+    <h2 class="font-display text-3xl md:text-4xl lg:text-5xl heading-tight text-white mb-6 leading-[1.15]">
+      Pare de perder contratos.<br/>Comece <span class="text-gold-300">hoje</span>.
+    </h2>
+    <p class="text-white/70 body-relaxed text-lg max-w-xl mx-auto mb-10">
+      Converse com um especialista e descubra como a IA pode transformar o atendimento do seu escritório em minutos.
+    </p>
+    <a href="https://wa.me/5562981669999?text=Ol%C3%A1,%20vim%20do%20site%20e%20quero%20saber%20mais" target="_blank" rel="noopener"
+       class="inline-flex items-center gap-2.5 bg-gold-400 hover:bg-gold-500 text-dark-900 font-bold px-10 py-4.5 rounded-2xl text-base btn-hover shadow-gold transition-colors duration-200">
+      <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/><path d="M12 0C5.373 0 0 5.373 0 12c0 2.127.555 4.126 1.528 5.861L.06 23.487a.5.5 0 00.613.613l5.626-1.468A11.937 11.937 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.82c-1.97 0-3.867-.548-5.508-1.56l-.395-.236-3.34.871.892-3.258-.259-.41A9.78 9.78 0 012.18 12C2.18 6.58 6.58 2.18 12 2.18S21.82 6.58 21.82 12 17.42 21.82 12 21.82z"/></svg>
+      Falar com Especialista
+    </a>
+  </div>
+  <div class="absolute top-10 left-20 w-64 h-64 bg-gold-400/5 rounded-full blur-3xl pointer-events-none"></div>
+  <div class="absolute bottom-10 right-20 w-80 h-80 bg-brand-300/5 rounded-full blur-3xl pointer-events-none"></div>
+</section>
+
+<!-- ═══════════════════════════════════════════
+     FOOTER
+═══════════════════════════════════════════ -->
+<footer class="bg-dark-900 py-10">
+  <div class="max-w-6xl mx-auto px-6 text-center">
+    <img src="/static/logo-advbrasil.png" alt="AdvBrasil.AI" class="h-8 mx-auto mb-4 brightness-200" onerror="this.onerror=null;this.src='logo-advbrasil.png'" />
+    <p class="text-white/40 text-sm">&copy; 2025 AdvBrasil.AI — Todos os direitos reservados.</p>
+  </div>
+</footer>
+
+<!-- ═══════════════════════════════════════════
+     SCROLL REVEAL
+═══════════════════════════════════════════ -->
+<script>
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+        observer.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+
+  document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+</script>
+
+</body>
+</html>
