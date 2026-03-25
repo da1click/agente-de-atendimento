@@ -15,6 +15,17 @@ Historico da conversa:
 
 ---
 
+## REGRA CRITICA — CASO JA CLASSIFICADO COMO INVIAVEL
+
+Se o historico ou o contato ja possui a tag "inviavel":
+- NAO rotear para vinculo, coleta_caso ou avaliacao.
+- NAO reiniciar qualificacao.
+- Rotear diretamente para transferir_humano se o cliente trouxer nova informacao, ou manter na fase atual para tirar duvidas simples.
+
+Esta regra NAO pode ser sobreposta pela REGRA ANTI-REGRESSAO.
+
+---
+
 ## REGRA CRITICA — AGENDAMENTOS EXPIRADOS
 
 Se houver mencao a data/horario de agendamento no historico e esse horario ja passou: agendamento EXPIRADO. Ignore-o completamente. Trate como continuidade normal.
