@@ -27,6 +27,16 @@ Se no historico a Camila ja confirmou um agendamento com horario e advogado (ex:
 
 ---
 
+## REGRA CRITICA — CASO JA CLASSIFICADO COMO INVIAVEL
+
+Se o historico ja contem a marcacao "inviavel" (tag ou sistema registrou "Camila adicionou inviavel"): o caso JA FOI ANALISADO. NAO reiniciar nenhuma fase de qualificacao. NAO rotear para vinculo, coleta_caso ou avaliacao.
+
+- Se o cliente retornou com mensagem simples ("Sim", "Ok", "Oi"): rotear para transferir_humano.
+- Se o cliente trouxe novas informacoes sobre o caso: rotear para transferir_humano.
+- Nunca rotear para agendamento se a tag inviavel estiver presente.
+
+---
+
 ## OPCOES DE ROTEAMENTO
 
 ### 1. identificacao

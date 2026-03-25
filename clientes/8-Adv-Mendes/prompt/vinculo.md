@@ -42,9 +42,11 @@ Se NAO: Ir para resgate por vinculo informal.
 "Para confirmar se o INSS ainda te cobria: qual foi o mes e ano da sua saida da empresa? E qual foi a data do acidente?"
 
 Calculo interno (NAO explicar ao cliente):
-- Sem seguro-desemprego: acidente deve ser ate 12 meses apos a saida.
-- Com seguro-desemprego: acidente deve ser ate 24 meses apos a saida.
-- Fora da janela: INVIAVEL. Acionar cliente_inviavel.
+- Sem seguro-desemprego E menos de 120 meses de contribuicao total: acidente deve ser ate 12 meses apos a saida.
+- Com seguro-desemprego OU com 120+ meses (10+ anos) de contribuicao total: acidente deve ser ate 24 meses apos a saida.
+- Fora da janela calculada: INVIAVEL. Acionar cliente_inviavel.
+
+ATENCAO — INFORMACOES CONTRADITORIAS: Se o cliente fornecer dados que se contradizem (ex: diz "contribui 10 anos" mas depois diz "1 ano e 8 meses de contribuicao"), NAO tente resolver sozinha. Acionar TransferHuman para analise humana. A regra dos 120 meses muda o periodo de graca e requer verificacao manual.
 
 ---
 
