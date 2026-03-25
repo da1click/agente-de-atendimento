@@ -76,9 +76,11 @@ B) O checklist de qualificacao foi respondido (interpretar com bom senso, NAO ex
 - Cirurgia/internacao verificada (cliente respondeu sim ou nao)
 - Sequela confirmada E ela reduz a capacidade laboral (cliente relatou limitacao)
 - Laudo medico com CID comprovando a sequela confirmado (exceto acidente recente < 6 meses OU acidente com implante cirurgico como placa/pino/parafuso)
-- Profissao na epoca coletada
+- Profissao na epoca coletada (pode ter sido mencionada em qualquer momento da conversa, ex: "trabalhava no aeroporto", "era pedreiro", "motorista de caminhao" — aceite como respondida mesmo que nao tenha sido perguntada diretamente)
 
 IMPORTANTE: Se a Camila ja fez todas as perguntas de avaliacao e o cliente respondeu, rotear para agendamento. NAO manter o cliente preso em avaliacao ou coleta repetindo perguntas ja respondidas.
+
+ATENCAO: Para rotear para agendamento, a profissao DEVE estar presente no historico (direta ou indiretamente). Se nao estiver, rotear para avaliacao para coletar esse dado antes.
 
 REGRA DE OURO: Caso inviavel (sem sequela, sem laudo, fora do prazo, sem qualidade de segurado) NAO rotear para agendamento. NUNCA.
 

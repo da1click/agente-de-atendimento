@@ -37,6 +37,10 @@ Avaliar se o cliente tem sequela permanente, laudo medico e reducao da capacidad
 ### 4. Profissao
 "Qual profissao voce exercia na epoca?"
 
+IMPORTANTE: Esta pergunta e OBRIGATORIA. NAO pule para o agendamento sem coletar a profissao. Mesmo que o cliente ja tenha descrito bem a sequela e o laudo, pergunte a profissao antes de encaminhar.
+
+Se o cliente ja mencionou a profissao no historico (ex: "trabalhava no aeroporto como despachante"), NAO repita a pergunta — aceite como respondida.
+
 ---
 
 ## HERNIA DE DISCO E DOENCA OCUPACIONAL
