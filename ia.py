@@ -262,20 +262,8 @@ async def executar_tool(nome: str, args: dict, config: dict, conversation_id: in
         except Exception as e:
             logger.warning(f"Supabase erro (convertido): {e}")
         # Notificação no grupo do Chatwoot
-        notif_conv_id = config.get("id_notificacao_convertido")
-        if notif_conv_id:
-            try:
-                resumo = _gerar_resumo_caso(context.get("historico_texto", ""))
-                msg_notif = (
-                    f"✅ Lead convertido!\n"
-                    f"👤 {contact_name}\n"
-                    f"📞 {contact_phone}\n"
-                    f"💬 Conversa #{conversation_id}\n\n"
-                    f"📋 Resumo: {resumo}"
-                )
-                await _enviar_notificacao(config, account_id, int(notif_conv_id), msg_notif)
-            except Exception as e:
-                logger.warning(f"[notificação] Erro ao notificar convertido: {e}")
+        # Notificação de convertido não envia mensagem própria — a notificação
+        # principal já é disparada pelo Agendar (STATUS: SUCESSO) para evitar duplicidade.
         logger.info("Tool: convertido")
         return json.dumps({"status": "ok"})
 
@@ -331,13 +319,11 @@ async def executar_tool(nome: str, args: dict, config: dict, conversation_id: in
                     advogado = args.get("advogado", "")
                     resumo = _gerar_resumo_caso(context.get("historico_texto", ""))
                     msg_notif = (
-                        f"📅 Novo agendamento!\n"
-                        f"👤 {contact_name}\n"
-                        f"📞 {contact_phone}\n"
-                        f"🗓️ {sched_date} às {sched_time}\n"
-                        f"⚖️ {advogado}\n"
-                        f"💬 Conversa #{conversation_id}\n\n"
-                        f"📋 Resumo: {resumo}"
+                        f"📅 NOVO AGENDAMENTO!\n\n"
+                        f"Nome: {contact_name}\n"
+                        f"Número: {contact_phone}\n\n"
+                        f"Agendado: {sched_date} às {sched_time} com {advogado}.\n"
+                        f"Resumo: {resumo}"
                     )
                     await _enviar_notificacao(config, account_id, int(notif_conv_id), msg_notif)
                 except Exception as e:
