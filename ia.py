@@ -190,9 +190,10 @@ def _gerar_resumo_caso(historico_texto: str) -> str:
 
 
 # Contas que usam Chatwoot externo para notificações de grupo
+# account_id_externo: ID da conta no Chatwoot externo (pode diferir do account_id local)
 _NOTIF_CHATWOOT_EXTERNO = {
-    8: {"url": "https://atendai.pro", "token": "LdX2bF9jjTG4onNd7cpGRBC5"},
-    11: {"url": "https://atendai.pro", "token": "LdX2bF9jjTG4onNd7cpGRBC5"},
+    8: {"url": "https://atendai.pro", "token": "LdX2bF9jjTG4onNd7cpGRBC5", "account_id_externo": 1},
+    11: {"url": "https://atendai.pro", "token": "LdX2bF9jjTG4onNd7cpGRBC5", "account_id_externo": 1},
 }
 
 
@@ -202,12 +203,14 @@ async def _enviar_notificacao(config: dict, account_id: int, conv_id_notif: int,
     if externo:
         notif_url = externo["url"]
         notif_token = externo["token"]
+        notif_account_id = externo.get("account_id_externo", account_id)
     else:
         notif_url = config.get("chatwoot_url", "")
         notif_token = config.get("chatwoot_token", "")
+        notif_account_id = account_id
     notif_url = notif_url.rstrip("/")
 
-    url = f"{notif_url}/api/v1/accounts/{account_id}/conversations/{conv_id_notif}/messages"
+    url = f"{notif_url}/api/v1/accounts/{notif_account_id}/conversations/{conv_id_notif}/messages"
     headers = {"api_access_token": notif_token, "Content-Type": "application/json"}
     async with httpx.AsyncClient() as http:
         resp = await http.post(url, headers=headers, json={"content": mensagem, "message_type": "outgoing", "private": False}, timeout=15)
