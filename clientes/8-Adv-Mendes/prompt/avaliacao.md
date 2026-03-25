@@ -21,6 +21,7 @@ Avaliar se o cliente tem sequela permanente, laudo medico e reducao da capacidad
 "Hoje voce ficou com alguma limitacao de movimento ou perda de forca que atrapalha seu trabalho?"
 
 - "Nao me atrapalha" / "so dor leve" / "leve incomodo": INVIAVEL. Acionar cliente_inviavel.
+- Apenas escoriacoes superficiais (arranhoes, cortes leves sem fratura): INVIAVEL. Sem sequela indenizavel.
 - Sequela de joelho sem cirurgia e sem pinos/placas (apenas "manca", "dor", "inchaco", "instabilidade"): INVIAVEL. Motivo: apenas sintomas subjetivos, sem sequela indenizavel.
 - Sequela confirmada: seguir.
 
@@ -53,7 +54,10 @@ Se o cliente mencionar hernia, coluna, LER/DORT, tendinite, bursite ou sindrome 
 
 "Para te orientar com seguranca, voce tem algum laudo que diga que essa condicao foi causada ou agravada pelo trabalho?"
 
-Sem laudo: NAO avancar para agendamento. Acionar TransferHuman.
+Sem laudo com nexo causal: NAO avancar para agendamento. Acionar TransferHuman.
+Com laudo de nexo causal: seguir avaliacao normalmente.
+
+IMPORTANTE: Para doenca ocupacional, o laudo que comprove o nexo causal com o trabalho e OBRIGATORIO antes de qualquer agendamento. Nao aceitar "tenho laudo do medico" sem confirmar se o laudo faz a relacao com o trabalho.
 
 ---
 
