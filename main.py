@@ -2695,12 +2695,15 @@ async def listar_sugestoes_conta(account_id: int, user: dict = Depends(get_curre
 
 
 @app.get("/api/sugestoes")
-async def listar_todas_sugestoes(user: dict = Depends(get_current_user)):
-    """Lista todas as sugestões pendentes (admin/super_admin). Admin vê apenas suas contas."""
+async def listar_todas_sugestoes(status: str = "pendente", user: dict = Depends(get_current_user)):
+    """Lista sugestões por status (admin/super_admin). Admin vê apenas suas contas."""
     if user.get("role") not in ("admin", "super_admin"):
         raise HTTPException(status_code=403, detail="Acesso restrito a administradores")
-    from db import listar_sugestoes_pendentes
-    sugestoes = listar_sugestoes_pendentes()
+    from db import listar_sugestoes_por_status, listar_todas_sugestoes_recentes
+    if status == "todas" and user.get("role") == "super_admin":
+        sugestoes = listar_todas_sugestoes_recentes()
+    else:
+        sugestoes = listar_sugestoes_por_status(status)
     # Admin: filtrar apenas sugestões das contas que ele tem acesso
     if user.get("role") == "admin":
         contas_permitidas = set(get_contas_do_usuario(user["sub"]))

@@ -4885,32 +4885,66 @@ async function _salvarSugestao() {
 // ══════════════════════════════════════════════
 // PAGE: SUGESTÕES (Admin)
 // ══════════════════════════════════════════════
+let _sugestoesFiltro = 'pendente';
+
 async function renderPageSugestoes() {
   const el = document.getElementById('page-content');
+  const isSuperAdmin = currentUser?.role === 'super_admin';
+
   el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);">Carregando sugestões...</div>';
   try {
-    const res = await fetch('/api/sugestoes');
+    const res = await fetch(`/api/sugestoes?status=${_sugestoesFiltro}`);
     if (!res.ok) throw new Error('Erro ao carregar');
     const sugestoes = await res.json();
+
+    let html = '<div style="max-width:1100px;">';
+
+    // Abas de filtro (apenas super_admin)
+    if (isSuperAdmin) {
+      html += `<div class="page-tabs" style="margin-bottom:16px;">
+        <button class="page-tab ${_sugestoesFiltro==='pendente'?'active':''}" onclick="_sugestoesFiltro='pendente';renderPageSugestoes()">Pendentes</button>
+        <button class="page-tab ${_sugestoesFiltro==='aprovada'?'active':''}" onclick="_sugestoesFiltro='aprovada';renderPageSugestoes()">Aprovadas</button>
+        <button class="page-tab ${_sugestoesFiltro==='rejeitada'?'active':''}" onclick="_sugestoesFiltro='rejeitada';renderPageSugestoes()">Rejeitadas</button>
+        <button class="page-tab ${_sugestoesFiltro==='todas'?'active':''}" onclick="_sugestoesFiltro='todas';renderPageSugestoes()">Todas</button>
+      </div>`;
+    }
+
     if (!sugestoes.length) {
-      el.innerHTML = '<div class="empty-state"><p>Nenhuma sugestão pendente</p></div>';
+      html += `<div class="empty-state"><p>Nenhuma sugestão ${_sugestoesFiltro === 'todas' ? '' : _sugestoesFiltro}</p></div>`;
+      el.innerHTML = html + '</div>';
       return;
     }
-    let html = '<div style="display:flex;flex-direction:column;gap:16px;max-width:1100px;">';
+
+    html += '<div style="display:flex;flex-direction:column;gap:16px;">';
     sugestoes.forEach((s, idx) => {
       const data = new Date(s.updated_at).toLocaleString('pt-BR');
+      const statusBadge = s.status === 'aprovada' ? '<span class="badge badge-green">Aprovada</span>'
+        : s.status === 'rejeitada' ? '<span class="badge badge-red">Rejeitada</span>'
+        : '<span class="badge badge-yellow">Pendente</span>';
+
+      let acoes = '';
+      if (isSuperAdmin) {
+        if (s.status === 'pendente') {
+          acoes = `
+            <button class="btn btn-primary" style="font-size:11px;padding:3px 10px;background:var(--green);" onclick="_resolverSugestao('${s.id}','aprovada',${idx})">Aprovar e Aplicar</button>
+            <button class="btn btn-ghost" style="font-size:11px;padding:3px 10px;color:var(--red);" onclick="_resolverSugestao('${s.id}','rejeitada',${idx})">Rejeitar</button>`;
+        } else if (s.status === 'aprovada') {
+          acoes = `<button class="btn btn-secondary" style="font-size:11px;padding:3px 10px;" onclick="_resolverSugestao('${s.id}','aprovada',${idx})">Re-aplicar no arquivo</button>`;
+        }
+      } else {
+        acoes = statusBadge;
+      }
+
       html += `
         <div class="card" style="padding:0;overflow:hidden;">
           <div style="padding:12px 16px;background:var(--bg);border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
             <div>
               <strong>${s.nome_conta || 'Conta #'+s.account_id}</strong> — <span style="color:var(--purple);font-weight:600;">${s.fase}</span>
+              ${isSuperAdmin && _sugestoesFiltro !== 'pendente' ? statusBadge : ''}
               <div style="font-size:11px;color:var(--text-muted);">Por ${s.user_nome || 'Usuário #'+s.user_id} em ${data}</div>
             </div>
-            <div style="display:flex;gap:6px;">
-              ${currentUser?.role === 'super_admin' ? `
-              <button class="btn btn-primary" style="font-size:11px;padding:3px 10px;background:var(--green);" onclick="_resolverSugestao('${s.id}','aprovada',${idx})">Aprovar e Aplicar</button>
-              <button class="btn btn-ghost" style="font-size:11px;padding:3px 10px;color:var(--red);" onclick="_resolverSugestao('${s.id}','rejeitada',${idx})">Rejeitar</button>
-              ` : `<span class="badge badge-yellow">Aguardando aprovação</span>`}
+            <div style="display:flex;gap:6px;align-items:center;">
+              ${acoes}
             </div>
           </div>
           <div style="padding:12px;">
@@ -4923,7 +4957,7 @@ async function renderPageSugestoes() {
           </div>
         </div>`;
     });
-    html += '</div>';
+    html += '</div></div>';
     el.innerHTML = html;
     // Renderizar diffs
     sugestoes.forEach((s, idx) => {

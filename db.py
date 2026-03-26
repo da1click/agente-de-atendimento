@@ -345,6 +345,20 @@ def listar_sugestoes_pendentes(account_id: int = None) -> list:
     return q.execute().data or []
 
 
+def listar_sugestoes_por_status(status: str = "pendente", account_id: int = None) -> list:
+    db = get_db()
+    q = db.table("ia_prompt_sugestoes").select("*").eq("status", status).order("updated_at", desc=True)
+    if account_id:
+        q = q.eq("account_id", account_id)
+    return q.execute().data or []
+
+
+def listar_todas_sugestoes_recentes(limit: int = 50) -> list:
+    """Lista todas as sugestões recentes (qualquer status) para o super_admin."""
+    db = get_db()
+    return db.table("ia_prompt_sugestoes").select("*").order("updated_at", desc=True).limit(limit).execute().data or []
+
+
 def listar_sugestoes_usuario(account_id: int, user_id: str) -> list:
     db = get_db()
     return db.table("ia_prompt_sugestoes").select("*").eq(
