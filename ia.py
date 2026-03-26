@@ -218,6 +218,8 @@ def _gerar_resumo_caso(historico_texto: str, openai_api_key: str = None) -> str:
 # Contas que usam Chatwoot externo para notificações de grupo
 # account_id_externo: ID da conta no Chatwoot externo (pode diferir do account_id local)
 _NOTIF_CHATWOOT_EXTERNO = {
+    8: {"token": "xJq2E7owxv89RaMbippvSV5J", "account_id_externo": 4},
+    11: {"token": "xJq2E7owxv89RaMbippvSV5J", "account_id_externo": 4},
 }
 
 
@@ -225,7 +227,7 @@ async def _enviar_notificacao(config: dict, account_id: int, conv_id_notif: int,
     """Envia notificação para o grupo do Chatwoot (pode ser outro Chatwoot)."""
     externo = _NOTIF_CHATWOOT_EXTERNO.get(account_id)
     if externo:
-        notif_url = externo["url"]
+        notif_url = externo.get("url") or config.get("chatwoot_url", "")
         notif_token = externo["token"]
         notif_account_id = externo.get("account_id_externo", account_id)
     else:
