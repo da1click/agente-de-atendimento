@@ -49,7 +49,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "TransferHuman",
-            "description": "Transfere a conversa para análise de um humano. Remove a atribuição do agente IA.",
+            "description": "Transfere a conversa para um humano. Use APENAS quando: o cliente pede explicitamente para falar com humano/advogado/responsável, OU o assunto está completamente fora do seu escopo. NÃO use quando o cliente está pensando, pausou, deu resposta curta (sim, não, ok, tô pensando) ou fez pergunta que você consegue responder.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -176,16 +176,42 @@ TOOLS = [
 
 # ── NOTIFICAÇÕES ─────────────────────────────────────────────
 
-def _gerar_resumo_caso(historico_texto: str) -> str:
-    """Extrai um resumo breve do caso a partir do histórico."""
+def _gerar_resumo_caso(historico_texto: str, openai_api_key: str = None) -> str:
+    """Extrai um resumo breve focado na qualificação do caso usando IA."""
+    if not historico_texto.strip():
+        return "Sem detalhes disponíveis"
+
+    if openai_api_key:
+        try:
+            client = OpenAI(api_key=openai_api_key)
+            resp = client.chat.completions.create(
+                model="gpt-4.1-nano",
+                messages=[
+                    {"role": "system", "content": (
+                        "Resuma em 1-2 frases curtas APENAS as informações de qualificação do caso jurídico "
+                        "a partir do histórico de conversa. Inclua: tipo de problema, situação do cliente, "
+                        "detalhes relevantes (vínculo, acidente, doença, etc). "
+                        "IGNORE completamente: mensagens sobre agendamento, horários, reagendamento, "
+                        "saudações, confirmações genéricas (sim, ok, quero). "
+                        "Responda direto, sem prefixos."
+                    )},
+                    {"role": "user", "content": historico_texto[-3000:]},
+                ],
+                max_tokens=150,
+                temperature=0,
+            )
+            resumo = (resp.choices[0].message.content or "").strip()
+            if resumo:
+                return resumo
+        except Exception as e:
+            logger.warning(f"[resumo] Erro ao gerar resumo com IA: {e}")
+
+    # Fallback: método simples
     linhas = historico_texto.strip().splitlines()
-    # Pegar apenas mensagens do cliente
     msgs_cliente = [l.split(": ", 1)[1] if ": " in l else l for l in linhas if l.startswith("[Cliente]")]
     if not msgs_cliente:
         return "Sem detalhes disponíveis"
-    # Juntar as mensagens do cliente (últimas 10 para não ficar longo)
     texto = " | ".join(msgs_cliente[-10:])
-    # Limitar a 300 chars
     return texto[:300] + "..." if len(texto) > 300 else texto
 
 
@@ -212,10 +238,13 @@ async def _enviar_notificacao(config: dict, account_id: int, conv_id_notif: int,
 
     url = f"{notif_url}/api/v1/accounts/{notif_account_id}/conversations/{conv_id_notif}/messages"
     headers = {"api_access_token": notif_token, "Content-Type": "application/json"}
+    logger.info(f"[notificação] Enviando para {notif_url} account={notif_account_id} conv={conv_id_notif}")
     async with httpx.AsyncClient() as http:
         resp = await http.post(url, headers=headers, json={"content": mensagem, "message_type": "outgoing", "private": False}, timeout=15)
+        if not resp.is_success:
+            logger.error(f"[notificação] ERRO: {resp.status_code} {resp.text}")
         resp.raise_for_status()
-    logger.info(f"[notificação] Mensagem enviada para conversa {conv_id_notif} em {notif_url}")
+    logger.info(f"[notificação] Mensagem enviada com sucesso para conversa {conv_id_notif}")
 
 
 # ── EXECUÇÃO DAS TOOLS ────────────────────────────────────────
@@ -288,6 +317,7 @@ async def executar_tool(nome: str, args: dict, config: dict, conversation_id: in
             return json.dumps({"erro": f"Falha ao consultar agenda: {str(e)}"})
 
     if nome == "Agendar":
+        is_reagendamento = context.get("is_reagendamento", False)
         try:
             resultado = await agendar_real(args, config, context)
         except Exception as e:
@@ -312,22 +342,43 @@ async def executar_tool(nome: str, args: dict, config: dict, conversation_id: in
                 )
             except Exception as e:
                 logger.warning(f"Supabase erro (Agendar): {e}")
-            # Notificação de agendamento no grupo do Chatwoot
-            notif_conv_id = config.get("id_notificacao_convertido")
-            if notif_conv_id:
-                try:
-                    advogado = args.get("advogado", "")
-                    resumo = _gerar_resumo_caso(context.get("historico_texto", ""))
-                    msg_notif = (
-                        f"📅 NOVO AGENDAMENTO!\n\n"
-                        f"Nome: {contact_name}\n"
-                        f"Número: {contact_phone}\n\n"
-                        f"Agendado: {sched_date} às {sched_time} com {advogado}.\n"
-                        f"Resumo: {resumo}"
-                    )
-                    await _enviar_notificacao(config, account_id, int(notif_conv_id), msg_notif)
-                except Exception as e:
-                    logger.warning(f"[notificação] Erro ao notificar agendamento: {e}")
+
+            # Etiqueta e notificação
+            advogado = args.get("advogado", "")
+            if is_reagendamento:
+                # Reagendamento: adicionar etiqueta e notificar
+                await chatwoot_adicionar_label(chatwoot_url, chatwoot_token, account_id, conversation_id, "reagendamento")
+                logger.info(f"🔄 Etiqueta 'reagendamento' adicionada — conv={conversation_id}")
+                notif_conv_id = config.get("id_notificacao_convertido")
+                logger.info(f"[notificação] account={account_id} id_notificacao_convertido={notif_conv_id} (reagendamento)")
+                if notif_conv_id:
+                    try:
+                        msg_notif = (
+                            f"🔄 REAGENDAMENTO!\n\n"
+                            f"Nome: {contact_name}\n"
+                            f"Número: {contact_phone}\n\n"
+                            f"Reagendado: {sched_date} às {sched_time} com {advogado}."
+                        )
+                        await _enviar_notificacao(config, account_id, int(notif_conv_id), msg_notif)
+                    except Exception as e:
+                        logger.warning(f"[notificação] Erro ao notificar reagendamento: {e}")
+            else:
+                # Novo agendamento
+                notif_conv_id = config.get("id_notificacao_convertido")
+                logger.info(f"[notificação] account={account_id} id_notificacao_convertido={notif_conv_id}")
+                if notif_conv_id:
+                    try:
+                        resumo = _gerar_resumo_caso(context.get("historico_texto", ""), config.get("openai_api_key"))
+                        msg_notif = (
+                            f"📅 NOVO AGENDAMENTO!\n\n"
+                            f"Nome: {contact_name}\n"
+                            f"Número: {contact_phone}\n\n"
+                            f"Agendado: {sched_date} às {sched_time} com {advogado}.\n"
+                            f"Resumo: {resumo}"
+                        )
+                        await _enviar_notificacao(config, account_id, int(notif_conv_id), msg_notif)
+                    except Exception as e:
+                        logger.warning(f"[notificação] Erro ao notificar agendamento: {e}")
         logger.info(f"Tool: Agendar → {resultado}")
         return json.dumps(resultado)
 
@@ -1055,6 +1106,7 @@ async def enviar_resposta_chatwoot(chatwoot_url: str, chatwoot_token: str, accou
             logger.warning(f"Erro ao resetar inatividade após resposta IA: {e}")
 
 
+
 # ── OPENAI: SUPERVISOR E AGENTE COM TOOLS ─────────────────────
 
 def chamar_supervisor(config: dict, historico_texto: str) -> str:
@@ -1167,6 +1219,7 @@ def agendar_processamento(config: dict, account_id: int, conversation_id: int, i
 async def processar_mensagem(config: dict, account_id: int, conversation_id: int, inbox_id: int | None = None):
     logger.info(f"═══ PROCESSANDO [{account_id}] conv={conversation_id} ═══")
 
+
     historico = await buscar_historico_chatwoot(
         chatwoot_url=config["chatwoot_url"],
         chatwoot_token=config["chatwoot_token"],
@@ -1185,7 +1238,8 @@ async def processar_mensagem(config: dict, account_id: int, conversation_id: int
 
     fase = chamar_supervisor(config, historico_texto)
 
-    # Trava: se já convertido, não re-agendar
+    # Se já convertido e supervisor quer agendamento → tratar como reagendamento
+    _is_reagendamento = False
     if fase == "agendamento":
         try:
             chatwoot_url = config["chatwoot_url"].rstrip("/")
@@ -1194,8 +1248,8 @@ async def processar_mensagem(config: dict, account_id: int, conversation_id: int
                 resp = await http.get(labels_url, headers={"api_access_token": config["chatwoot_token"]}, timeout=10)
                 labels = resp.json().get("payload", []) if resp.is_success else []
             if "convertido" in labels:
-                logger.info(f"⚠️ Conversa já convertida — ignorando re-agendamento (conv={conversation_id})")
-                fase = "explicacao"
+                _is_reagendamento = True
+                logger.info(f"🔄 Conversa já convertida — tratando como reagendamento (conv={conversation_id})")
         except Exception as e:
             logger.warning(f"Erro ao verificar labels: {e}")
 
@@ -1250,6 +1304,7 @@ async def processar_mensagem(config: dict, account_id: int, conversation_id: int
         "contact_name": contact_name,
         "contact_phone": contact_phone,
         "historico_texto": historico_texto,
+        "is_reagendamento": _is_reagendamento,
     }
 
     # Kanban: criar card "Novo Lead" ou mover para "Em Qualificação"

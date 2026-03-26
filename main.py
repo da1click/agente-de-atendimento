@@ -41,6 +41,14 @@ from db import (
     criar_onboarding, get_onboarding_by_token, get_onboarding_by_account,
     atualizar_onboarding_draft, submeter_onboarding,
 )
+from db import (
+    get_zapsign_config, salvar_zapsign_config,
+    listar_zapsign_docs, upsert_zapsign_doc, contar_zapsign_docs_por_status,
+)
+from db import (
+    remover_doc_token_followup, atualizar_zapsign_doc_status,
+    get_zapsign_followup_stats, listar_zapsign_followups,
+)
 from auth import hash_password, verify_password, create_token, get_current_user, require_super_admin
 from inatividade import registrar_atividade, iniciar_monitoramento
 from remarketing import iniciar_remarketing
@@ -50,6 +58,7 @@ import json
 import logging
 import os
 import random
+import re
 import secrets
 import string
 from collections import OrderedDict
@@ -68,6 +77,8 @@ async def lifespan(app: FastAPI):
     iniciar_remarketing()
     from agendador_audiencias import iniciar_agendador_audiencias
     iniciar_agendador_audiencias()
+    from zapsign_followup import iniciar_zapsign_followup
+    iniciar_zapsign_followup()
     # Cria super_admin inicial se não existir
     try:
         if not super_admin_existe():
@@ -995,6 +1006,46 @@ async def criar_usuarios_chatwoot(request: Request):
     return {"resultados": resultados}
 
 
+# ── ZAPSIGN URL DETECTION (para webhook Chatwoot) ────────────
+
+_ZAPSIGN_URL_PATTERN = re.compile(r'https?://(?:app\.)?zapsign\.com\.br/[^\s)\]]+')
+_ZAPSIGN_TOKEN_PATTERN = re.compile(r'/(?:verificar|doc|assinar)/([a-f0-9-]+)')
+
+
+def _detectar_zapsign_url_webhook(texto: str, account_id: int, conversation_id: int, inbox_id: int | None):
+    """Detecta URLs ZapSign em mensagens outgoing (agente ou IA) e cria follow-up."""
+    from db import get_zapsign_config, upsert_zapsign_followup
+    from datetime import datetime, timezone, timedelta
+
+    urls = _ZAPSIGN_URL_PATTERN.findall(texto)
+    if not urls:
+        return
+
+    zapsign_cfg = get_zapsign_config(account_id)
+    if not zapsign_cfg or not zapsign_cfg.get("followup_ativo", False):
+        return
+
+    estagios = zapsign_cfg.get("followup_estagios", [])
+    if isinstance(estagios, str):
+        estagios = json.loads(estagios)
+
+    first_stage = next((e for e in estagios if e.get("stagio") == 1), None)
+    if not first_stage:
+        return
+
+    proximo = (datetime.now(timezone.utc) + timedelta(hours=first_stage["horas"])).isoformat()
+
+    for url in urls:
+        match = _ZAPSIGN_TOKEN_PATTERN.search(url)
+        doc_token = match.group(1) if match else url
+
+        try:
+            upsert_zapsign_followup(account_id, conversation_id, inbox_id, doc_token, 1, proximo)
+            logger.info(f"[zapsign-followup] Follow-up criado via webhook — conv={conversation_id} doc={doc_token}")
+        except Exception as e:
+            logger.warning(f"[zapsign-followup] Erro ao criar follow-up: {e}")
+
+
 @app.post("/webhook/chatwoot")
 async def chatwoot_webhook(request: Request):
     payload = await request.json()
@@ -1050,8 +1101,14 @@ async def chatwoot_webhook(request: Request):
         except Exception as e:
             logger.debug(f"Erro ao salvar mensagem no histórico: {e}")
 
-        # Ignorar mensagens do agente (só processar do cliente)
+        # Mensagens outgoing (agente humano ou IA): detectar URL ZapSign para follow-up
         if msg_type not in (0, "incoming"):
+            try:
+                conteudo = msg.get("content") or ""
+                if conteudo and "zapsign" in conteudo.lower():
+                    _detectar_zapsign_url_webhook(conteudo, account_id, conversation_id, inbox_id)
+            except Exception as e:
+                logger.debug(f"[zapsign-followup] Erro ao detectar URL em outgoing: {e}")
             continue
 
         # Deduplicação: ignorar mensagens já processadas (webhook retry)
@@ -1733,15 +1790,29 @@ async def proxy_chatwoot_teams(account_id: int):
 
 @app.get("/api/clientes/{account_id}/chatwoot/groups")
 async def proxy_chatwoot_groups(account_id: int):
-    """Busca contatos de grupos WhatsApp (@g.us / GRUPO) no Chatwoot."""
+    """Busca grupos WhatsApp no Chatwoot e retorna conversation_id para notificações."""
+    from ia import _NOTIF_CHATWOOT_EXTERNO
     config = carregar_config_cliente(account_id)
     if not config:
         raise HTTPException(status_code=404, detail="Cliente não encontrado")
+
+    # Grupos permitidos por conta no Chatwoot externo (conversation_id → label)
+    _GRUPOS_PERMITIDOS = {
+        8: {191: "Novos Leads", 192: "Clientes Existentes"},
+        11: {204: "Novos Leads", 203: "Clientes Existentes"},
+    }
+
+    # Se conta tem grupos pré-definidos, retorna direto sem buscar na API
+    if account_id in _GRUPOS_PERMITIDOS:
+        return [{"id": cid, "label": label} for cid, label in _GRUPOS_PERMITIDOS[account_id].items()]
+
+    # Demais contas: buscar grupos no Chatwoot da conta
     base = config["chatwoot_url"].rstrip("/")
     headers = {"api_access_token": config["chatwoot_token"]}
+
     groups = []
     try:
-        async with httpx.AsyncClient(timeout=8) as client:
+        async with httpx.AsyncClient(timeout=15) as client:
             r = await client.get(
                 f"{base}/api/v1/accounts/{account_id}/contacts/search",
                 params={"q": "GRUPO", "page": 1},
@@ -1753,7 +1824,15 @@ async def proxy_chatwoot_groups(account_id: int):
                     identifier = c.get("identifier") or ""
                     name = c.get("name") or ""
                     if "@g.us" in identifier or "(GRUPO)" in name.upper():
-                        groups.append({"id": c["id"], "label": name})
+                        contact_id = c["id"]
+                        r2 = await client.get(
+                            f"{base}/api/v1/accounts/{account_id}/contacts/{contact_id}/conversations",
+                            headers=headers,
+                        )
+                        if r2.is_success:
+                            convs = r2.json().get("payload", [])
+                            if convs:
+                                groups.append({"id": convs[0]["id"], "label": name})
     except Exception:
         pass
     return groups
@@ -1877,34 +1956,46 @@ async def _enviar_aviso_audiencia_core(audiencia_id: str, msg_id: str = None) ->
 
     audiencia = get_audiencia_db(audiencia_id)
     if not audiencia:
+        logger.warning(f"[audiencia-envio] Audiência {audiencia_id} não encontrada")
         return {"error": "Audiência não encontrada", "status_code": 404}
 
     account_id = audiencia["account_id"]
     conversation_id = audiencia["conversation_id"]
     inbox_id = audiencia.get("inbox_id")
+    logger.info(f"[audiencia-envio] Iniciando envio: audiencia={audiencia_id} account={account_id} conv={conversation_id} inbox={inbox_id} tipo_audiencia='{audiencia.get('tipo_audiencia')}'")
 
     config = carregar_config_cliente(account_id)
     if not config:
+        logger.warning(f"[audiencia-envio] Config não encontrada para account_id={account_id}")
         return {"error": "Cliente não encontrado", "status_code": 404}
 
-    # Buscar a mensagem do tipo de audiência
-    tipos = listar_hearing_types_db()
+    # Buscar a mensagem do tipo de audiência (filtrando por account_id)
+    tipos = listar_hearing_types_db(account_id)
     tipo = next((t for t in tipos if t["nome"] == audiencia.get("tipo_audiencia")), None)
     if not tipo:
+        # Fallback: buscar sem filtro de account
+        tipos = listar_hearing_types_db()
+        tipo = next((t for t in tipos if t["nome"] == audiencia.get("tipo_audiencia")), None)
+    if not tipo:
+        logger.warning(f"[audiencia-envio] Tipo '{audiencia.get('tipo_audiencia')}' não encontrado. Tipos disponíveis: {[t['nome'] for t in tipos]}")
         return {"error": "Tipo de audiência não encontrado", "status_code": 400}
 
     mensagens_tipo = tipo.get("mensagens", [])
+    logger.info(f"[audiencia-envio] Tipo encontrado: '{tipo['nome']}' com {len(mensagens_tipo)} mensagem(ns)")
     if not mensagens_tipo:
+        logger.warning(f"[audiencia-envio] Nenhuma mensagem configurada para tipo '{tipo['nome']}'")
         return {"error": "Nenhuma mensagem configurada para este tipo", "status_code": 400}
 
     # Se msg_id específico, envia essa; senão, envia todas
     if msg_id:
         msg = next((m for m in mensagens_tipo if m["id"] == msg_id), None)
         if not msg:
+            logger.warning(f"[audiencia-envio] msg_id={msg_id} não encontrado. IDs disponíveis: {[m.get('id') for m in mensagens_tipo]}")
             raise HTTPException(status_code=404, detail="Mensagem não encontrada no tipo")
         msgs_para_enviar = [msg]
     else:
         msgs_para_enviar = sorted(mensagens_tipo, key=lambda m: m.get("idx", 0))
+    logger.info(f"[audiencia-envio] Mensagens a enviar: {[m.get('id','?') for m in msgs_para_enviar]}")
 
     chatwoot_url = config["chatwoot_url"].rstrip("/")
     token = config["chatwoot_token"]
@@ -1919,6 +2010,7 @@ async def _enviar_aviso_audiencia_core(audiencia_id: str, msg_id: str = None) ->
     # Verificar tipo de inbox e janela de 24h (para o cliente principal)
     channel_type = await _get_inbox_channel_type(config, inbox_id)
     is_whatsapp_oficial = "whatsapp" in channel_type.lower()
+    logger.info(f"[audiencia-envio] channel_type='{channel_type}' is_whatsapp_oficial={is_whatsapp_oficial}")
 
     # ── Montar lista de destinatários: cliente + testemunhas ──
     destinatarios = [
@@ -1977,8 +2069,10 @@ async def _enviar_aviso_audiencia_core(audiencia_id: str, msg_id: str = None) ->
                         ultima_msg is None or
                         (datetime.now(timezone.utc) - ultima_msg).total_seconds() > 86400
                     )
-                except Exception:
+                    logger.info(f"[audiencia-envio] Dest '{dest['nome']}' conv={conv_id}: ultima_msg={ultima_msg} janela_expirada={dest_janela_expirada}")
+                except Exception as e:
                     dest_janela_expirada = True  # assume expirada por segurança
+                    logger.warning(f"[audiencia-envio] Erro ao checar janela 24h conv={conv_id}: {e}")
 
             # Enviar cada mensagem para este destinatário
             for msg in msgs_para_enviar:
@@ -1986,43 +2080,56 @@ async def _enviar_aviso_audiencia_core(audiencia_id: str, msg_id: str = None) ->
                 audiencia_copy = {**audiencia, "nome_cliente": dest["nome"]}
                 conteudo = _substituir_placeholders(msg.get("conteudo", ""), audiencia_copy)
                 template_name = (msg.get("template_whatsapp") or "").strip()
+                logger.info(f"[audiencia-envio] Processando msg={msg.get('id')} para '{dest['nome']}': whatsapp_oficial={is_whatsapp_oficial} janela_expirada={dest_janela_expirada} template='{template_name}'")
 
                 try:
-                    if is_whatsapp_oficial and dest_janela_expirada:
-                        if template_name:
-                            # Montar processed_params com mapeamento de variáveis salvo
-                            tpl_vars = msg.get("template_vars") or {}
-                            pp = _build_template_params(audiencia_copy, tpl_vars)
-                            await _enviar_template_audiencia_http(
-                                http, chatwoot_url, token, account_id, conv_id, template_name, pp
-                            )
-                            # Nota privada com a mensagem completa como o cliente recebeu
-                            msg_completa = await _montar_texto_template_completo(
-                                template_name, pp, account_id
-                            )
-                            await _enviar_nota_privada_http(
-                                http, chatwoot_url, token, account_id, conv_id,
-                                f"📋 *[Aviso de Audiência — Enviado via Template]*\n\n{msg_completa}"
-                            )
-                            resultados.append({
-                                "destinatario": dest["nome"], "tipo": dest["tipo"],
-                                "msg_id": msg["id"], "metodo": "template", "status": "enviado",
-                            })
-                        else:
-                            resultados.append({
-                                "destinatario": dest["nome"], "tipo": dest["tipo"],
-                                "msg_id": msg["id"], "metodo": "template", "status": "erro",
-                                "detalhe": "Fora da janela 24h e sem template configurado",
-                            })
-                    else:
-                        await _enviar_texto_audiencia_http(
-                            http, chatwoot_url, token, account_id, conv_id, conteudo
+                    if is_whatsapp_oficial and template_name:
+                        # Template configurado → sempre envia via template (funciona dentro e fora da janela 24h)
+                        tpl_vars = msg.get("template_vars") or {}
+                        pp = _build_template_params(audiencia_copy, tpl_vars)
+                        logger.info(f"[audiencia-envio] Enviando template '{template_name}' conv={conv_id} params={pp}")
+                        await _enviar_template_audiencia_http(
+                            http, chatwoot_url, token, account_id, conv_id, template_name, pp
+                        )
+                        logger.info(f"[audiencia-envio] Template enviado com sucesso para conv={conv_id}")
+                        # Nota privada com a mensagem completa como o cliente recebeu
+                        msg_completa = await _montar_texto_template_completo(
+                            template_name, pp, account_id
+                        )
+                        await _enviar_nota_privada_http(
+                            http, chatwoot_url, token, account_id, conv_id,
+                            f"📋 *[Aviso de Audiência — Enviado via Template]*\n\n{msg_completa}"
                         )
                         resultados.append({
                             "destinatario": dest["nome"], "tipo": dest["tipo"],
-                            "msg_id": msg["id"], "metodo": "texto", "status": "enviado",
+                            "msg_id": msg["id"], "metodo": "template", "status": "enviado",
+                        })
+                    elif not is_whatsapp_oficial or not dest_janela_expirada:
+                        # Sem template + janela aberta (ou inbox não-WhatsApp) → texto livre
+                        if conteudo.strip():
+                            await _enviar_texto_audiencia_http(
+                                http, chatwoot_url, token, account_id, conv_id, conteudo
+                            )
+                            resultados.append({
+                                "destinatario": dest["nome"], "tipo": dest["tipo"],
+                                "msg_id": msg["id"], "metodo": "texto", "status": "enviado",
+                            })
+                        else:
+                            logger.warning(f"[audiencia-envio] Conteúdo vazio para msg={msg.get('id')} — sem template e sem texto")
+                            resultados.append({
+                                "destinatario": dest["nome"], "tipo": dest["tipo"],
+                                "msg_id": msg["id"], "metodo": "texto", "status": "erro",
+                                "detalhe": "Conteúdo da mensagem vazio e sem template configurado",
+                            })
+                    else:
+                        # Janela expirada + sem template → erro
+                        resultados.append({
+                            "destinatario": dest["nome"], "tipo": dest["tipo"],
+                            "msg_id": msg["id"], "metodo": "template", "status": "erro",
+                            "detalhe": "Fora da janela 24h e sem template configurado",
                         })
                 except Exception as e:
+                    logger.error(f"[audiencia-envio] ERRO ao enviar msg={msg.get('id')} para '{dest['nome']}' conv={conv_id}: {e}")
                     resultados.append({
                         "destinatario": dest["nome"], "tipo": dest["tipo"],
                         "msg_id": msg["id"], "status": "erro", "detalhe": str(e),
@@ -2055,7 +2162,7 @@ async def _enviar_aviso_audiencia_core(audiencia_id: str, msg_id: str = None) ->
                 except Exception:
                     pass
 
-    logger.info(f"[audiencia] Envio concluído — {audiencia['nome_cliente']} | {len(resultados)} resultado(s)")
+    logger.info(f"[audiencia-envio] Envio concluído — {audiencia['nome_cliente']} | resultados={resultados}")
     return {"status": "ok", "resultados": resultados}
 
 
@@ -2589,11 +2696,15 @@ async def listar_sugestoes_conta(account_id: int, user: dict = Depends(get_curre
 
 @app.get("/api/sugestoes")
 async def listar_todas_sugestoes(user: dict = Depends(get_current_user)):
-    """Lista todas as sugestões pendentes (admin/super_admin)."""
+    """Lista todas as sugestões pendentes (admin/super_admin). Admin vê apenas suas contas."""
     if user.get("role") not in ("admin", "super_admin"):
         raise HTTPException(status_code=403, detail="Acesso restrito a administradores")
     from db import listar_sugestoes_pendentes
     sugestoes = listar_sugestoes_pendentes()
+    # Admin: filtrar apenas sugestões das contas que ele tem acesso
+    if user.get("role") == "admin":
+        contas_permitidas = set(get_contas_do_usuario(user["sub"]))
+        sugestoes = [s for s in sugestoes if s["account_id"] in contas_permitidas]
     # Enriquecer com o prompt original para comparação
     for s in sugestoes:
         pasta = pasta_cliente(s["account_id"])
@@ -2614,10 +2725,18 @@ async def listar_todas_sugestoes(user: dict = Depends(get_current_user)):
 
 @app.patch("/api/sugestoes/{sugestao_id}")
 async def atualizar_sugestao(sugestao_id: str, request: Request, user: dict = Depends(get_current_user)):
-    """Aprova ou rejeita uma sugestão (admin/super_admin)."""
+    """Aprova ou rejeita uma sugestão (admin/super_admin). Admin só altera sugestões das suas contas."""
     if user.get("role") not in ("admin", "super_admin"):
         raise HTTPException(status_code=403, detail="Acesso restrito a administradores")
-    from db import atualizar_status_sugestao
+    from db import atualizar_status_sugestao, buscar_sugestao
+    # Admin: verificar se a sugestão pertence a uma conta que ele tem acesso
+    if user.get("role") == "admin":
+        sugestao = buscar_sugestao(sugestao_id)
+        if not sugestao:
+            raise HTTPException(status_code=404, detail="Sugestão não encontrada")
+        contas_permitidas = set(get_contas_do_usuario(user["sub"]))
+        if sugestao["account_id"] not in contas_permitidas:
+            raise HTTPException(status_code=403, detail="Sem permissão para esta sugestão")
     body = await request.json()
     status = body.get("status", "")
     if status not in ("aprovada", "rejeitada"):
@@ -2708,192 +2827,6 @@ async def api_submeter_onboarding(token: str):
     return {"status": "submitted"}
 
 
-def _slugify(text: str) -> str:
-    import unicodedata
-    text = unicodedata.normalize("NFKD", text)
-    text = text.encode("ascii", "ignore").decode("ascii")
-    text = _re.sub(r"[^a-zA-Z0-9]+", "-", text).strip("-").lower()
-    return text[:25]
-
-
-def _detectar_especialidade(form_data: dict) -> str:
-    """Detecta 'trabalhista' ou 'previdenciario' a partir dos dados do formulario."""
-    for adv in form_data.get("advogados", []):
-        esp = (adv.get("especialidade") or "").lower()
-        if "trabalhist" in esp:
-            return "trabalhista"
-        if "previdenci" in esp:
-            return "previdenciario"
-    obs = (form_data.get("comportamento", {}).get("outras_instrucoes") or "").lower()
-    if "trabalhist" in obs:
-        return "trabalhista"
-    if "previdenci" in obs:
-        return "previdenciario"
-    return "trabalhista"
-
-
-def _build_placeholders_onboarding(form_data: dict, especialidade: str) -> dict:
-    """Constroi o dicionario de placeholders para preenchimento dos templates."""
-    escritorio = form_data.get("escritorio", {})
-    personalidade = form_data.get("personalidade", {})
-    comportamento = form_data.get("comportamento", {})
-    anuncios = form_data.get("anuncios", {})
-    regras = form_data.get("regras", {})
-
-    nome_ia = (personalidade.get("nome_ia") or "Assistente").strip()
-    nome_escritorio = (escritorio.get("nome") or "Escritorio de Advocacia").strip()
-    especialidade_texto = "Direito do Trabalho" if especialidade == "trabalhista" else "Direito Previdenciario"
-
-    # Endereco
-    cidade = (escritorio.get("cidade") or "").strip()
-    estado = (escritorio.get("estado") or "").strip()
-    endereco = (escritorio.get("endereco") or "").strip()
-    area = escritorio.get("area_atendimento") or "online"
-    telefone = (escritorio.get("telefone") or "").strip()
-
-    linhas_end = []
-    if area == "online":
-        linhas_end.append(f"Atendemos 100% online em todo o Brasil. Voce nao precisa sair de casa.")
-    elif area == "presencial":
-        loc = ", ".join(filter(None, [cidade, estado]))
-        linhas_end.append(f"Nosso escritorio fica em {loc}." if loc else "Atendemos de forma presencial.")
-        if endereco:
-            linhas_end.append(endereco)
-    else:
-        loc = ", ".join(filter(None, [cidade, estado]))
-        linhas_end.append(f"Temos escritorio em {loc} e atendemos tambem 100% online em todo o Brasil." if loc else "Atendemos presencialmente e de forma online em todo o Brasil.")
-        if endereco:
-            linhas_end.append(endereco)
-    if telefone:
-        linhas_end.append(f"\nTelefone: {telefone}")
-    endereco_escritorio = "\n".join(linhas_end)
-
-    # Custo
-    explicacao_custo_raw = (comportamento.get("explicacao_custo") or "").strip()
-    if not explicacao_custo_raw:
-        explicacao_custo_raw = "Nao cobramos nada antecipado. Os honorarios sao pagos apenas no exito, sobre o valor recebido pelo cliente."
-
-    # Apresentacao
-    apresentacao_raw = (personalidade.get("apresentacao") or "").strip()
-    if not apresentacao_raw:
-        apresentacao_raw = (
-            f"Cumprimento baseado no horario:\n"
-            f"- 06h-12h: \"Bom dia!\"\n"
-            f"- 12h-18h: \"Boa tarde!\"\n"
-            f"- 18h-06h: \"Boa noite!\"\n\n"
-            f"Seguido de:\n"
-            f"\"{nome_ia}, do {nome_escritorio}. Como posso te ajudar?\""
-        )
-
-    # Palavras proibidas extras
-    palavras_raw = (comportamento.get("palavras_proibidas") or "").strip()
-    palavras_extra = ""
-    if palavras_raw:
-        linhas_p = [ln.strip() for ln in palavras_raw.splitlines() if ln.strip()]
-        palavras_extra = "\n".join(f'- NUNCA usar a expressao "{p}".' for p in linhas_p)
-
-    # Instrucoes adicionais compostas
-    partes = []
-    perguntas = (regras.get("perguntas_obrigatorias") or "").strip()
-    assuntos = (regras.get("assuntos_especiais") or "").strip()
-    valores = (regras.get("valores_atualizados") or "").strip()
-    outras = (comportamento.get("outras_instrucoes") or "").strip()
-    obs_regras = (regras.get("observacoes") or "").strip()
-    if perguntas:
-        partes.append(f"## PERGUNTAS OBRIGATORIAS\n\nAs perguntas a seguir DEVEM ser feitas ao cliente (uma por vez):\n\n{perguntas}")
-    if assuntos:
-        partes.append(f"## ASSUNTOS ESPECIAIS\n\n{assuntos}")
-    if valores:
-        partes.append(f"## VALORES ATUALIZADOS\n\n{valores}")
-    if outras:
-        partes.append(f"## INSTRUCOES ADICIONAIS\n\n{outras}")
-    if obs_regras:
-        partes.append(f"## OBSERVACOES\n\n{obs_regras}")
-    instrucoes_adicionais = ("\n\n---\n\n".join(partes) + "\n\n---\n\n") if partes else ""
-
-    # Anuncios
-    usa_meta = bool(anuncios.get("usa_meta"))
-    if usa_meta:
-        temas = anuncios.get("temas") or []
-        regra_anuncio = 'Se a conversa iniciar com "Mensagem de Anuncio!", o usuario obrigatoriamente deve passar por todo o atendimento da IA. Voce deve atender, qualificar, entender o caso e conduzir ate agendamento.'
-        if temas:
-            regra_anuncio += "\n\nMensagens de abertura por tema de anuncio:\n"
-            for t in temas:
-                if t.get("nome") and t.get("mensagem"):
-                    regra_anuncio += f'\n- Tema "{t["nome"]}": {t["mensagem"]}'
-    else:
-        regra_anuncio = 'Se a conversa iniciar com "Mensagem de Anuncio!", atender normalmente e conduzir ao agendamento.'
-
-    # Encerramento
-    regra_encerramento = (
-        f"Sempre que utilizar as ferramentas convertido ou TransferHuman, "
-        f"informar ao cliente que um especialista da equipe vai analisar o caso e retornar em breve.\n\n"
-        f"EXCECAO OBRIGATORIA: Quando o interlocutor declarar que e advogado(a) da reclamada/empresa ou estiver "
-        f"representando a empresa, NAO enviar pedido de avaliacao. Finalize apenas com a confirmacao da proxima acao e encerre."
-    )
-
-    return {
-        "{{NOME_IA}}": nome_ia,
-        "{{NOME_ESCRITORIO}}": nome_escritorio,
-        "{{ESPECIALIDADE_TEXTO}}": especialidade_texto,
-        "{{APRESENTACAO_IA}}": apresentacao_raw,
-        "{{ENDERECO_ESCRITORIO}}": endereco_escritorio,
-        "{{TELEFONES_OFICIAIS}}": telefone or "(nao informado)",
-        "{{EXPLICACAO_CUSTO}}": explicacao_custo_raw,
-        "{{PALAVRAS_PROIBIDAS_EXTRA}}": palavras_extra,
-        "{{INSTRUCOES_ADICIONAIS}}": instrucoes_adicionais,
-        "{{REGRA_ANUNCIO}}": regra_anuncio,
-        "{{REGRA_ENCERRAMENTO}}": regra_encerramento,
-    }
-
-
-def _copiar_e_preencher_template(src: str, dst: str, placeholders: dict):
-    """Le um template, substitui placeholders e salva no destino."""
-    with open(src, encoding="utf-8") as f:
-        content = f.read()
-    for key, value in placeholders.items():
-        content = content.replace(key, value or "")
-    with open(dst, encoding="utf-8", mode="w") as f:
-        f.write(content)
-
-
-def _gerar_prompts_onboarding(account_id: int, form_data: dict):
-    """Gera os arquivos de prompt para a conta a partir dos templates de onboarding."""
-    especialidade = _detectar_especialidade(form_data)
-    placeholders = _build_placeholders_onboarding(form_data, especialidade)
-
-    nome_escritorio = form_data.get("escritorio", {}).get("nome") or f"cliente-{account_id}"
-    slug = _slugify(nome_escritorio)
-
-    # Usar pasta existente (account_id-*) ou criar nova
-    pasta_existente = pasta_cliente(account_id)
-    if pasta_existente:
-        pasta = pasta_existente
-    else:
-        pasta = os.path.join(CLIENTES_DIR, f"{account_id}-{slug}")
-
-    prompt_dir = os.path.join(pasta, "prompt")
-    os.makedirs(prompt_dir, exist_ok=True)
-
-    templates_dir = os.path.join(BASE_DIR, "templates")
-    shared_dir = os.path.join(templates_dir, "shared")
-    specialty_dir = os.path.join(templates_dir, especialidade)
-
-    for d in [shared_dir, specialty_dir]:
-        if not os.path.isdir(d):
-            continue
-        for fname in os.listdir(d):
-            if fname.endswith(".md"):
-                src = os.path.join(d, fname)
-                dst = os.path.join(prompt_dir, fname)
-                try:
-                    _copiar_e_preencher_template(src, dst, placeholders)
-                except Exception as e:
-                    logging.error(f"[onboarding] Erro ao gerar {fname}: {e}")
-
-    logging.info(f"[onboarding] Prompts gerados para account_id={account_id} em '{pasta}' (especialidade={especialidade})")
-
-
 def _processar_onboarding(account_id: int, form_data: dict):
     """Auto-configura a conta com os dados do onboarding."""
     # 1. Atualizar config do cliente
@@ -2942,13 +2875,328 @@ def _processar_onboarding(account_id: int, form_data: dict):
     if especialidades:
         salvar_config_cliente(account_id, {"especialidade": ", ".join(sorted(especialidades))})
 
-    # 4. Salvar email_agenda se fornecido
-    agenda = form_data.get("agenda", {})
-    if agenda.get("email_calendar"):
-        salvar_config_cliente(account_id, {"email_agenda": agenda["email_calendar"]})
+    # 4. Salvar email_agenda se fornecido (do primeiro advogado que tiver)
+    for adv in advogados:
+        if adv.get("email_calendar"):
+            salvar_config_cliente(account_id, {"email_agenda": adv["email_calendar"]})
+            break
 
-    # 5. Gerar arquivos de prompt a partir dos templates de onboarding
+    # 5. Gerar pasta e prompts do cliente
     try:
-        _gerar_prompts_onboarding(account_id, form_data)
+        from onboarding_prompts import gerar_prompts_cliente
+        cfg = carregar_config_cliente(account_id) or {}
+        nome_conta = cfg.get("nome", f"Conta{account_id}")
+        gerar_prompts_cliente(account_id, nome_conta, form_data, CLIENTES_DIR)
+        logger.info(f"Prompts gerados automaticamente para conta {account_id}")
     except Exception as e:
-        logging.error(f"[onboarding] Erro ao gerar prompts para account_id={account_id}: {e}")
+        logger.error(f"Erro ao gerar prompts para conta {account_id}: {e}")
+
+
+# ══════════════════════════════════════════════════════════════
+# ZAPSIGN
+# ══════════════════════════════════════════════════════════════
+
+ZAPSIGN_API_BASE = "https://api.zapsign.com.br/api/v1"
+
+
+@app.get("/api/zapsign/config")
+async def api_get_zapsign_config(account_id: int, user=Depends(get_current_user)):
+    """Busca configuração ZapSign da conta."""
+    cfg = get_zapsign_config(account_id)
+    if not cfg:
+        return {"account_id": account_id, "api_token": "", "sandbox": False, "webhook_url": ""}
+    # Mascarar token na resposta (mostrar só últimos 8 chars)
+    token = cfg.get("api_token", "")
+    cfg["api_token_masked"] = f"***{token[-8:]}" if len(token) > 8 else token
+    return cfg
+
+
+@app.post("/api/zapsign/config")
+async def api_save_zapsign_config(request: Request, user=Depends(get_current_user)):
+    """Salva configuração ZapSign da conta."""
+    body = await request.json()
+    account_id = body.get("account_id")
+    if not account_id:
+        raise HTTPException(400, "account_id obrigatório")
+    config = {
+        "api_token": body.get("api_token", ""),
+        "sandbox": body.get("sandbox", False),
+        "webhook_url": body.get("webhook_url", ""),
+    }
+    salvar_zapsign_config(account_id, config)
+    return {"ok": True}
+
+
+@app.get("/api/zapsign/docs")
+async def api_list_zapsign_docs(account_id: int, user=Depends(get_current_user)):
+    """Lista documentos ZapSign da conta (busca via API ZapSign e salva localmente)."""
+    cfg = get_zapsign_config(account_id)
+    if not cfg or not cfg.get("api_token"):
+        return {"docs": [], "error": "Token ZapSign não configurado"}
+
+    api_token = cfg["api_token"]
+    docs_remote = []
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(
+                f"{ZAPSIGN_API_BASE}/docs/",
+                headers={"Authorization": f"Bearer {api_token}"},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            docs_remote = data if isinstance(data, list) else data.get("results", [])
+
+        # Salvar/atualizar docs localmente
+        for doc in docs_remote:
+            upsert_zapsign_doc(account_id, doc)
+
+    except Exception as e:
+        logger.warning(f"Erro ao buscar docs ZapSign conta {account_id}: {e}")
+        # Retorna docs locais como fallback
+        docs_local = listar_zapsign_docs(account_id)
+        return {"docs": docs_local, "error": str(e), "source": "cache"}
+
+    docs_local = listar_zapsign_docs(account_id)
+    return {"docs": docs_local, "source": "api"}
+
+
+@app.get("/api/zapsign/docs/{doc_token}")
+async def api_get_zapsign_doc(doc_token: str, account_id: int, user=Depends(get_current_user)):
+    """Busca detalhes de um documento específico via API ZapSign."""
+    cfg = get_zapsign_config(account_id)
+    if not cfg or not cfg.get("api_token"):
+        raise HTTPException(400, "Token ZapSign não configurado")
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(
+                f"{ZAPSIGN_API_BASE}/docs/{doc_token}/",
+                headers={"Authorization": f"Bearer {cfg['api_token']}"},
+            )
+            resp.raise_for_status()
+            return resp.json()
+    except Exception as e:
+        raise HTTPException(502, f"Erro ao buscar documento: {e}")
+
+
+@app.get("/api/zapsign/metrics")
+async def api_zapsign_metrics(account_id: int, user=Depends(get_current_user)):
+    """Retorna métricas dos documentos ZapSign da conta."""
+    contagem = contar_zapsign_docs_por_status(account_id)
+    total = sum(contagem.values())
+    return {
+        "total": total,
+        "signed": contagem.get("signed", 0),
+        "pending": contagem.get("pending", 0),
+        "expired": contagem.get("expired", 0),
+        "canceled": contagem.get("canceled", 0),
+        "refunded": contagem.get("refunded", 0),
+        "by_status": contagem,
+    }
+
+
+@app.post("/api/zapsign/test-connection")
+async def api_zapsign_test_connection(request: Request, user=Depends(get_current_user)):
+    """Testa conexão com a API ZapSign usando o token fornecido."""
+    body = await request.json()
+    api_token = body.get("api_token", "")
+    if not api_token:
+        return {"ok": False, "error": "Token vazio"}
+
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(
+                f"{ZAPSIGN_API_BASE}/docs/",
+                headers={"Authorization": f"Bearer {api_token}"},
+                params={"page_size": 1},
+            )
+            if resp.status_code == 200:
+                return {"ok": True, "message": "Conexão OK"}
+            else:
+                return {"ok": False, "error": f"Status {resp.status_code}: {resp.text[:200]}"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+ZAPSIGN_WEBHOOK_URL = "https://api.advbrasil.ai/webhook/zapsign"
+
+
+@app.post("/api/zapsign/implantar")
+async def api_zapsign_implantar(request: Request, user=Depends(get_current_user)):
+    """Implanta ZapSign na conta: salva token + registra webhook automaticamente."""
+    body = await request.json()
+    account_id = body.get("account_id")
+    api_token = body.get("api_token", "").strip()
+
+    if not account_id or not api_token:
+        return {"ok": False, "error": "account_id e api_token obrigatórios"}
+
+    resultados = {"token_salvo": False, "webhook_criado": False, "webhook_ja_existe": False, "erros": []}
+
+    # 1. Testar se o token é válido
+    try:
+        async with httpx.AsyncClient(timeout=10) as http:
+            resp = await http.get(
+                f"{ZAPSIGN_API_BASE}/docs/",
+                headers={"Authorization": f"Bearer {api_token}"},
+                params={"page_size": 1},
+            )
+            if resp.status_code != 200:
+                return {"ok": False, "error": f"Token inválido (status {resp.status_code})"}
+    except Exception as e:
+        return {"ok": False, "error": f"Erro ao validar token: {e}"}
+
+    # 2. Salvar token na config
+    try:
+        salvar_zapsign_config(account_id, {"api_token": api_token})
+        resultados["token_salvo"] = True
+    except Exception as e:
+        resultados["erros"].append(f"Erro ao salvar token: {e}")
+
+    # 3. Verificar se webhook já existe
+    try:
+        async with httpx.AsyncClient(timeout=10) as http:
+            resp = await http.get(
+                f"{ZAPSIGN_API_BASE}/user/company/webhook/",
+                headers={"Authorization": f"Bearer {api_token}"},
+            )
+            if resp.status_code == 200:
+                webhooks = resp.json()
+                if isinstance(webhooks, list):
+                    for wh in webhooks:
+                        wh_url = wh.get("url", "")
+                        if "advbrasil" in wh_url or "webhook/zapsign" in wh_url:
+                            resultados["webhook_ja_existe"] = True
+                            break
+    except Exception:
+        pass  # Se falhar ao listar, tenta criar mesmo assim
+
+    # 4. Criar webhook se não existe
+    if not resultados["webhook_ja_existe"]:
+        try:
+            async with httpx.AsyncClient(timeout=10) as http:
+                resp = await http.post(
+                    f"{ZAPSIGN_API_BASE}/user/company/webhook/",
+                    headers={
+                        "Authorization": f"Bearer {api_token}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "url": ZAPSIGN_WEBHOOK_URL,
+                        "type": "",  # vazio = todos os eventos
+                    },
+                )
+                if resp.status_code in (200, 201):
+                    resultados["webhook_criado"] = True
+                    logger.info(f"[zapsign-implantar] Webhook criado para conta {account_id}")
+                else:
+                    resultados["erros"].append(f"Webhook: status {resp.status_code} — {resp.text[:200]}")
+        except Exception as e:
+            resultados["erros"].append(f"Erro ao criar webhook: {e}")
+    else:
+        logger.info(f"[zapsign-implantar] Webhook já existe para conta {account_id}")
+
+    ok = resultados["token_salvo"] and (resultados["webhook_criado"] or resultados["webhook_ja_existe"])
+    return {"ok": ok, **resultados}
+
+
+# ══════════════════════════════════════════════════════════════
+# ZAPSIGN WEBHOOK
+# ══════════════════════════════════════════════════════════════
+
+@app.post("/webhook/zapsign")
+async def webhook_zapsign(request: Request):
+    """Recebe webhooks de status do ZapSign (sem auth — endpoint público para webhook)."""
+    try:
+        body = await request.json()
+    except Exception:
+        return {"ok": False, "error": "Invalid JSON"}
+
+    event_type = body.get("event_type", "")
+    doc = body.get("doc", {}) if isinstance(body.get("doc"), dict) else {}
+    doc_token = doc.get("token", "") or body.get("token", "")
+    status = doc.get("status", "") or body.get("status", "")
+
+    logger.info(f"[zapsign-webhook] event={event_type} doc={doc_token} status={status}")
+
+    if not doc_token:
+        return {"ok": False, "error": "doc_token não encontrado"}
+
+    # Atualizar status local do documento
+    try:
+        atualizar_zapsign_doc_status(doc_token, status)
+    except Exception as e:
+        logger.warning(f"[zapsign-webhook] Erro ao atualizar status doc: {e}")
+
+    # Se documento foi assinado/fechado, remover da lista de pendentes
+    # Se era o último doc pendente, desativa o follow-up da conversa
+    if status in ("signed", "closed") or event_type in ("doc_signed", "doc_closed"):
+        try:
+            todos_assinaram = remover_doc_token_followup(doc_token)
+            if todos_assinaram:
+                logger.info(f"[zapsign-webhook] Todos docs assinados — follow-up desativado (doc={doc_token})")
+            else:
+                logger.info(f"[zapsign-webhook] Doc {doc_token} assinado, mas ainda faltam docs pendentes")
+        except Exception as e:
+            logger.warning(f"[zapsign-webhook] Erro ao processar assinatura: {e}")
+
+    return {"ok": True}
+
+
+# ══════════════════════════════════════════════════════════════
+# ZAPSIGN FOLLOW-UP CONFIG
+# ══════════════════════════════════════════════════════════════
+
+_DEFAULT_FOLLOWUP_ESTAGIOS = [
+    {"stagio": 1, "horas": 2, "mensagem": "Olá! Notei que o contrato ainda não foi assinado. Precisa de alguma ajuda?"},
+    {"stagio": 2, "horas": 6, "mensagem": "Oi! Só passando para lembrar sobre o contrato pendente. Posso ajudar com alguma dúvida?"},
+    {"stagio": 3, "horas": 12, "mensagem": "Olá! Este é nosso último lembrete sobre o contrato. Por favor, assine para darmos continuidade."},
+]
+
+
+@app.get("/api/zapsign/followup-config")
+async def api_get_zapsign_followup_config(account_id: int, user=Depends(get_current_user)):
+    """Busca configuração de follow-up ZapSign da conta."""
+    cfg = get_zapsign_config(account_id)
+    if not cfg:
+        return {"followup_ativo": False, "followup_estagios": _DEFAULT_FOLLOWUP_ESTAGIOS}
+
+    estagios = cfg.get("followup_estagios", _DEFAULT_FOLLOWUP_ESTAGIOS)
+    if isinstance(estagios, str):
+        try:
+            estagios = json.loads(estagios)
+        except Exception:
+            estagios = _DEFAULT_FOLLOWUP_ESTAGIOS
+
+    return {
+        "followup_ativo": cfg.get("followup_ativo", False),
+        "followup_estagios": estagios,
+    }
+
+
+@app.post("/api/zapsign/followup-config")
+async def api_save_zapsign_followup_config(request: Request, user=Depends(get_current_user)):
+    """Salva configuração de follow-up ZapSign da conta."""
+    body = await request.json()
+    account_id = body.get("account_id")
+    if not account_id:
+        raise HTTPException(400, "account_id obrigatório")
+
+    salvar_zapsign_config(account_id, {
+        "followup_ativo": body.get("followup_ativo", False),
+        "followup_estagios": body.get("followup_estagios", _DEFAULT_FOLLOWUP_ESTAGIOS),
+    })
+    return {"ok": True}
+
+
+@app.get("/api/zapsign/followup-list")
+async def api_zapsign_followup_list(account_id: int, limit: int = 20, offset: int = 0, user=Depends(get_current_user)):
+    """Lista follow-ups com dados do lead, documentos e estágio. Paginado."""
+    return listar_zapsign_followups(account_id, limit, offset)
+
+
+@app.get("/api/zapsign/followup-stats")
+async def api_zapsign_followup_stats(account_id: int, user=Depends(get_current_user)):
+    """Retorna métricas dos follow-ups ZapSign: enviados, assinados, pendentes, esgotados."""
+    return get_zapsign_followup_stats(account_id)

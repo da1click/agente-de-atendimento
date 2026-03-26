@@ -69,7 +69,7 @@ Usar quando o cliente pergunta "onde voces ficam?", "como funciona?", "atendem m
 ### 7. agendamento
 Usar APENAS se UMA das condicoes for verdadeira:
 
-A) O cliente pediu explicitamente agendar.
+A) O cliente pediu explicitamente agendar ("quero marcar", "como contrato", "quando posso falar com o advogado", "tem horario hoje?", "tem horario disponivel?", "quero falar com especialista").
 
 B) A qualificacao minima foi preenchida:
 - Area identificada (trabalhista ou previdenciaria)
@@ -83,12 +83,15 @@ IMPORTANTE: Se a agente ja fez todas as perguntas e o cliente respondeu, rotear 
 REGRA DE OURO: Caso inviavel (sem sequela, sem laudo, fora do prazo, sem qualidade de segurado) NAO rotear para agendamento. NUNCA.
 
 ### 8. transferir_humano
-- Cliente ja e cliente existente (retorno).
 - Caso com menos de 90 dias de trabalho (trabalhista).
 - Cliente aguardando cirurgia ou resultado de exame importante (previdenciario). Fisioterapia e acompanhamento medico NAO sao motivo para transferir.
 - Assunto fora do trabalhista e previdenciario.
 - Duvida complexa ou fora do escopo da triagem.
 - Cliente pede para falar com advogado ou humano.
+
+IMPORTANTE: NAO transferir quando o cliente pergunta sobre valores estimados do caso. Isso faz parte da qualificacao — continuar no fluxo normal.
+IMPORTANTE: NAO transferir cliente existente que retorna. Verificar se quer reagendar (agendamento) ou tirar duvida (explicacao).
+IMPORTANTE: Se o cliente pede horario, pergunta sobre disponibilidade ou quer falar com especialista, rotear para agendamento. NAO transferir para humano.
 
 ---
 

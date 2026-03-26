@@ -43,16 +43,20 @@ O VINCULO ainda NAO foi verificado (nao confirmou carteira assinada nem periodo 
 Usar quando o cliente ainda nao respondeu sobre carteira assinada ou MEI.
 
 ### 3. coleta_caso
-Vinculo CONFIRMADO (carteira ou periodo de graca ou vinculo informal com subordinacao).
+Vinculo CONFIRMADO (carteira ativa OU periodo de graca validado com datas OU vinculo informal com subordinacao).
 Faltam dados do acidente: data, descricao, parte do corpo, cirurgia.
 
 Usar enquanto nao tem: data + descricao + parte do corpo + informacao sobre cirurgia.
+
+IMPORTANTE: Se o cliente saiu do emprego (pediu demissao, foi demitido) e as datas de saida NAO foram verificadas para confirmar periodo de graca, o vinculo NAO esta confirmado. Manter em vinculo ate confirmar.
 
 ### 4. avaliacao
 Dados do acidente JA coletados (data, descricao, cirurgia).
 Falta avaliar: sequela, impacto no trabalho, laudo medico, profissao.
 
 Usar quando tem dados factuais mas ainda nao ha decisao de viabilidade.
+
+IMPORTANTE: NAO rotear para avaliacao se a qualidade de segurado nao foi confirmada. Se o cliente saiu do emprego e nao verificou periodo de graca, manter em vinculo.
 
 ### 5. casos_especiais
 O cliente mencionou: BPC, LOAS, aposentadoria, auxilio-doenca, deficiencia, autismo, esquizofrenia, idade avancada, doenca sem relacao com trabalho, ou menor de idade.
@@ -67,7 +71,7 @@ Usar quando o cliente pergunta "como funciona?", "preciso pagar algo?", "onde fi
 ### 7. agendamento
 Usar APENAS se UMA das condicoes for verdadeira:
 
-A) O cliente pediu explicitamente agendar ("quero marcar", "como contrato", "quando posso falar com o advogado").
+A) O cliente pediu explicitamente agendar ("quero marcar", "como contrato", "quando posso falar com o advogado", "tem horario hoje?", "tem horario disponivel?", "quero falar com especialista").
 
 B) O checklist de qualificacao foi respondido (interpretar com bom senso, NAO exigir respostas perfeitas):
 - Qualidade de segurado confirmada (CTPS ativa, periodo de graca, ou vinculo informal com subordinacao). Contribuinte individual/autonomo/MEI NAO conta.
@@ -88,9 +92,12 @@ REGRA DE OURO: Caso inviavel (sem sequela, sem laudo, fora do prazo, sem qualida
 - Beneficio cessando com tratamento em andamento.
 - Caso de terceiro/indicacao.
 - Duvida complexa ou fora do escopo juridico.
-- Cliente existente (retorno).
 - Documentacao insuficiente para analise.
 - Duvida administrativa (pagar INSS, emitir guias).
+
+IMPORTANTE: NAO transferir quando o cliente pergunta sobre valores estimados do caso. Isso faz parte da qualificacao — continuar no fluxo normal.
+IMPORTANTE: NAO transferir cliente existente que retorna. Verificar se quer reagendar (agendamento) ou tirar duvida (explicacao).
+IMPORTANTE: Se o cliente pede horario, pergunta sobre disponibilidade ou quer falar com especialista, rotear para agendamento. NAO transferir para humano.
 
 ---
 

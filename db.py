@@ -946,3 +946,289 @@ def submeter_onboarding(token: str):
         "submitted_at": "now()",
         "updated_at": "now()",
     }).eq("token", token).eq("status", "draft").execute()
+
+
+# ── ZAPSIGN ──────────────────────────────────────────────────
+
+def get_zapsign_config(account_id: int) -> dict | None:
+    """Busca config ZapSign da conta."""
+    db = get_db()
+    resp = db.table("ia_zapsign_config").select("*").eq("account_id", account_id).maybe_single().execute()
+    return resp.data
+
+
+def salvar_zapsign_config(account_id: int, config: dict):
+    """Salva ou atualiza config ZapSign da conta (upsert)."""
+    db = get_db()
+    data = {"account_id": account_id, **config, "updated_at": "now()"}
+    db.table("ia_zapsign_config").upsert(data, on_conflict="account_id").execute()
+
+
+def listar_zapsign_docs(account_id: int, limit: int = 50, offset: int = 0) -> list:
+    """Lista documentos ZapSign salvos localmente."""
+    db = get_db()
+    resp = (db.table("ia_zapsign_docs")
+            .select("*")
+            .eq("account_id", account_id)
+            .order("created_at", desc=True)
+            .range(offset, offset + limit - 1)
+            .execute())
+    return resp.data or []
+
+
+def upsert_zapsign_doc(account_id: int, doc: dict):
+    """Salva/atualiza documento ZapSign (usa doc_token como chave única)."""
+    db = get_db()
+    data = {
+        "account_id": account_id,
+        "doc_token": doc["token"],
+        "nome": doc.get("name", ""),
+        "status": doc.get("status", ""),
+        "external_id": doc.get("external_id", ""),
+        "created_at_zapsign": doc.get("created_at", ""),
+        "signers": doc.get("signers", []),
+        "updated_at": "now()",
+    }
+    db.table("ia_zapsign_docs").upsert(data, on_conflict="doc_token").execute()
+
+
+def contar_zapsign_docs_por_status(account_id: int) -> dict:
+    """Conta documentos por status para métricas."""
+    db = get_db()
+    resp = db.table("ia_zapsign_docs").select("status").eq("account_id", account_id).execute()
+    contagem = {}
+    for row in (resp.data or []):
+        s = row.get("status", "unknown")
+        contagem[s] = contagem.get(s, 0) + 1
+    return contagem
+
+
+def atualizar_zapsign_doc_status(doc_token: str, status: str):
+    """Atualiza status do doc ZapSign via webhook (pode não ter doc completo)."""
+    db = get_db()
+    db.table("ia_zapsign_docs").update({
+        "status": status,
+        "updated_at": "now()",
+    }).eq("doc_token", doc_token).execute()
+
+
+# ── ZAPSIGN FOLLOW-UP (por conversa, não por documento) ──────
+
+def upsert_zapsign_followup(account_id: int, conversation_id: int, inbox_id: int | None,
+                            doc_token: str, stagio: int, proximo_disparo: str):
+    """Cria follow-up ou adiciona doc_token à lista de uma conversa existente.
+    Lógica: 1 follow-up por conversa. Se já existe, apenas adiciona o doc_token à lista."""
+    db = get_db()
+    import json as _json
+
+    # Verificar se já existe follow-up ativo pra essa conversa
+    existing = (db.table("ia_zapsign_followup")
+                .select("id, doc_tokens, ativo")
+                .eq("account_id", account_id)
+                .eq("conversation_id", conversation_id)
+                .maybe_single().execute())
+
+    if existing.data and existing.data.get("ativo"):
+        # Já existe e está ativo — apenas adicionar doc_token à lista
+        current_tokens = existing.data.get("doc_tokens") or []
+        if isinstance(current_tokens, str):
+            current_tokens = _json.loads(current_tokens)
+        if doc_token not in current_tokens:
+            current_tokens.append(doc_token)
+            db.table("ia_zapsign_followup").update({
+                "doc_tokens": current_tokens,
+                "updated_at": "now()",
+            }).eq("id", existing.data["id"]).execute()
+    elif existing.data and not existing.data.get("ativo"):
+        # Existe mas inativo — reativar com novo doc
+        current_tokens = existing.data.get("doc_tokens") or []
+        if isinstance(current_tokens, str):
+            current_tokens = _json.loads(current_tokens)
+        if doc_token not in current_tokens:
+            current_tokens.append(doc_token)
+        db.table("ia_zapsign_followup").update({
+            "doc_tokens": current_tokens,
+            "doc_token": doc_token,
+            "stagio": stagio,
+            "proximo_disparo": proximo_disparo,
+            "ativo": True,
+            "updated_at": "now()",
+        }).eq("id", existing.data["id"]).execute()
+    else:
+        # Não existe — criar novo
+        db.table("ia_zapsign_followup").insert({
+            "account_id": account_id,
+            "conversation_id": conversation_id,
+            "inbox_id": inbox_id,
+            "doc_token": doc_token,
+            "doc_tokens": [doc_token],
+            "stagio": stagio,
+            "proximo_disparo": proximo_disparo,
+            "ativo": True,
+        }).execute()
+
+
+def get_zapsign_followups_pendentes() -> list:
+    """Busca follow-ups ativos com proximo_disparo <= agora."""
+    db = get_db()
+    from datetime import datetime, timezone
+    agora = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S+00:00")
+    resp = (
+        db.table("ia_zapsign_followup")
+        .select("*")
+        .eq("ativo", True)
+        .lte("proximo_disparo", agora)
+        .execute()
+    )
+    return resp.data or []
+
+
+def desativar_zapsign_followup_conversa(account_id: int, conversation_id: int):
+    """Desativa follow-up de uma conversa."""
+    db = get_db()
+    db.table("ia_zapsign_followup").update({
+        "ativo": False, "updated_at": "now()",
+    }).eq("account_id", account_id).eq(
+        "conversation_id", conversation_id
+    ).eq("ativo", True).execute()
+
+
+def remover_doc_token_followup(doc_token: str) -> bool:
+    """Remove doc_token da lista de um follow-up (quando doc é assinado).
+    Se não sobrar nenhum doc pendente, desativa o follow-up.
+    Retorna True se follow-up foi desativado (todos assinaram)."""
+    db = get_db()
+    import json as _json
+
+    # Buscar todos follow-ups ativos que contêm esse doc_token
+    resp = db.table("ia_zapsign_followup").select("*").eq("ativo", True).execute()
+    desativou = False
+
+    for row in (resp.data or []):
+        tokens = row.get("doc_tokens") or []
+        if isinstance(tokens, str):
+            tokens = _json.loads(tokens)
+
+        if doc_token in tokens:
+            tokens.remove(doc_token)
+            if len(tokens) == 0:
+                # Todos docs assinados — desativar follow-up
+                db.table("ia_zapsign_followup").update({
+                    "doc_tokens": [],
+                    "ativo": False,
+                    "updated_at": "now()",
+                }).eq("id", row["id"]).execute()
+                desativou = True
+            else:
+                # Ainda faltam docs — atualizar lista
+                db.table("ia_zapsign_followup").update({
+                    "doc_tokens": tokens,
+                    "updated_at": "now()",
+                }).eq("id", row["id"]).execute()
+
+    return desativou
+
+
+def listar_zapsign_followups(account_id: int, limit: int = 20, offset: int = 0) -> dict:
+    """Lista follow-ups com dados do lead e nomes dos documentos, paginado."""
+    db = get_db()
+    import json as _json
+
+    # Buscar follow-ups paginado
+    resp = (db.table("ia_zapsign_followup")
+            .select("*")
+            .eq("account_id", account_id)
+            .order("created_at", desc=True)
+            .range(offset, offset + limit - 1)
+            .execute())
+    followups = resp.data or []
+
+    # Contar total
+    resp_total = (db.table("ia_zapsign_followup")
+                  .select("id", count="exact")
+                  .eq("account_id", account_id)
+                  .execute())
+    total = resp_total.count if resp_total.count else len(followups)
+
+    if not followups:
+        return {"items": [], "total": total}
+
+    # Buscar leads por conversation_id
+    conv_ids = list(set(f["conversation_id"] for f in followups))
+    leads_resp = (db.table("ia_leads")
+                  .select("conversation_id, contact_name, contact_phone")
+                  .eq("account_id", account_id)
+                  .in_("conversation_id", conv_ids)
+                  .execute())
+    leads_map = {l["conversation_id"]: l for l in (leads_resp.data or [])}
+
+    # Buscar nomes dos docs pelos tokens
+    all_tokens = []
+    for f in followups:
+        tokens = f.get("doc_tokens") or []
+        if isinstance(tokens, str):
+            tokens = _json.loads(tokens)
+        all_tokens.extend(tokens)
+    all_tokens = list(set(all_tokens))
+
+    docs_map = {}
+    if all_tokens:
+        docs_resp = (db.table("ia_zapsign_docs")
+                     .select("doc_token, nome, status")
+                     .in_("doc_token", all_tokens)
+                     .execute())
+        docs_map = {d["doc_token"]: d for d in (docs_resp.data or [])}
+
+    # Montar resultado
+    items = []
+    for f in followups:
+        lead = leads_map.get(f["conversation_id"], {})
+        tokens = f.get("doc_tokens") or []
+        if isinstance(tokens, str):
+            tokens = _json.loads(tokens)
+
+        docs = []
+        for t in tokens:
+            doc_info = docs_map.get(t, {})
+            docs.append({
+                "token": t,
+                "nome": doc_info.get("nome", t[:12] + "..."),
+                "status": doc_info.get("status", "pending"),
+            })
+
+        items.append({
+            "id": f["id"],
+            "conversation_id": f["conversation_id"],
+            "contact_name": lead.get("contact_name", "-"),
+            "contact_phone": lead.get("contact_phone", "-"),
+            "docs": docs,
+            "stagio": f["stagio"],
+            "ativo": f["ativo"],
+            "proximo_disparo": f.get("proximo_disparo", ""),
+            "created_at": f.get("created_at", ""),
+        })
+
+    return {"items": items, "total": total}
+
+
+def get_zapsign_followup_stats(account_id: int) -> dict:
+    """Retorna métricas dos follow-ups por conversa."""
+    db = get_db()
+    resp = db.table("ia_zapsign_followup").select(
+        "ativo, stagio"
+    ).eq("account_id", account_id).execute()
+    rows = resp.data or []
+
+    total = len(rows)
+    pendentes = sum(1 for r in rows if r["ativo"])
+    # Inativos com estágio <= 3 = assinaram todos os docs antes de esgotar
+    assinados = sum(1 for r in rows if not r["ativo"] and r["stagio"] <= 3)
+    # Inativos com estágio > 3 = lembretes esgotados sem assinar
+    esgotados = sum(1 for r in rows if not r["ativo"] and r["stagio"] > 3)
+
+    return {
+        "total": total,
+        "pendentes": pendentes,
+        "assinados": assinados,
+        "esgotados": esgotados,
+    }

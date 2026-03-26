@@ -77,7 +77,7 @@ Usar quando o cliente pergunta "como funciona?", "preciso pagar algo?", "onde fi
 ### 7. agendamento
 Usar APENAS se UMA das condicoes for verdadeira:
 
-A) O cliente pediu explicitamente agendar ("quero marcar", "como contrato", "quando posso falar com o advogado").
+A) O cliente pediu explicitamente agendar ("quero marcar", "como contrato", "quando posso falar com o advogado", "tem horario hoje?", "tem horario disponivel?", "quero falar com especialista").
 
 B) O checklist de qualificacao foi respondido (interpretar com bom senso, NAO exigir respostas perfeitas):
 - Qualidade de segurado confirmada (CTPS ativa, periodo de graca, ou vinculo informal com subordinacao). Contribuinte individual/autonomo/MEI NAO conta.
@@ -123,11 +123,15 @@ Em caso de duvida sobre o enquadramento: rotear para transferir_humano, NUNCA pa
 - Beneficio cessando com tratamento em andamento.
 - Caso de terceiro/indicacao.
 - Duvida complexa ou fora do escopo juridico.
-- Cliente existente (retorno) ou com tag "contrato-fechado".
+- Cliente com tag "contrato-fechado".
 - Documentacao insuficiente para analise.
 - Duvida administrativa (pagar INSS, emitir guias).
 - Dados contraditórios sobre tempo de contribuicao ou vinculo.
 - Cliente informa que beneficio foi "cortado" — pode haver direito retroativo ao auxilio-acidente.
+
+IMPORTANTE: NAO transferir quando o cliente pergunta sobre valores estimados do caso. Isso faz parte da qualificacao — continuar no fluxo normal.
+IMPORTANTE: NAO transferir cliente existente que retorna. Verificar se quer reagendar (agendamento) ou tirar duvida (explicacao).
+IMPORTANTE: Se o cliente pede horario, pergunta sobre disponibilidade ou quer falar com especialista, rotear para agendamento. NAO transferir para humano.
 
 ---
 

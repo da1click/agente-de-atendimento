@@ -67,7 +67,7 @@ Usar quando o cliente pergunta "como funciona?", "preciso pagar algo?", "onde fi
 ### 7. agendamento
 Usar APENAS se UMA das condicoes for verdadeira:
 
-A) O cliente pediu explicitamente agendar ("quero marcar", "como contrato", "quando posso falar com o advogado").
+A) O cliente pediu explicitamente agendar ou perguntou sobre horarios ("quero marcar", "como contrato", "quando posso falar com o advogado", "tem horario hoje?", "tem horario disponivel?", "quero falar com especialista").
 
 B) O checklist de qualificacao foi respondido (interpretar com bom senso, NAO exigir respostas perfeitas):
 - Qualidade de segurado confirmada (CTPS ativa, periodo de graca, ou vinculo informal com subordinacao). Contribuinte individual/autonomo/MEI NAO conta.
@@ -88,9 +88,12 @@ REGRA DE OURO: Caso inviavel (sem sequela, sem laudo, fora do prazo, sem qualida
 - Beneficio cessando com tratamento em andamento.
 - Caso de terceiro/indicacao.
 - Duvida complexa ou fora do escopo juridico.
-- Cliente existente (retorno).
 - Documentacao insuficiente para analise.
 - Duvida administrativa (pagar INSS, emitir guias).
+
+IMPORTANTE: NAO transferir quando o cliente pergunta sobre valores estimados do caso. Isso faz parte da qualificacao — continuar no fluxo normal.
+IMPORTANTE: NAO transferir cliente existente que retorna. Verificar se quer reagendar (agendamento) ou tirar duvida (explicacao).
+IMPORTANTE: Se o cliente pede horario, pergunta sobre disponibilidade ou quer falar com especialista, rotear para agendamento. NAO transferir para humano.
 
 ---
 
@@ -102,10 +105,16 @@ Se o cliente perguntar sobre agendamento ("nao faz agendamento?", "quero marcar"
 
 ---
 
+## REGRA PRIORITARIA — PEDIDO DE HORARIO/AGENDAMENTO
+
+Se a ULTIMA mensagem do cliente pede horario, disponibilidade ou agendamento (ex: "tem horario hoje?", "quero marcar", "tem horario disponivel?", "quero falar com especialista"), rotear para agendamento IMEDIATAMENTE. Esta regra tem PRIORIDADE sobre todas as regras de transicao abaixo.
+
+---
+
 ## REGRAS DE TRANSICAO
 
 - identificacao → vinculo: quando Maria se apresentou E cliente disse o nome E assunto e acidente (previdenciario).
-- identificacao → transferir_humano: quando assunto e TRABALHISTA (demissao, rescisao, carteira nao assinada, verbas, assedio, insalubridade). A IA deve acolher e transferir para o advogado.
+- identificacao → transferir_humano: quando assunto e TRABALHISTA (demissao, rescisao, carteira nao assinada, verbas, assedio, insalubridade) E o cliente NAO esta pedindo horario ou agendamento. A IA deve acolher e transferir para o advogado.
 - identificacao → casos_especiais: quando assunto e BPC/LOAS/aposentadoria/doenca.
 - vinculo → coleta_caso: quando carteira ou periodo de graca CONFIRMADO.
 - coleta_caso → avaliacao: quando tem data + descricao + parte do corpo + cirurgia.

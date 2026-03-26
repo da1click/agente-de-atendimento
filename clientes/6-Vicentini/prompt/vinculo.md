@@ -19,7 +19,9 @@ Verificar se o cliente tinha cobertura do INSS na data do acidente (vinculo empr
 
 "Na data do acidente, voce tinha carteira assinada?"
 
-Se SIM: Vinculo confirmado. Fase concluida. O supervisor encaminhara para coleta_caso.
+Se SIM e ainda esta empregado: Vinculo confirmado. Fase concluida. O supervisor encaminhara para coleta_caso.
+
+Se SIM mas ja saiu do emprego (pediu demissao, foi demitido, saiu): OBRIGATORIO ir para pergunta 3 (validacao de datas) para confirmar se ainda estava no periodo de graca na data do acidente. NAO pular para coleta_caso sem confirmar as datas.
 
 Se NAO: Ir para pergunta 2.
 

@@ -609,6 +609,14 @@
       <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg></span>
       <span class="nav-label">Prompt</span>
     </div>
+    <div class="nav-item" id="nav-zapsign" onclick="navTo('zapsign')">
+      <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 15l2 2 4-4"/></svg></span>
+      <span class="nav-label">ZapSign</span>
+    </div>
+    <div class="nav-item" id="nav-tutoriais" onclick="navTo('tutoriais')">
+      <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg></span>
+      <span class="nav-label">Tutoriais</span>
+    </div>
   </div>
 
   <div class="nav-section" id="nav-sistema" style="margin-top:8px;display:none;">
@@ -1262,13 +1270,13 @@ function aplicarPermissoes() {
   document.getElementById('btn-criador-usuarios').style.display = role === 'super_admin' ? 'block' : 'none';
   // Nav items visíveis por role
   const PERMS = {
-    super_admin: ['templates', 'inatividade', 'relatorios', 'audiencias', 'config', 'usuarios', 'prompt'],
-    admin:       ['templates', 'inatividade', 'relatorios', 'audiencias', 'config', 'prompt'],
-    moderador:   ['relatorios', 'audiencias', 'prompt'],
-    agente:      ['templates', 'inatividade', 'audiencias', 'prompt'],
+    super_admin: ['templates', 'inatividade', 'remarketing', 'relatorios', 'audiencias', 'advogados', 'config', 'usuarios', 'prompt', 'zapsign', 'tutoriais'],
+    admin:       ['templates', 'inatividade', 'remarketing', 'relatorios', 'audiencias', 'advogados', 'config', 'prompt', 'zapsign', 'tutoriais'],
+    moderador:   ['remarketing', 'relatorios', 'audiencias', 'prompt', 'tutoriais'],
+    agente:      ['templates', 'inatividade', 'audiencias', 'prompt', 'tutoriais'],
   };
   const allowed = PERMS[role] || [];
-  ['templates', 'inatividade', 'relatorios', 'audiencias', 'config', 'prompt'].forEach(s => {
+  ['templates', 'inatividade', 'remarketing', 'relatorios', 'audiencias', 'advogados', 'config', 'prompt', 'zapsign', 'tutoriais'].forEach(s => {
     const el = document.getElementById(`nav-${s}`);
     if (el) el.style.display = allowed.includes(s) ? 'flex' : 'none';
   });
@@ -1294,7 +1302,14 @@ async function _iniciarDashboard() {
   fetch('/api/version').then(r=>r.json()).then(d=>{document.getElementById('sidebar-version').innerHTML=`v${d.version}${d.updated_at ? `<br><span style="font-size:10px;font-weight:400;opacity:0.7;">${d.updated_at}</span>` : ''}`;}).catch(()=>{});
   aplicarPermissoes();
   await carregarClientes();
-  navTo('contas');
+  // Restaurar conta e seção ativas do localStorage (ex: após deploy/reload)
+  const savedConta = localStorage.getItem('da1click_conta_ativa');
+  const savedSecao = localStorage.getItem('da1click_secao_ativa');
+  if (savedConta && clientes.some(c => c.account_id === parseInt(savedConta))) {
+    clienteAtivo = parseInt(savedConta);
+    renderSidebarAccounts();
+  }
+  navTo(savedSecao || 'contas');
 }
 
 // ══════════════════════════════════════════════
@@ -1345,6 +1360,7 @@ function renderSidebarAccounts() {
 function trocarContaTopbar(id) {
   if (!id) {
     clienteAtivo = null;
+    localStorage.removeItem('da1click_conta_ativa');
     renderSidebarAccounts();
     document.getElementById('page-content').innerHTML = `<div class="empty-state">
       <p>Selecione uma conta no menu acima</p></div>`;
@@ -1363,18 +1379,21 @@ function navTo(secao) {
   closeSidebarMobile();
   // Verificar permissão — redireciona se não tem acesso
   const PERMS_NAV = {
-    super_admin: ['contas','templates','inatividade','remarketing','relatorios','audiencias','advogados','config','usuarios','terminal','prompt','sugestoes'],
-    admin:       ['contas','templates','inatividade','remarketing','relatorios','audiencias','advogados','config','prompt','sugestoes'],
-    moderador:   ['contas','remarketing','relatorios','audiencias','prompt'],
-    agente:      ['contas','templates','inatividade','audiencias','prompt'],
+    super_admin: ['contas','templates','inatividade','remarketing','relatorios','audiencias','advogados','config','usuarios','terminal','prompt','sugestoes','zapsign','tutoriais'],
+    admin:       ['contas','templates','inatividade','remarketing','relatorios','audiencias','advogados','config','prompt','sugestoes','zapsign','tutoriais'],
+    moderador:   ['remarketing','relatorios','audiencias','prompt','tutoriais'],
+    agente:      ['templates','inatividade','audiencias','prompt','tutoriais'],
   };
   const allowedNav = PERMS_NAV[currentUser?.role] || ['contas','prompt'];
   if (!allowedNav.includes(secao)) {
     secao = _paginaPadrao();
   }
   secaoAtiva = secao;
+  // Persistir estado no localStorage (sobrevive a reload/deploy)
+  localStorage.setItem('da1click_secao_ativa', secao);
+  if (clienteAtivo) localStorage.setItem('da1click_conta_ativa', clienteAtivo);
   // Update nav highlights (only for non-conta sections)
-  ['templates','inatividade','remarketing','relatorios','audiencias','advogados','config','usuarios','terminal','prompt','sugestoes'].forEach(s => {
+  ['templates','inatividade','remarketing','relatorios','audiencias','advogados','config','usuarios','terminal','prompt','sugestoes','zapsign','tutoriais'].forEach(s => {
     document.getElementById(`nav-${s}`)?.classList.toggle('active', s === secao);
   });
   renderSidebarAccounts();
@@ -1384,7 +1403,7 @@ function navTo(secao) {
     inatividade: 'Inatividade', remarketing: 'Remarketing',
     relatorios: 'Relatórios', audiencias: 'Aviso de Audiência', advogados: 'Advogados',
     config: 'Configurações', usuarios: 'Gerenciar Usuários', terminal: 'Terminal IA',
-    prompt: 'Prompt da IA', sugestoes: 'Sugestões de Prompt',
+    prompt: 'Prompt da IA', sugestoes: 'Sugestões de Prompt', zapsign: 'ZapSign', tutoriais: 'Tutoriais',
   };
   document.getElementById('topbar-title').textContent = titles[secao] || secao;
 
@@ -1392,8 +1411,8 @@ function navTo(secao) {
     inatividade: renderPageInatividade, remarketing: renderPageRemarketing,
     relatorios: renderPageRelatorios, audiencias: renderPageAvisoAudiencia, advogados: renderPageAdvogados,
     config: renderPageConfig, usuarios: renderPageUsuarios, terminal: renderPageTerminal,
-    prompt: renderPagePrompt, sugestoes: renderPageSugestoes };
-  (pages[secao] || renderPageContas)();
+    prompt: renderPagePrompt, sugestoes: renderPageSugestoes, zapsign: renderPageZapSign, tutoriais: renderPageTutoriais };
+  (pages[secao] || pages[_paginaPadrao()] || renderPageContas)();
 }
 
 // ══════════════════════════════════════════════
@@ -4889,23 +4908,58 @@ async function renderPageSugestoes() {
               <button class="btn btn-ghost" style="font-size:11px;padding:3px 10px;color:var(--red);" onclick="_resolverSugestao('${s.id}','rejeitada',${idx})">Rejeitar</button>
             </div>
           </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0;">
-            <div style="padding:12px;border-right:1px solid var(--border);">
-              <div style="font-size:11px;font-weight:600;color:var(--text-muted);margin-bottom:6px;">PROMPT ATUAL</div>
-              <pre style="font-size:12px;white-space:pre-wrap;word-break:break-word;max-height:400px;overflow:auto;margin:0;font-family:inherit;line-height:1.5;">${_escHtml(s.conteudo_original || '(vazio)')}</pre>
+          <div style="padding:12px;">
+            <div style="font-size:11px;font-weight:600;color:var(--text-muted);margin-bottom:6px;">ALTERAÇÕES <span style="font-weight:400;">(
+              <span style="background:#dcfce7;color:#166534;padding:1px 4px;border-radius:3px;">adicionado</span>
+              <span style="background:#fee2e2;color:#991b1b;padding:1px 4px;border-radius:3px;text-decoration:line-through;">removido</span>
+              )</span>
             </div>
-            <div style="padding:12px;background:rgba(99,102,241,0.03);">
-              <div style="font-size:11px;font-weight:600;color:var(--purple);margin-bottom:6px;">SUGESTÃO DO CLIENTE</div>
-              <pre style="font-size:12px;white-space:pre-wrap;word-break:break-word;max-height:400px;overflow:auto;margin:0;font-family:inherit;line-height:1.5;">${_escHtml(s.conteudo_sugerido)}</pre>
-            </div>
+            <pre id="diff-${idx}" style="font-size:12px;white-space:pre-wrap;word-break:break-word;max-height:500px;overflow:auto;margin:0;font-family:inherit;line-height:1.7;"></pre>
           </div>
         </div>`;
     });
     html += '</div>';
     el.innerHTML = html;
+    // Renderizar diffs
+    sugestoes.forEach((s, idx) => {
+      const diffEl = document.getElementById(`diff-${idx}`);
+      if (diffEl) diffEl.innerHTML = _renderDiff(s.conteudo_original || '', s.conteudo_sugerido || '');
+    });
   } catch(e) {
     el.innerHTML = `<div class="empty-state"><p style="color:var(--red);">Erro: ${e.message}</p></div>`;
   }
+}
+
+function _renderDiff(original, sugerido) {
+  const oldLines = original.split('\n');
+  const newLines = sugerido.split('\n');
+  // LCS para alinhar linhas
+  const m = oldLines.length, n = newLines.length;
+  const dp = Array.from({length: m+1}, () => new Uint16Array(n+1));
+  for (let i = 1; i <= m; i++)
+    for (let j = 1; j <= n; j++)
+      dp[i][j] = oldLines[i-1] === newLines[j-1] ? dp[i-1][j-1]+1 : Math.max(dp[i-1][j], dp[i][j-1]);
+  // Backtrack
+  const ops = [];
+  let i = m, j = n;
+  while (i > 0 || j > 0) {
+    if (i > 0 && j > 0 && oldLines[i-1] === newLines[j-1]) {
+      ops.unshift({type:'same', text: oldLines[i-1]});
+      i--; j--;
+    } else if (j > 0 && (i === 0 || dp[i][j-1] >= dp[i-1][j])) {
+      ops.unshift({type:'add', text: newLines[j-1]});
+      j--;
+    } else {
+      ops.unshift({type:'del', text: oldLines[i-1]});
+      i--;
+    }
+  }
+  return ops.map(op => {
+    const esc = _escHtml(op.text || ' ');
+    if (op.type === 'add') return `<span style="background:#dcfce7;display:block;padding:1px 4px;border-left:3px solid #22c55e;">${esc}</span>`;
+    if (op.type === 'del') return `<span style="background:#fee2e2;display:block;padding:1px 4px;border-left:3px solid #ef4444;text-decoration:line-through;opacity:0.7;">${esc}</span>`;
+    return `<span style="display:block;padding:1px 4px;">${esc}</span>`;
+  }).join('');
 }
 
 async function _resolverSugestao(id, status, idx) {
@@ -5210,6 +5264,932 @@ function _terminalRestart() {
   if (!confirm('Reiniciar a aplicação? Isso aplica as alterações feitas pelo Claude.')) return;
   if (!_terminalWs || _terminalWs.readyState !== WebSocket.OPEN) return;
   _terminalWs.send('__RESTART_APP__');
+}
+
+// ══════════════════════════════════════════════
+// PAGE: ZAPSIGN
+// ══════════════════════════════════════════════
+
+let _zapsignConfig = {};
+let _zapsignFollowup = { followup_ativo: false, followup_estagios: [] };
+let _zapsignFuStats = { total: 0, pendentes: 0, assinados: 0, esgotados: 0 };
+let _zapsignFuList = { items: [], total: 0 };
+let _zapsignFuPage = 0;
+const _ZAPSIGN_FU_LIMIT = 10;
+
+async function renderPageZapSign() {
+  const el = document.getElementById('page-content');
+  if (!clienteAtivo) {
+    el.innerHTML = '<div class="empty-state">Selecione uma conta para gerenciar ZapSign.</div>';
+    document.getElementById('topbar-sub').textContent = '';
+    return;
+  }
+  document.getElementById('topbar-sub').textContent = `Conta #${clienteAtivo}`;
+  el.innerHTML = '<div class="loading">Carregando ZapSign...</div>';
+
+  // Carregar config, docs e métricas em paralelo
+  try {
+    const [cfgResp, fuResp, fuStatsResp, fuListResp] = await Promise.all([
+      fetch(`/api/zapsign/config?account_id=${clienteAtivo}`),
+      fetch(`/api/zapsign/followup-config?account_id=${clienteAtivo}`).catch(() => null),
+      fetch(`/api/zapsign/followup-stats?account_id=${clienteAtivo}`).catch(() => null),
+      fetch(`/api/zapsign/followup-list?account_id=${clienteAtivo}&limit=${_ZAPSIGN_FU_LIMIT}&offset=${_zapsignFuPage * _ZAPSIGN_FU_LIMIT}`).catch(() => null),
+    ]);
+    _zapsignConfig = await cfgResp.json();
+    _zapsignFollowup = fuResp ? await fuResp.json() : { followup_ativo: false, followup_estagios: [] };
+    _zapsignFuStats = fuStatsResp ? await fuStatsResp.json() : { total: 0, pendentes: 0, assinados: 0, esgotados: 0 };
+    _zapsignFuList = fuListResp ? await fuListResp.json() : { items: [], total: 0 };
+  } catch(e) {
+    _zapsignConfig = {};
+    _zapsignFollowup = { followup_ativo: false, followup_estagios: [] };
+    _zapsignFuStats = { total: 0, pendentes: 0, assinados: 0, esgotados: 0 };
+    _zapsignFuList = { items: [], total: 0 };
+  }
+
+  _renderZapSignPage();
+}
+
+function _zapsignStatusBadge(status) {
+  const map = {
+    signed: { label: 'Assinado', cls: 'badge-on' },
+    pending: { label: 'Pendente', cls: 'badge-warn' },
+    expired: { label: 'Expirado', cls: 'badge-off' },
+    canceled: { label: 'Cancelado', cls: 'badge-off' },
+    refunded: { label: 'Reembolsado', cls: 'badge-off' },
+  };
+  const m = map[status] || { label: status || 'Desconhecido', cls: '' };
+  return `<span class="badge ${m.cls}">${m.label}</span>`;
+}
+
+function _renderZapSignPage() {
+  const el = document.getElementById('page-content');
+  const hasToken = !!(_zapsignConfig.api_token || _zapsignConfig.api_token_masked);
+  const tokenDisplay = _zapsignConfig.api_token_masked || '';
+
+  // Rows dos follow-ups (leads + docs + estágio)
+  const fuItems = _zapsignFuList.items || [];
+  const fuTotal = _zapsignFuList.total || 0;
+  const fuTotalPages = Math.ceil(fuTotal / _ZAPSIGN_FU_LIMIT);
+
+  const fuRows = fuItems.map(f => {
+    const docsNames = (f.docs || []).map(d =>
+      `<span class="badge ${d.status === 'signed' ? 'badge-on' : ''}" style="margin:1px;font-size:11px;">${d.nome || d.token.slice(0,8)+'...'}</span>`
+    ).join(' ') || '-';
+
+    const estagioLabel = f.ativo
+      ? `<span class="badge badge-warn">Estágio ${f.stagio}/3</span>`
+      : (f.stagio > 3
+        ? '<span class="badge badge-off">Esgotado</span>'
+        : '<span class="badge badge-on">Assinado</span>');
+
+    const criado = f.created_at ? new Date(f.created_at).toLocaleDateString('pt-BR') : '-';
+
+    return `<tr>
+      <td><strong>${f.contact_name}</strong><br><small style="color:var(--text-secondary);">${f.contact_phone}</small></td>
+      <td>${docsNames}</td>
+      <td>${estagioLabel}</td>
+      <td>${criado}</td>
+    </tr>`;
+  }).join('');
+
+  const fu = _zapsignFuStats;
+
+  el.innerHTML = `
+    <!-- Follow-up Stats -->
+    <div class="card" style="margin-bottom:20px;">
+      <div class="card-header"><span>Painel de Assinaturas</span></div>
+      <div class="card-body" style="padding:16px;">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:16px;">
+          <div style="text-align:center;padding:14px;background:var(--bg);border-radius:10px;">
+            <div style="font-size:24px;font-weight:700;color:var(--purple);">${_zapsignFuStats.total}</div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">Enviados</div>
+          </div>
+          <div style="text-align:center;padding:14px;background:var(--bg);border-radius:10px;">
+            <div style="font-size:24px;font-weight:700;color:var(--yellow);">${_zapsignFuStats.pendentes}</div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">Aguardando</div>
+          </div>
+          <div style="text-align:center;padding:14px;background:var(--bg);border-radius:10px;">
+            <div style="font-size:24px;font-weight:700;color:var(--green);">${_zapsignFuStats.assinados}</div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">Assinaram</div>
+          </div>
+          <div style="text-align:center;padding:14px;background:var(--bg);border-radius:10px;">
+            <div style="font-size:24px;font-weight:700;color:var(--red);">${_zapsignFuStats.esgotados}</div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">Não Assinaram</div>
+          </div>
+        </div>
+        ${_zapsignFuStats.total > 0 ? `
+        <div style="height:20px;background:#e8eaf0;border-radius:10px;overflow:hidden;display:flex;">
+          ${_zapsignFuStats.assinados ? `<div style="width:${(_zapsignFuStats.assinados/_zapsignFuStats.total*100).toFixed(1)}%;background:var(--green);transition:0.3s;" title="Assinaram: ${_zapsignFuStats.assinados}"></div>` : ''}
+          ${_zapsignFuStats.pendentes ? `<div style="width:${(_zapsignFuStats.pendentes/_zapsignFuStats.total*100).toFixed(1)}%;background:var(--yellow);transition:0.3s;" title="Aguardando: ${_zapsignFuStats.pendentes}"></div>` : ''}
+          ${_zapsignFuStats.esgotados ? `<div style="width:${(_zapsignFuStats.esgotados/_zapsignFuStats.total*100).toFixed(1)}%;background:var(--red);transition:0.3s;" title="Não assinaram: ${_zapsignFuStats.esgotados}"></div>` : ''}
+        </div>
+        <div style="display:flex;gap:16px;margin-top:8px;font-size:12px;color:var(--text-secondary);">
+          <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:50%;background:var(--green);"></span> Assinaram</span>
+          <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:50%;background:var(--yellow);"></span> Aguardando</span>
+          <span style="display:flex;align-items:center;gap:4px;"><span style="width:10px;height:10px;border-radius:50%;background:var(--red);"></span> Não Assinaram</span>
+        </div>
+        ` : '<div style="text-align:center;color:var(--text-secondary);font-size:13px;padding:8px 0;">Nenhum follow-up registrado ainda.</div>'}
+      </div>
+    </div>
+
+    <!-- Configuração -->
+    <div class="card" style="margin-bottom:20px;">
+      <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+        <span>Configuração ZapSign</span>
+        <div style="display:flex;gap:8px;align-items:center;">
+          ${hasToken ? '<span class="badge badge-on">Conectado</span>' : '<span class="badge badge-off">Não configurado</span>'}
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="field-group" style="margin-bottom:16px;">
+          <label>API Token</label>
+          <input type="password" id="zs-token" placeholder="Cole seu token da ZapSign" value="${_zapsignConfig.api_token || ''}" />
+          <small style="color:var(--text-secondary);">${tokenDisplay ? 'Atual: ' + tokenDisplay : 'Obtenha em zapsign.com.br > Configurações > API'}</small>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:16px;">
+          <button class="btn btn-primary" onclick="_zapsignImplantar()" style="display:flex;align-items:center;gap:6px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            Implantar ZapSign
+          </button>
+          <button class="btn btn-secondary" onclick="_zapsignTestarConexao()">Testar Conexão</button>
+        </div>
+        <small style="color:var(--text-secondary);display:block;margin-top:8px;">
+          "Implantar" salva o token e configura o webhook automaticamente na sua conta ZapSign.
+        </small>
+        <div id="zs-config-msg" style="margin-top:10px;"></div>
+      </div>
+    </div>
+
+    <!-- Follow-up de Assinatura -->
+    <div class="card" style="margin-bottom:20px;">
+      <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+        <span>Follow-up de Assinatura</span>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:13px;color:var(--text-secondary);">${_zapsignFollowup.followup_ativo ? 'Ativo' : 'Inativo'}</span>
+          <label class="toggle"><input type="checkbox" id="zs-followup-ativo" ${_zapsignFollowup.followup_ativo ? 'checked' : ''} /><span class="toggle-slider"></span></label>
+        </div>
+      </div>
+      <div class="card-body">
+        <p style="color:var(--text-secondary);margin-bottom:16px;font-size:13px;">
+          Envia lembretes automáticos quando um contrato ZapSign é enviado e ainda não foi assinado.
+        </p>
+        ${_zapsignRenderEstagios()}
+        <div style="display:flex;gap:8px;margin-top:16px;">
+          <button class="btn btn-primary" onclick="_zapsignSalvarFollowup()">Salvar Follow-up</button>
+        </div>
+        <div id="zs-followup-msg" style="margin-top:10px;"></div>
+      </div>
+    </div>
+
+    <!-- Follow-ups (Leads + Documentos) -->
+    <div class="card">
+      <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+        <span>Acompanhamento de Assinaturas</span>
+        <small style="color:var(--text-secondary);">${fuTotal} registro${fuTotal !== 1 ? 's' : ''}</small>
+      </div>
+      <div class="card-body" style="padding:0;">
+        ${fuItems.length ? `
+          <table class="data-table">
+            <thead><tr>
+              <th>Lead</th><th>Documentos</th><th>Estágio</th><th>Criado</th>
+            </tr></thead>
+            <tbody>${fuRows}</tbody>
+          </table>
+          ${fuTotalPages > 1 ? `
+          <div style="display:flex;justify-content:center;align-items:center;gap:12px;padding:12px;">
+            <button class="btn btn-secondary btn-sm" onclick="_zapsignFuPaginar(-1)" ${_zapsignFuPage <= 0 ? 'disabled' : ''}>Anterior</button>
+            <span style="font-size:13px;color:var(--text-secondary);">Página ${_zapsignFuPage + 1} de ${fuTotalPages}</span>
+            <button class="btn btn-secondary btn-sm" onclick="_zapsignFuPaginar(1)" ${_zapsignFuPage >= fuTotalPages - 1 ? 'disabled' : ''}>Próxima</button>
+          </div>
+          ` : ''}
+        ` : `<div class="empty-state" style="padding:40px;">
+          ${hasToken ? 'Nenhum follow-up registrado ainda. Envie um link ZapSign no Chatwoot para começar.' : 'Configure o token da API para começar.'}
+        </div>`}
+      </div>
+    </div>
+  `;
+}
+
+async function _zapsignTestarConexao() {
+  const token = document.getElementById('zs-token').value.trim();
+  const msgEl = document.getElementById('zs-config-msg');
+
+  if (!token) {
+    msgEl.innerHTML = '<span style="color:var(--red);">Informe o token para testar.</span>';
+    return;
+  }
+
+  msgEl.innerHTML = '<span style="color:var(--text-secondary);">Testando conexão...</span>';
+
+  try {
+    const resp = await fetch('/api/zapsign/test-connection', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ api_token: token }),
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      msgEl.innerHTML = '<span style="color:var(--green);">Conexão OK! Token válido.</span>';
+    } else {
+      msgEl.innerHTML = `<span style="color:var(--red);">Falha: ${data.error}</span>`;
+    }
+  } catch(e) {
+    msgEl.innerHTML = `<span style="color:var(--red);">Erro: ${e.message}</span>`;
+  }
+}
+
+async function _zapsignImplantar() {
+  const token = document.getElementById('zs-token').value.trim();
+  const msgEl = document.getElementById('zs-config-msg');
+
+  if (!token) {
+    msgEl.innerHTML = '<span style="color:var(--red);">Informe o API Token antes de implantar.</span>';
+    return;
+  }
+
+  msgEl.innerHTML = '<span style="color:var(--text-secondary);">Implantando ZapSign... validando token e configurando webhook...</span>';
+
+  try {
+    const resp = await fetch('/api/zapsign/implantar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ account_id: clienteAtivo, api_token: token }),
+    });
+    const data = await resp.json();
+
+    if (data.ok) {
+      let msg = '<span style="color:var(--green);font-weight:600;">ZapSign implantado com sucesso!</span><br>';
+      msg += '<span style="color:var(--text-secondary);font-size:13px;">';
+      msg += data.token_salvo ? 'Token salvo. ' : '';
+      msg += data.webhook_criado ? 'Webhook configurado automaticamente.' : '';
+      msg += data.webhook_ja_existe ? 'Webhook já estava configurado.' : '';
+      msg += '</span>';
+      msgEl.innerHTML = msg;
+      setTimeout(() => renderPageZapSign(), 2000);
+    } else {
+      msgEl.innerHTML = `<span style="color:var(--red);">Erro: ${data.error || 'Falha na implantação'}</span>`;
+      if (data.erros && data.erros.length) {
+        msgEl.innerHTML += '<br><small style="color:var(--text-secondary);">' + data.erros.join('<br>') + '</small>';
+      }
+    }
+  } catch(e) {
+    msgEl.innerHTML = `<span style="color:var(--red);">Erro: ${e.message}</span>`;
+  }
+}
+
+async function _zapsignFuPaginar(dir) {
+  _zapsignFuPage += dir;
+  if (_zapsignFuPage < 0) _zapsignFuPage = 0;
+  await renderPageZapSign();
+}
+
+async function _zapsignVerDoc(docToken) {
+  const container = document.getElementById('zs-modal-container');
+  container.innerHTML = '<div class="modal-overlay open" onclick="_zapsignFecharModal()"><div class="modal" onclick="event.stopPropagation()" style="max-width:600px;"><div class="loading">Carregando detalhes...</div></div></div>';
+
+  try {
+    const resp = await fetch(`/api/zapsign/docs/${docToken}?account_id=${clienteAtivo}`);
+    const doc = await resp.json();
+
+    const signers = (doc.signers || []).map(s => `
+      <tr>
+        <td>${s.name || '-'}</td>
+        <td>${s.email || '-'}</td>
+        <td>${s.phone_country || ''}${s.phone_number || '-'}</td>
+        <td>${_zapsignStatusBadge(s.status)}</td>
+        <td>${s.signed_at ? new Date(s.signed_at).toLocaleString('pt-BR') : '-'}</td>
+      </tr>
+    `).join('');
+
+    container.innerHTML = `
+      <div class="modal-overlay open" onclick="_zapsignFecharModal()">
+        <div class="modal" onclick="event.stopPropagation()" style="max-width:700px;">
+          <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+            <span>${doc.name || 'Documento'}</span>
+            <button class="btn btn-secondary btn-sm" onclick="_zapsignFecharModal()">Fechar</button>
+          </div>
+          <div class="card-body">
+            <div class="fields-grid" style="margin-bottom:16px;">
+              <div class="field-group">
+                <label>Status</label>
+                <div>${_zapsignStatusBadge(doc.status)}</div>
+              </div>
+              <div class="field-group">
+                <label>Criado em</label>
+                <div>${doc.created_at ? new Date(doc.created_at).toLocaleString('pt-BR') : '-'}</div>
+              </div>
+              <div class="field-group">
+                <label>External ID</label>
+                <div>${doc.external_id || '-'}</div>
+              </div>
+              <div class="field-group">
+                <label>Token</label>
+                <div style="font-size:12px;word-break:break-all;">${doc.token || docToken}</div>
+              </div>
+            </div>
+            ${signers ? `
+              <h4 style="margin-bottom:8px;">Signatários</h4>
+              <table class="data-table">
+                <thead><tr><th>Nome</th><th>Email</th><th>Telefone</th><th>Status</th><th>Assinado em</th></tr></thead>
+                <tbody>${signers}</tbody>
+              </table>
+            ` : '<p>Sem signatários.</p>'}
+          </div>
+        </div>
+      </div>
+    `;
+  } catch(e) {
+    container.innerHTML = `
+      <div class="modal-overlay open" onclick="_zapsignFecharModal()">
+        <div class="modal" onclick="event.stopPropagation()" style="max-width:400px;">
+          <div class="card-body" style="text-align:center;padding:30px;">
+            <p style="color:var(--red);">Erro ao carregar detalhes: ${e.message}</p>
+            <button class="btn btn-secondary" onclick="_zapsignFecharModal()" style="margin-top:12px;">Fechar</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+}
+
+function _zapsignFecharModal() {
+  document.getElementById('zs-modal-container').innerHTML = '';
+}
+
+function _zapsignRenderEstagios() {
+  const defaultEstagios = [
+    {stagio: 1, horas: 2, mensagem: "Olá! Notei que o contrato ainda não foi assinado. Precisa de alguma ajuda?"},
+    {stagio: 2, horas: 6, mensagem: "Oi! Só passando para lembrar sobre o contrato pendente. Posso ajudar com alguma dúvida?"},
+    {stagio: 3, horas: 12, mensagem: "Olá! Este é nosso último lembrete sobre o contrato. Por favor, assine para darmos continuidade."},
+  ];
+  const estagios = (_zapsignFollowup.followup_estagios && _zapsignFollowup.followup_estagios.length)
+    ? _zapsignFollowup.followup_estagios
+    : defaultEstagios;
+
+  const cores = ['var(--green)', 'var(--yellow)', 'var(--red)'];
+  const labels = ['1o Lembrete', '2o Lembrete', 'Último Lembrete'];
+
+  return estagios.map((e, i) => `
+    <div style="border-left:3px solid ${cores[i] || 'var(--purple)'};padding:12px 16px;margin-bottom:12px;background:var(--bg);border-radius:0 8px 8px 0;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <strong style="font-size:14px;">${labels[i] || 'Estágio ' + e.stagio}</strong>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <label style="font-size:13px;color:var(--text-secondary);">Após</label>
+          <input type="number" id="zs-fu-horas-${e.stagio}" value="${e.horas}" min="1" max="72"
+            style="width:60px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;text-align:center;" />
+          <span style="font-size:13px;color:var(--text-secondary);">horas</span>
+        </div>
+      </div>
+      <textarea id="zs-fu-msg-${e.stagio}" rows="2"
+        style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:6px;resize:vertical;font-size:13px;"
+        placeholder="Mensagem do lembrete...">${e.mensagem || ''}</textarea>
+    </div>
+  `).join('');
+}
+
+async function _zapsignSalvarFollowup() {
+  const ativo = document.getElementById('zs-followup-ativo').checked;
+  const estagios = [1, 2, 3].map(s => ({
+    stagio: s,
+    horas: parseInt(document.getElementById(`zs-fu-horas-${s}`).value) || 2,
+    mensagem: document.getElementById(`zs-fu-msg-${s}`).value.trim(),
+  }));
+
+  const msgEl = document.getElementById('zs-followup-msg');
+  try {
+    const resp = await fetch('/api/zapsign/followup-config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        account_id: clienteAtivo,
+        followup_ativo: ativo,
+        followup_estagios: estagios,
+      }),
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      msgEl.innerHTML = '<span style="color:var(--green);">Follow-up salvo com sucesso!</span>';
+      _zapsignFollowup = { followup_ativo: ativo, followup_estagios: estagios };
+      setTimeout(() => { msgEl.innerHTML = ''; }, 3000);
+    } else {
+      msgEl.innerHTML = `<span style="color:var(--red);">Erro: ${data.error || 'Falha ao salvar'}</span>`;
+    }
+  } catch(e) {
+    msgEl.innerHTML = `<span style="color:var(--red);">Erro: ${e.message}</span>`;
+  }
+}
+
+// ══════════════════════════════════════════════
+// PAGE: TUTORIAIS
+// ══════════════════════════════════════════════
+
+let _tutorialSecaoAberta = null;
+
+function renderPageTutoriais() {
+  const el = document.getElementById('page-content');
+  document.getElementById('topbar-sub').textContent = '';
+
+  const role = currentUser?.role || 'agente';
+  const isAdmin = role === 'super_admin' || role === 'admin';
+
+  const tutoriais = [
+    {
+      id: 'visao-geral',
+      icon: '🏠',
+      titulo: 'Visao Geral do Dashboard',
+      badge: 'Todos',
+      badgeClass: 'badge-purple',
+      conteudo: `
+        <p>O dashboard e o painel central de controle da sua conta. Aqui voce gerencia todas as ferramentas da IA de atendimento.</p>
+        <div class="section-divider">Como funciona</div>
+        <div class="tut-steps">
+          <div class="tut-step">
+            <span class="tut-step-num">1</span>
+            <div>
+              <strong>Selecione uma conta</strong>
+              <p>Use o seletor no topo da pagina para escolher qual conta deseja gerenciar. Todas as telas mostram dados da conta selecionada.</p>
+            </div>
+          </div>
+          <div class="tut-step">
+            <span class="tut-step-num">2</span>
+            <div>
+              <strong>Navegue pelas ferramentas</strong>
+              <p>O menu lateral mostra todas as ferramentas disponiveis para o seu perfil. Clique em qualquer item para acessar.</p>
+            </div>
+          </div>
+          <div class="tut-step">
+            <span class="tut-step-num">3</span>
+            <div>
+              <strong>Perfis de acesso</strong>
+              <p><strong>Admin:</strong> acesso completo a todas as ferramentas e configuracoes.<br>
+              <strong>Agente:</strong> acesso a Templates, Inatividade, Audiencias e Prompt.<br>
+              <strong>Moderador:</strong> acesso a Remarketing, Relatorios, Audiencias e Prompt.</p>
+            </div>
+          </div>
+        </div>
+      `
+    },
+    {
+      id: 'templates',
+      icon: '💬',
+      titulo: 'Templates Meta (WhatsApp)',
+      badge: 'Admin / Agente',
+      badgeClass: 'badge-green',
+      conteudo: `
+        <p>Templates sao mensagens pre-aprovadas pela Meta para envio ativo pelo WhatsApp. Sao usados para remarketing e follow-ups.</p>
+        <div class="section-divider">Para que serve</div>
+        <ul class="tut-list">
+          <li>Enviar mensagens ativas para clientes que nao responderam</li>
+          <li>Fazer campanhas de remarketing para leads antigos</li>
+          <li>Reengajar clientes que abandonaram o atendimento</li>
+        </ul>
+        <div class="section-divider">Como criar um template</div>
+        <div class="tut-steps">
+          <div class="tut-step">
+            <span class="tut-step-num">1</span>
+            <div>
+              <strong>Acesse Templates Meta</strong>
+              <p>No menu lateral, clique em <strong>Templates Meta</strong>.</p>
+            </div>
+          </div>
+          <div class="tut-step">
+            <span class="tut-step-num">2</span>
+            <div>
+              <strong>Clique em "Sincronizar Templates"</strong>
+              <p>Isso importa os templates ja aprovados na sua conta Meta Business. Os templates precisam ser criados e aprovados diretamente no <strong>Meta Business Suite</strong> antes de aparecerem aqui.</p>
+            </div>
+          </div>
+          <div class="tut-step">
+            <span class="tut-step-num">3</span>
+            <div>
+              <strong>Visualize e gerencie</strong>
+              <p>Apos sincronizar, voce vera a lista com nome, status (aprovado/pendente/rejeitado), idioma e categoria de cada template.</p>
+            </div>
+          </div>
+        </div>
+        <div class="prompt-notice info" style="margin-top:16px;">
+          <strong>Dica:</strong> Templates rejeitados pela Meta precisam ser corrigidos no Meta Business Suite. O dashboard apenas exibe o status.
+        </div>
+      `
+    },
+    {
+      id: 'inatividade',
+      icon: '⏰',
+      titulo: 'Inatividade (Follow-up)',
+      badge: 'Admin / Agente',
+      badgeClass: 'badge-green',
+      conteudo: `
+        <p>O sistema de inatividade envia mensagens automaticas quando o cliente para de responder, tentando reengaja-lo antes de perder o lead.</p>
+        <div class="section-divider">Para que serve</div>
+        <ul class="tut-list">
+          <li><strong>Estagio 1:</strong> Primeira tentativa de reengajamento (ex: "Oi, ainda esta ai?")</li>
+          <li><strong>Estagio 2:</strong> Segunda tentativa mais direta (ex: "Gostaria de continuar o atendimento?")</li>
+          <li><strong>Estagio 3:</strong> Ultima tentativa antes de encerrar (ex: "Vou encerrar por aqui, mas pode voltar quando quiser")</li>
+        </ul>
+        <div class="section-divider">Como configurar</div>
+        <div class="tut-steps">
+          <div class="tut-step">
+            <span class="tut-step-num">1</span>
+            <div>
+              <strong>Acesse Inatividade</strong>
+              <p>No menu lateral, clique em <strong>Inatividade</strong>.</p>
+            </div>
+          </div>
+          <div class="tut-step">
+            <span class="tut-step-num">2</span>
+            <div>
+              <strong>Ative o follow-up</strong>
+              <p>Ligue o toggle "Ativar follow-up de inatividade" para habilitar o envio automatico.</p>
+            </div>
+          </div>
+          <div class="tut-step">
+            <span class="tut-step-num">3</span>
+            <div>
+              <strong>Configure os tempos</strong>
+              <p>Defina quanto tempo (em minutos) esperar antes de cada estagio. Exemplo: Estagio 1 apos 30min, Estagio 2 apos 60min, Estagio 3 apos 120min.</p>
+            </div>
+          </div>
+        </div>
+        <div class="prompt-notice info" style="margin-top:16px;">
+          <strong>Importante:</strong> As mensagens de follow-up sao geradas pela IA com base no contexto da conversa. Nao sao mensagens fixas.
+        </div>
+      `
+    },
+    {
+      id: 'remarketing',
+      icon: '🔄',
+      titulo: 'Remarketing',
+      badge: 'Admin',
+      badgeClass: 'badge-yellow',
+      visivel: isAdmin || role === 'moderador',
+      conteudo: `
+        <p>O remarketing permite reengajar leads antigos que nao converteram, enviando mensagens via template do WhatsApp.</p>
+        <div class="section-divider">Para que serve</div>
+        <ul class="tut-list">
+          <li>Recontatar leads que ficaram parados ha dias/semanas</li>
+          <li>Enviar campanhas segmentadas por status (inviavel, transferido, aguardando)</li>
+          <li>Aumentar taxa de conversao reativando leads frios</li>
+        </ul>
+        <div class="section-divider">Como usar</div>
+        <div class="tut-steps">
+          <div class="tut-step">
+            <span class="tut-step-num">1</span>
+            <div>
+              <strong>Acesse Remarketing</strong>
+              <p>No menu lateral, clique em <strong>Remarketing</strong>.</p>
+            </div>
+          </div>
+          <div class="tut-step">
+            <span class="tut-step-num">2</span>
+            <div>
+              <strong>Selecione o template</strong>
+              <p>Escolha qual template aprovado da Meta sera usado para o envio.</p>
+            </div>
+          </div>
+          <div class="tut-step">
+            <span class="tut-step-num">3</span>
+            <div>
+              <strong>Filtre os leads</strong>
+              <p>Defina os criterios: status do lead, periodo de inatividade, inbox de origem.</p>
+            </div>
+          </div>
+          <div class="tut-step">
+            <span class="tut-step-num">4</span>
+            <div>
+              <strong>Envie a campanha</strong>
+              <p>Revise a quantidade de leads selecionados e confirme o envio.</p>
+            </div>
+          </div>
+        </div>
+      `
+    },
+    {
+      id: 'relatorios',
+      icon: '📊',
+      titulo: 'Relatorios',
+      badge: 'Admin',
+      badgeClass: 'badge-yellow',
+      visivel: isAdmin || role === 'moderador',
+      conteudo: `
+        <p>Os relatorios mostram metricas de desempenho da IA e do atendimento em tempo real.</p>
+        <div class="section-divider">O que voce encontra</div>
+        <ul class="tut-list">
+          <li><strong>Conversas do ciclo:</strong> quantas conversas a IA processou no periodo</li>
+          <li><strong>Leads por status:</strong> convertidos, transferidos, inviaveis, aguardando</li>
+          <li><strong>Agendamentos:</strong> total de agendamentos feitos pela IA</li>
+          <li><strong>Transcricoes:</strong> total de audios transcritos</li>
+          <li><strong>Uso vs. plano:</strong> consumo mensal comparado ao limite do plano</li>
+        </ul>
+        <div class="prompt-notice info" style="margin-top:16px;">
+          <strong>Dica:</strong> O ciclo de cobranca e baseado no dia configurado na conta (campo "Dia do ciclo"). O relatorio se ajusta automaticamente.
+        </div>
+      `
+    },
+    {
+      id: 'audiencias',
+      icon: '📅',
+      titulo: 'Aviso de Audiencia',
+      badge: 'Todos',
+      badgeClass: 'badge-purple',
+      conteudo: `
+        <p>O sistema de Aviso de Audiencia permite cadastrar audiencias agendadas e notificar automaticamente os clientes sobre datas, horarios e instrucoes.</p>
+        <div class="section-divider">Para que serve</div>
+        <ul class="tut-list">
+          <li>Cadastrar audiencias com data, horario, local e tipo</li>
+          <li>Enviar avisos automaticos ao cliente sobre a audiencia</li>
+          <li>Manter registro organizado de todas as audiencias</li>
+        </ul>
+        <div class="section-divider">Como cadastrar uma audiencia</div>
+        <div class="tut-steps">
+          <div class="tut-step">
+            <span class="tut-step-num">1</span>
+            <div>
+              <strong>Acesse Aviso de Audiencia</strong>
+              <p>No menu lateral, clique em <strong>Aviso de Audiencia</strong>.</p>
+            </div>
+          </div>
+          <div class="tut-step">
+            <span class="tut-step-num">2</span>
+            <div>
+              <strong>Clique em "Nova Audiencia"</strong>
+              <p>Preencha os dados: nome do cliente, telefone, data e hora da audiencia, tipo (presencial/virtual) e local/link.</p>
+            </div>
+          </div>
+          <div class="tut-step">
+            <span class="tut-step-num">3</span>
+            <div>
+              <strong>Salve e envie</strong>
+              <p>Apos salvar, o sistema envia automaticamente o aviso ao cliente pelo WhatsApp usando o template configurado.</p>
+            </div>
+          </div>
+        </div>
+        <div class="section-divider">Tipos de audiencia</div>
+        <ul class="tut-list">
+          <li><strong>Presencial:</strong> O cliente precisa comparecer pessoalmente. Informe o endereco completo</li>
+          <li><strong>Virtual:</strong> A audiencia sera por videoconferencia. Informe o link de acesso</li>
+        </ul>
+        <div class="prompt-notice warning" style="margin-top:16px;">
+          <strong>Atencao:</strong> Certifique-se de que o numero de telefone esta correto e com DDI (+55). O aviso e enviado via WhatsApp e nao pode ser desfeito.
+        </div>
+      `
+    },
+    {
+      id: 'advogados',
+      icon: '👤',
+      titulo: 'Advogados',
+      badge: 'Admin',
+      badgeClass: 'badge-yellow',
+      visivel: isAdmin,
+      conteudo: `
+        <p>A tela de Advogados permite cadastrar e gerenciar os profissionais que atendem os agendamentos feitos pela IA.</p>
+        <div class="section-divider">Para que serve</div>
+        <ul class="tut-list">
+          <li>Cadastrar advogados com nome, especialidade e cor no Google Calendar</li>
+          <li>Definir horarios de disponibilidade de cada profissional</li>
+          <li>Configurar duracao padrao dos atendimentos</li>
+          <li>Ativar/desativar advogados sem excluir</li>
+        </ul>
+        <div class="section-divider">Como cadastrar um advogado</div>
+        <div class="tut-steps">
+          <div class="tut-step">
+            <span class="tut-step-num">1</span>
+            <div>
+              <strong>Acesse Advogados</strong>
+              <p>No menu lateral, clique em <strong>Advogados</strong>.</p>
+            </div>
+          </div>
+          <div class="tut-step">
+            <span class="tut-step-num">2</span>
+            <div>
+              <strong>Clique em "Novo Advogado"</strong>
+              <p>Preencha: nome, especialidade (previdenciario, trabalhista, etc.), cor do Google Calendar (para identificar no calendario) e duracao do atendimento.</p>
+            </div>
+          </div>
+          <div class="tut-step">
+            <span class="tut-step-num">3</span>
+            <div>
+              <strong>Configure a disponibilidade</strong>
+              <p>Defina os horarios em que o advogado atende: dias da semana, horario inicial e final. A IA so oferecera horarios dentro dessa janela.</p>
+            </div>
+          </div>
+          <div class="tut-step">
+            <span class="tut-step-num">4</span>
+            <div>
+              <strong>Salve</strong>
+              <p>O advogado ficara disponivel para agendamentos imediatamente.</p>
+            </div>
+          </div>
+        </div>
+        <div class="prompt-notice info" style="margin-top:16px;">
+          <strong>Cor do Calendar:</strong> Cada advogado deve ter uma cor unica no Google Calendar. A IA usa essa cor para identificar os eventos de cada profissional e evitar conflitos.
+        </div>
+      `
+    },
+    {
+      id: 'prompt',
+      icon: '📝',
+      titulo: 'Prompt da IA',
+      badge: 'Admin / Agente',
+      badgeClass: 'badge-green',
+      conteudo: `
+        <p>O Prompt e o "cerebro" da IA. Ele define como a IA se comporta, qual tom usar, quais perguntas fazer e como qualificar os leads.</p>
+        <div class="section-divider">Para que serve</div>
+        <ul class="tut-list">
+          <li><strong>base.md:</strong> Regras gerais de comportamento, tom de voz, identidade da IA e restricoes globais</li>
+          <li><strong>supervisor.md:</strong> Logica de roteamento — decide qual fase atender (identificacao, vinculo, avaliacao, agendamento, etc.)</li>
+          <li><strong>identificacao.md:</strong> Como a IA se apresenta e coleta o nome do cliente</li>
+          <li><strong>vinculo.md:</strong> Verificacao de carteira assinada e qualidade de segurado</li>
+          <li><strong>coleta_caso.md:</strong> Coleta de dados do acidente (data, descricao, parte do corpo, cirurgia)</li>
+          <li><strong>avaliacao.md:</strong> Avaliacao de viabilidade (sequela, laudo, profissao)</li>
+          <li><strong>agendamento.md:</strong> Consulta de agenda e confirmacao de horario com o cliente</li>
+          <li><strong>transferir_humano.md:</strong> Mensagem de despedida ao transferir para humano</li>
+        </ul>
+        <div class="section-divider">Como editar</div>
+        <div class="tut-steps">
+          <div class="tut-step">
+            <span class="tut-step-num">1</span>
+            <div>
+              <strong>Acesse Prompt da IA</strong>
+              <p>No menu lateral, clique em <strong>Prompt</strong>.</p>
+            </div>
+          </div>
+          <div class="tut-step">
+            <span class="tut-step-num">2</span>
+            <div>
+              <strong>Selecione o arquivo</strong>
+              <p>Use as abas para navegar entre os arquivos de prompt (base, supervisor, identificacao, etc.).</p>
+            </div>
+          </div>
+          <div class="tut-step">
+            <span class="tut-step-num">3</span>
+            <div>
+              <strong>Edite e salve</strong>
+              <p>Faca as alteracoes desejadas e clique em <strong>Salvar</strong>. As mudancas entram em vigor imediatamente.</p>
+            </div>
+          </div>
+        </div>
+        <div class="prompt-notice warning" style="margin-top:16px;">
+          <strong>Cuidado:</strong> Alteracoes no prompt afetam diretamente o comportamento da IA em todas as conversas. Teste com cuidado e use o Terminal IA para validar antes de salvar em producao.
+        </div>
+      `
+    },
+    {
+      id: 'config',
+      icon: '⚙️',
+      titulo: 'Configuracoes da Conta',
+      badge: 'Admin',
+      badgeClass: 'badge-yellow',
+      visivel: isAdmin,
+      conteudo: `
+        <p>As configuracoes definem como a IA opera para cada conta: conexao com Chatwoot, chave da OpenAI, especialidade, agenda e notificacoes.</p>
+        <div class="section-divider">Campos principais</div>
+        <ul class="tut-list">
+          <li><strong>Chatwoot URL / Token:</strong> Conexao com o Chatwoot da conta</li>
+          <li><strong>OpenAI API Key:</strong> Chave para o modelo GPT que a IA usa</li>
+          <li><strong>Especialidade:</strong> Area juridica da conta (previdenciario, trabalhista, etc.)</li>
+          <li><strong>E-mail Agenda:</strong> E-mail do Google Calendar para consultar horarios</li>
+          <li><strong>ID Notificacao:</strong> Conversa do Chatwoot onde a IA envia notificacoes de agendamentos</li>
+          <li><strong>IA Ativa:</strong> Liga/desliga a IA para a conta inteira</li>
+          <li><strong>Inboxes:</strong> Define em quais caixas de entrada a IA responde</li>
+        </ul>
+        <div class="prompt-notice warning" style="margin-top:16px;">
+          <strong>Cuidado:</strong> Alterar Chatwoot URL, Token ou OpenAI Key incorretamente pode desativar a IA. Sempre confira os valores antes de salvar.
+        </div>
+      `
+    },
+    {
+      id: 'zapsign',
+      icon: '✍️',
+      titulo: 'ZapSign (Assinatura Digital)',
+      badge: 'Admin',
+      badgeClass: 'badge-yellow',
+      visivel: isAdmin,
+      conteudo: `
+        <p>A integracao com ZapSign permite enviar contratos para assinatura digital automaticamente apos o agendamento.</p>
+        <div class="section-divider">Para que serve</div>
+        <ul class="tut-list">
+          <li>Enviar contratos automaticamente apos agendamento confirmado</li>
+          <li>Acompanhar status das assinaturas (pendente, assinado, expirado)</li>
+          <li>Configurar follow-up automatico para contratos nao assinados</li>
+        </ul>
+        <div class="section-divider">Como configurar</div>
+        <div class="tut-steps">
+          <div class="tut-step">
+            <span class="tut-step-num">1</span>
+            <div>
+              <strong>Acesse ZapSign</strong>
+              <p>No menu lateral, clique em <strong>ZapSign</strong>.</p>
+            </div>
+          </div>
+          <div class="tut-step">
+            <span class="tut-step-num">2</span>
+            <div>
+              <strong>Insira o token da API</strong>
+              <p>Cole o token da sua conta ZapSign. Ele e encontrado em Configuracoes > API dentro do painel da ZapSign.</p>
+            </div>
+          </div>
+          <div class="tut-step">
+            <span class="tut-step-num">3</span>
+            <div>
+              <strong>Configure o follow-up</strong>
+              <p>Ative o follow-up e defina os estagios de cobranca para contratos nao assinados.</p>
+            </div>
+          </div>
+        </div>
+      `
+    },
+  ];
+
+  // Filtrar por visibilidade
+  const visiveis = tutoriais.filter(t => t.visivel !== false);
+
+  el.innerHTML = `
+    <style>
+      .tut-card { background:var(--surface);border:1.5px solid var(--border);border-radius:12px;margin-bottom:12px;overflow:hidden;transition:border-color 0.15s; }
+      .tut-card:hover { border-color:var(--purple-light); }
+      .tut-card-header { display:flex;align-items:center;gap:12px;padding:16px 20px;cursor:pointer;user-select:none; }
+      .tut-card-header:hover { background:#fafafe; }
+      .tut-card-icon { font-size:22px;width:40px;height:40px;display:flex;align-items:center;justify-content:center;background:var(--purple-light);border-radius:10px;flex-shrink:0; }
+      .tut-card-title { font-size:14px;font-weight:700;color:var(--text); }
+      .tut-card-meta { display:flex;align-items:center;gap:8px;margin-top:2px; }
+      .tut-card-arrow { margin-left:auto;color:var(--text-muted);transition:transform 0.2s;font-size:18px; }
+      .tut-card-arrow.open { transform:rotate(180deg); }
+      .tut-card-body { display:none;padding:0 20px 20px 72px;font-size:13px;color:var(--text-secondary);line-height:1.7; }
+      .tut-card-body.open { display:block; }
+      .tut-card-body p { margin:0 0 10px; }
+      .tut-card-body ul { margin:0;padding-left:18px; }
+      .tut-card-body li { margin-bottom:6px; }
+      .tut-steps { display:flex;flex-direction:column;gap:14px;margin:8px 0; }
+      .tut-step { display:flex;gap:12px;align-items:flex-start; }
+      .tut-step-num { width:26px;height:26px;border-radius:50%;background:var(--purple);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;margin-top:1px; }
+      .tut-step div p { margin:4px 0 0;color:var(--text-muted);font-size:12.5px; }
+      .tut-step div strong { font-size:13px;color:var(--text); }
+      .tut-list { list-style:none;padding:0;margin:8px 0; }
+      .tut-list li { padding:6px 0;border-bottom:1px solid #f5f6fa;font-size:13px; }
+      .tut-list li:last-child { border-bottom:none; }
+      .tut-search { width:100%;padding:10px 14px 10px 38px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;background:var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23b0b3c6' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'/%3E%3C/svg%3E") no-repeat 12px center;outline:none;transition:border-color 0.15s; }
+      .tut-search:focus { border-color:var(--purple); }
+    </style>
+    <div style="max-width:800px;">
+      <div style="margin-bottom:20px;">
+        <p style="font-size:13px;color:var(--text-secondary);margin:0;">Aprenda como usar cada ferramenta do dashboard. Clique em um topico para expandir.</p>
+      </div>
+      <input type="text" class="tut-search" id="tut-search" placeholder="Buscar tutorial..." oninput="_filtrarTutoriais(this.value)" />
+      <div id="tut-lista" style="margin-top:16px;">
+        ${visiveis.map(t => `
+          <div class="tut-card" data-tut-id="${t.id}" data-tut-search="${t.titulo.toLowerCase()} ${t.badge.toLowerCase()}">
+            <div class="tut-card-header" onclick="_toggleTutorial('${t.id}')">
+              <div class="tut-card-icon">${t.icon}</div>
+              <div>
+                <div class="tut-card-title">${t.titulo}</div>
+                <div class="tut-card-meta">
+                  <span class="badge ${t.badgeClass}">${t.badge}</span>
+                </div>
+              </div>
+              <span class="tut-card-arrow" id="tut-arrow-${t.id}">▼</span>
+            </div>
+            <div class="tut-card-body" id="tut-body-${t.id}">
+              ${t.conteudo}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+
+  // Reabrir secao que estava aberta
+  if (_tutorialSecaoAberta) {
+    const body = document.getElementById('tut-body-' + _tutorialSecaoAberta);
+    const arrow = document.getElementById('tut-arrow-' + _tutorialSecaoAberta);
+    if (body) { body.classList.add('open'); }
+    if (arrow) { arrow.classList.add('open'); }
+  }
+}
+
+function _toggleTutorial(id) {
+  const body = document.getElementById('tut-body-' + id);
+  const arrow = document.getElementById('tut-arrow-' + id);
+  if (!body) return;
+  const aberto = body.classList.contains('open');
+  // Fechar todos
+  document.querySelectorAll('.tut-card-body.open').forEach(el => el.classList.remove('open'));
+  document.querySelectorAll('.tut-card-arrow.open').forEach(el => el.classList.remove('open'));
+  if (!aberto) {
+    body.classList.add('open');
+    arrow?.classList.add('open');
+    _tutorialSecaoAberta = id;
+  } else {
+    _tutorialSecaoAberta = null;
+  }
+}
+
+function _filtrarTutoriais(termo) {
+  const cards = document.querySelectorAll('.tut-card');
+  const t = termo.toLowerCase().trim();
+  cards.forEach(card => {
+    const search = card.getAttribute('data-tut-search') || '';
+    card.style.display = !t || search.includes(t) ? '' : 'none';
+  });
 }
 
 // ══════════════════════════════════════════════
