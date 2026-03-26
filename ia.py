@@ -266,7 +266,7 @@ async def executar_tool(nome: str, args: dict, config: dict, conversation_id: in
 
     if nome == "cliente_inviavel":
         await chatwoot_adicionar_label(chatwoot_url, chatwoot_token, account_id, conversation_id, "inviavel")
-        await chatwoot_transferir_humano(chatwoot_url, chatwoot_token, account_id, conversation_id)
+        await chatwoot_transferir_humano(chatwoot_url, chatwoot_token, account_id, conversation_id, motivo=f"tool:cliente_inviavel — {args.get('motivo','')}")
         try:
             upsert_lead(account_id, inbox_id, conversation_id, contact_name, contact_phone,
                         status="inviavel", inviability_reason=args.get("motivo"))
@@ -276,7 +276,7 @@ async def executar_tool(nome: str, args: dict, config: dict, conversation_id: in
         return json.dumps({"status": "ok"})
 
     if nome == "TransferHuman":
-        await chatwoot_transferir_humano(chatwoot_url, chatwoot_token, account_id, conversation_id)
+        await chatwoot_transferir_humano(chatwoot_url, chatwoot_token, account_id, conversation_id, motivo=f"tool:TransferHuman — {args.get('motivo','')}")
         try:
             upsert_lead(account_id, inbox_id, conversation_id, contact_name, contact_phone, status="transferido")
         except Exception as e:
@@ -298,7 +298,7 @@ async def executar_tool(nome: str, args: dict, config: dict, conversation_id: in
 
     if nome == "lead_disponivel":
         await chatwoot_adicionar_label(chatwoot_url, chatwoot_token, account_id, conversation_id, "lead-disponivel")
-        await chatwoot_transferir_humano(chatwoot_url, chatwoot_token, account_id, conversation_id)
+        await chatwoot_transferir_humano(chatwoot_url, chatwoot_token, account_id, conversation_id, motivo="tool:lead_disponivel")
         try:
             upsert_lead(account_id, inbox_id, conversation_id, contact_name, contact_phone, status="transferido")
         except Exception as e:
@@ -400,7 +400,7 @@ async def executar_tool(nome: str, args: dict, config: dict, conversation_id: in
 
     if nome == "desqualificado":
         await chatwoot_adicionar_label(chatwoot_url, chatwoot_token, account_id, conversation_id, "desqualificado")
-        await chatwoot_transferir_humano(chatwoot_url, chatwoot_token, account_id, conversation_id)
+        await chatwoot_transferir_humano(chatwoot_url, chatwoot_token, account_id, conversation_id, motivo=f"tool:desqualificado — {args.get('motivo','')}")
         try:
             upsert_lead(account_id, inbox_id, conversation_id, contact_name, contact_phone,
                         status="desqualificado", inviability_reason=args.get("motivo"))
@@ -411,7 +411,7 @@ async def executar_tool(nome: str, args: dict, config: dict, conversation_id: in
 
     if nome == "nao_lead":
         await chatwoot_adicionar_label(chatwoot_url, chatwoot_token, account_id, conversation_id, "nao-lead")
-        await chatwoot_transferir_humano(chatwoot_url, chatwoot_token, account_id, conversation_id)
+        await chatwoot_transferir_humano(chatwoot_url, chatwoot_token, account_id, conversation_id, motivo=f"tool:nao_lead — {args.get('motivo','')}")
         try:
             upsert_lead(account_id, inbox_id, conversation_id, contact_name, contact_phone,
                         status="desqualificado", inviability_reason=args.get("motivo"))
@@ -422,7 +422,7 @@ async def executar_tool(nome: str, args: dict, config: dict, conversation_id: in
 
     if nome == "nao_alfabetizado":
         await chatwoot_adicionar_label(chatwoot_url, chatwoot_token, account_id, conversation_id, "nao-alfabetizado")
-        await chatwoot_transferir_humano(chatwoot_url, chatwoot_token, account_id, conversation_id)
+        await chatwoot_transferir_humano(chatwoot_url, chatwoot_token, account_id, conversation_id, motivo="tool:nao_alfabetizado")
         try:
             upsert_lead(account_id, inbox_id, conversation_id, contact_name, contact_phone, status="transferido")
         except Exception as e:
@@ -462,12 +462,15 @@ async def chatwoot_atualizar_contato(url: str, token: str, account_id: int, conv
                 logger.info(f"Contato {contact_id} atualizado para '{nome}'")
 
 
-async def chatwoot_transferir_humano(url: str, token: str, account_id: int, conversation_id: int):
+async def chatwoot_transferir_humano(url: str, token: str, account_id: int, conversation_id: int, motivo: str = ""):
     headers = {"api_access_token": token, "Content-Type": "application/json"}
     assign_url = f"{url}/api/v1/accounts/{account_id}/conversations/{conversation_id}/assignments"
     async with httpx.AsyncClient() as http:
         await http.post(assign_url, headers=headers, json={"assignee_id": None}, timeout=10)
-    logger.info(f"Conversa {conversation_id} desatribuída do agente IA")
+    # Log detalhado com stack trace para rastrear origem da desatribuição
+    import traceback
+    caller = traceback.extract_stack()[-2]
+    logger.info(f"🔴 DESATRIBUIÇÃO — conta={account_id} conv={conversation_id} motivo='{motivo}' chamado_de={caller.filename}:{caller.lineno} ({caller.name})")
 
     # Desativar inatividade (follow-up) ao transferir para humano
     try:
@@ -1263,6 +1266,16 @@ async def processar_mensagem(config: dict, account_id: int, conversation_id: int
             contact_phone = sender.get("phone_number", "")
             break
 
+    # Proteção anti-desatribuição prematura: se supervisor quer transferir_humano
+    # mas o cliente teve poucas interações, forçar qualificação primeiro
+    if fase == "transferir_humano":
+        msgs_cliente = [m for m in historico if m.get("message_type") == 0]
+        msgs_ia = [m for m in historico if m.get("message_type") == 1]
+        # Se o cliente mandou <= 3 mensagens e a IA mandou <= 2, é muito cedo pra transferir
+        if len(msgs_cliente) <= 3 and len(msgs_ia) <= 2:
+            logger.warning(f"⚠️ Supervisor quis transferir_humano com apenas {len(msgs_cliente)} msgs do cliente e {len(msgs_ia)} da IA. Forçando coleta_caso.")
+            fase = "coleta_caso"
+
     if fase == "transferir_humano":
         logger.info("Supervisor → transferir_humano")
         context = {
@@ -1286,7 +1299,8 @@ async def processar_mensagem(config: dict, account_id: int, conversation_id: int
         except Exception as e:
             logger.warning(f"⚠️ Erro ao gerar mensagem de transferência — conv={conversation_id}: {e}")
         await chatwoot_transferir_humano(
-            config["chatwoot_url"], config["chatwoot_token"], account_id, conversation_id
+            config["chatwoot_url"], config["chatwoot_token"], account_id, conversation_id,
+            motivo="supervisor:transferir_humano"
         )
         try:
             upsert_lead(account_id, inbox_id, conversation_id, contact_name, contact_phone, status="transferido")
