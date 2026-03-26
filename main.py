@@ -2708,6 +2708,192 @@ async def api_submeter_onboarding(token: str):
     return {"status": "submitted"}
 
 
+def _slugify(text: str) -> str:
+    import unicodedata
+    text = unicodedata.normalize("NFKD", text)
+    text = text.encode("ascii", "ignore").decode("ascii")
+    text = _re.sub(r"[^a-zA-Z0-9]+", "-", text).strip("-").lower()
+    return text[:25]
+
+
+def _detectar_especialidade(form_data: dict) -> str:
+    """Detecta 'trabalhista' ou 'previdenciario' a partir dos dados do formulario."""
+    for adv in form_data.get("advogados", []):
+        esp = (adv.get("especialidade") or "").lower()
+        if "trabalhist" in esp:
+            return "trabalhista"
+        if "previdenci" in esp:
+            return "previdenciario"
+    obs = (form_data.get("comportamento", {}).get("outras_instrucoes") or "").lower()
+    if "trabalhist" in obs:
+        return "trabalhista"
+    if "previdenci" in obs:
+        return "previdenciario"
+    return "trabalhista"
+
+
+def _build_placeholders_onboarding(form_data: dict, especialidade: str) -> dict:
+    """Constroi o dicionario de placeholders para preenchimento dos templates."""
+    escritorio = form_data.get("escritorio", {})
+    personalidade = form_data.get("personalidade", {})
+    comportamento = form_data.get("comportamento", {})
+    anuncios = form_data.get("anuncios", {})
+    regras = form_data.get("regras", {})
+
+    nome_ia = (personalidade.get("nome_ia") or "Assistente").strip()
+    nome_escritorio = (escritorio.get("nome") or "Escritorio de Advocacia").strip()
+    especialidade_texto = "Direito do Trabalho" if especialidade == "trabalhista" else "Direito Previdenciario"
+
+    # Endereco
+    cidade = (escritorio.get("cidade") or "").strip()
+    estado = (escritorio.get("estado") or "").strip()
+    endereco = (escritorio.get("endereco") or "").strip()
+    area = escritorio.get("area_atendimento") or "online"
+    telefone = (escritorio.get("telefone") or "").strip()
+
+    linhas_end = []
+    if area == "online":
+        linhas_end.append(f"Atendemos 100% online em todo o Brasil. Voce nao precisa sair de casa.")
+    elif area == "presencial":
+        loc = ", ".join(filter(None, [cidade, estado]))
+        linhas_end.append(f"Nosso escritorio fica em {loc}." if loc else "Atendemos de forma presencial.")
+        if endereco:
+            linhas_end.append(endereco)
+    else:
+        loc = ", ".join(filter(None, [cidade, estado]))
+        linhas_end.append(f"Temos escritorio em {loc} e atendemos tambem 100% online em todo o Brasil." if loc else "Atendemos presencialmente e de forma online em todo o Brasil.")
+        if endereco:
+            linhas_end.append(endereco)
+    if telefone:
+        linhas_end.append(f"\nTelefone: {telefone}")
+    endereco_escritorio = "\n".join(linhas_end)
+
+    # Custo
+    explicacao_custo_raw = (comportamento.get("explicacao_custo") or "").strip()
+    if not explicacao_custo_raw:
+        explicacao_custo_raw = "Nao cobramos nada antecipado. Os honorarios sao pagos apenas no exito, sobre o valor recebido pelo cliente."
+
+    # Apresentacao
+    apresentacao_raw = (personalidade.get("apresentacao") or "").strip()
+    if not apresentacao_raw:
+        apresentacao_raw = (
+            f"Cumprimento baseado no horario:\n"
+            f"- 06h-12h: \"Bom dia!\"\n"
+            f"- 12h-18h: \"Boa tarde!\"\n"
+            f"- 18h-06h: \"Boa noite!\"\n\n"
+            f"Seguido de:\n"
+            f"\"{nome_ia}, do {nome_escritorio}. Como posso te ajudar?\""
+        )
+
+    # Palavras proibidas extras
+    palavras_raw = (comportamento.get("palavras_proibidas") or "").strip()
+    palavras_extra = ""
+    if palavras_raw:
+        linhas_p = [ln.strip() for ln in palavras_raw.splitlines() if ln.strip()]
+        palavras_extra = "\n".join(f'- NUNCA usar a expressao "{p}".' for p in linhas_p)
+
+    # Instrucoes adicionais compostas
+    partes = []
+    perguntas = (regras.get("perguntas_obrigatorias") or "").strip()
+    assuntos = (regras.get("assuntos_especiais") or "").strip()
+    valores = (regras.get("valores_atualizados") or "").strip()
+    outras = (comportamento.get("outras_instrucoes") or "").strip()
+    obs_regras = (regras.get("observacoes") or "").strip()
+    if perguntas:
+        partes.append(f"## PERGUNTAS OBRIGATORIAS\n\nAs perguntas a seguir DEVEM ser feitas ao cliente (uma por vez):\n\n{perguntas}")
+    if assuntos:
+        partes.append(f"## ASSUNTOS ESPECIAIS\n\n{assuntos}")
+    if valores:
+        partes.append(f"## VALORES ATUALIZADOS\n\n{valores}")
+    if outras:
+        partes.append(f"## INSTRUCOES ADICIONAIS\n\n{outras}")
+    if obs_regras:
+        partes.append(f"## OBSERVACOES\n\n{obs_regras}")
+    instrucoes_adicionais = ("\n\n---\n\n".join(partes) + "\n\n---\n\n") if partes else ""
+
+    # Anuncios
+    usa_meta = bool(anuncios.get("usa_meta"))
+    if usa_meta:
+        temas = anuncios.get("temas") or []
+        regra_anuncio = 'Se a conversa iniciar com "Mensagem de Anuncio!", o usuario obrigatoriamente deve passar por todo o atendimento da IA. Voce deve atender, qualificar, entender o caso e conduzir ate agendamento.'
+        if temas:
+            regra_anuncio += "\n\nMensagens de abertura por tema de anuncio:\n"
+            for t in temas:
+                if t.get("nome") and t.get("mensagem"):
+                    regra_anuncio += f'\n- Tema "{t["nome"]}": {t["mensagem"]}'
+    else:
+        regra_anuncio = 'Se a conversa iniciar com "Mensagem de Anuncio!", atender normalmente e conduzir ao agendamento.'
+
+    # Encerramento
+    regra_encerramento = (
+        f"Sempre que utilizar as ferramentas convertido ou TransferHuman, "
+        f"informar ao cliente que um especialista da equipe vai analisar o caso e retornar em breve.\n\n"
+        f"EXCECAO OBRIGATORIA: Quando o interlocutor declarar que e advogado(a) da reclamada/empresa ou estiver "
+        f"representando a empresa, NAO enviar pedido de avaliacao. Finalize apenas com a confirmacao da proxima acao e encerre."
+    )
+
+    return {
+        "{{NOME_IA}}": nome_ia,
+        "{{NOME_ESCRITORIO}}": nome_escritorio,
+        "{{ESPECIALIDADE_TEXTO}}": especialidade_texto,
+        "{{APRESENTACAO_IA}}": apresentacao_raw,
+        "{{ENDERECO_ESCRITORIO}}": endereco_escritorio,
+        "{{TELEFONES_OFICIAIS}}": telefone or "(nao informado)",
+        "{{EXPLICACAO_CUSTO}}": explicacao_custo_raw,
+        "{{PALAVRAS_PROIBIDAS_EXTRA}}": palavras_extra,
+        "{{INSTRUCOES_ADICIONAIS}}": instrucoes_adicionais,
+        "{{REGRA_ANUNCIO}}": regra_anuncio,
+        "{{REGRA_ENCERRAMENTO}}": regra_encerramento,
+    }
+
+
+def _copiar_e_preencher_template(src: str, dst: str, placeholders: dict):
+    """Le um template, substitui placeholders e salva no destino."""
+    with open(src, encoding="utf-8") as f:
+        content = f.read()
+    for key, value in placeholders.items():
+        content = content.replace(key, value or "")
+    with open(dst, encoding="utf-8", mode="w") as f:
+        f.write(content)
+
+
+def _gerar_prompts_onboarding(account_id: int, form_data: dict):
+    """Gera os arquivos de prompt para a conta a partir dos templates de onboarding."""
+    especialidade = _detectar_especialidade(form_data)
+    placeholders = _build_placeholders_onboarding(form_data, especialidade)
+
+    nome_escritorio = form_data.get("escritorio", {}).get("nome") or f"cliente-{account_id}"
+    slug = _slugify(nome_escritorio)
+
+    # Usar pasta existente (account_id-*) ou criar nova
+    pasta_existente = pasta_cliente(account_id)
+    if pasta_existente:
+        pasta = pasta_existente
+    else:
+        pasta = os.path.join(CLIENTES_DIR, f"{account_id}-{slug}")
+
+    prompt_dir = os.path.join(pasta, "prompt")
+    os.makedirs(prompt_dir, exist_ok=True)
+
+    templates_dir = os.path.join(BASE_DIR, "templates")
+    shared_dir = os.path.join(templates_dir, "shared")
+    specialty_dir = os.path.join(templates_dir, especialidade)
+
+    for d in [shared_dir, specialty_dir]:
+        if not os.path.isdir(d):
+            continue
+        for fname in os.listdir(d):
+            if fname.endswith(".md"):
+                src = os.path.join(d, fname)
+                dst = os.path.join(prompt_dir, fname)
+                try:
+                    _copiar_e_preencher_template(src, dst, placeholders)
+                except Exception as e:
+                    logging.error(f"[onboarding] Erro ao gerar {fname}: {e}")
+
+    logging.info(f"[onboarding] Prompts gerados para account_id={account_id} em '{pasta}' (especialidade={especialidade})")
+
+
 def _processar_onboarding(account_id: int, form_data: dict):
     """Auto-configura a conta com os dados do onboarding."""
     # 1. Atualizar config do cliente
@@ -2760,3 +2946,9 @@ def _processar_onboarding(account_id: int, form_data: dict):
     agenda = form_data.get("agenda", {})
     if agenda.get("email_calendar"):
         salvar_config_cliente(account_id, {"email_agenda": agenda["email_calendar"]})
+
+    # 5. Gerar arquivos de prompt a partir dos templates de onboarding
+    try:
+        _gerar_prompts_onboarding(account_id, form_data)
+    except Exception as e:
+        logging.error(f"[onboarding] Erro ao gerar prompts para account_id={account_id}: {e}")
