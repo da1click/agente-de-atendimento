@@ -2725,24 +2725,35 @@ async def listar_todas_sugestoes(user: dict = Depends(get_current_user)):
 
 @app.patch("/api/sugestoes/{sugestao_id}")
 async def atualizar_sugestao(sugestao_id: str, request: Request, user: dict = Depends(get_current_user)):
-    """Aprova ou rejeita uma sugestão (admin/super_admin). Admin só altera sugestões das suas contas."""
-    if user.get("role") not in ("admin", "super_admin"):
-        raise HTTPException(status_code=403, detail="Acesso restrito a administradores")
+    """Aprova ou rejeita uma sugestão. Apenas super_admin pode aprovar/rejeitar. Ao aprovar, aplica no arquivo de prompt."""
+    if user.get("role") != "super_admin":
+        raise HTTPException(status_code=403, detail="Apenas super_admin pode aprovar ou rejeitar sugestões")
     from db import atualizar_status_sugestao, buscar_sugestao
-    # Admin: verificar se a sugestão pertence a uma conta que ele tem acesso
-    if user.get("role") == "admin":
-        sugestao = buscar_sugestao(sugestao_id)
-        if not sugestao:
-            raise HTTPException(status_code=404, detail="Sugestão não encontrada")
-        contas_permitidas = set(get_contas_do_usuario(user["sub"]))
-        if sugestao["account_id"] not in contas_permitidas:
-            raise HTTPException(status_code=403, detail="Sem permissão para esta sugestão")
     body = await request.json()
     status = body.get("status", "")
     if status not in ("aprovada", "rejeitada"):
         raise HTTPException(status_code=400, detail="Status deve ser 'aprovada' ou 'rejeitada'")
+    # Buscar sugestão para aplicar no arquivo
+    sugestao = buscar_sugestao(sugestao_id)
+    if not sugestao:
+        raise HTTPException(status_code=404, detail="Sugestão não encontrada")
+    # Se aprovada, aplicar conteúdo no arquivo de prompt
+    if status == "aprovada":
+        pasta = pasta_cliente(sugestao["account_id"])
+        if pasta:
+            caminho = os.path.join(pasta, "prompt", sugestao["fase"])
+            try:
+                os.makedirs(os.path.dirname(caminho), exist_ok=True)
+                with open(caminho, "w", encoding="utf-8") as f:
+                    f.write(sugestao["conteudo_sugerido"])
+                logger.info(f"[sugestão] Prompt aplicado: {caminho}")
+            except Exception as e:
+                logger.error(f"[sugestão] Erro ao aplicar prompt {caminho}: {e}")
+                raise HTTPException(status_code=500, detail=f"Erro ao aplicar prompt: {e}")
+        else:
+            raise HTTPException(status_code=404, detail=f"Pasta da conta {sugestao['account_id']} não encontrada")
     atualizar_status_sugestao(sugestao_id, status, body.get("admin_nota"))
-    return {"status": "ok"}
+    return {"status": "ok", "aplicado": status == "aprovada"}
 
 
 # ── ONBOARDING ──────────────────────────────────────────────

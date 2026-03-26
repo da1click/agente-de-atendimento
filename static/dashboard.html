@@ -4907,8 +4907,10 @@ async function renderPageSugestoes() {
               <div style="font-size:11px;color:var(--text-muted);">Por ${s.user_nome || 'Usuário #'+s.user_id} em ${data}</div>
             </div>
             <div style="display:flex;gap:6px;">
-              <button class="btn btn-primary" style="font-size:11px;padding:3px 10px;background:var(--green);" onclick="_resolverSugestao('${s.id}','aprovada',${idx})">Aprovar</button>
+              ${currentUser?.role === 'super_admin' ? `
+              <button class="btn btn-primary" style="font-size:11px;padding:3px 10px;background:var(--green);" onclick="_resolverSugestao('${s.id}','aprovada',${idx})">Aprovar e Aplicar</button>
               <button class="btn btn-ghost" style="font-size:11px;padding:3px 10px;color:var(--red);" onclick="_resolverSugestao('${s.id}','rejeitada',${idx})">Rejeitar</button>
+              ` : `<span class="badge badge-yellow">Aguardando aprovação</span>`}
             </div>
           </div>
           <div style="padding:12px;">
