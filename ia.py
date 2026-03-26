@@ -223,6 +223,23 @@ _NOTIF_CHATWOOT_EXTERNO = {
 }
 
 
+# Mapeamento fixo: conta → conversa do grupo "Novos Leads" (contas com Chatwoot externo)
+_GRUPO_NOVOS_LEADS = {
+    8: 75,
+    11: 76,
+}
+
+
+def _get_grupo_novos_leads(account_id: int, config: dict) -> int | None:
+    """Retorna o ID da conversa do grupo de novos leads para a conta."""
+    # Primeiro: mapeamento fixo (contas com grupo em Chatwoot externo)
+    if account_id in _GRUPO_NOVOS_LEADS:
+        return _GRUPO_NOVOS_LEADS[account_id]
+    # Fallback: campo id_notificacao_convertido do config
+    notif = config.get("id_notificacao_convertido")
+    return int(notif) if notif else None
+
+
 async def _enviar_notificacao(config: dict, account_id: int, conv_id_notif: int, mensagem: str):
     """Envia notificação para o grupo do Chatwoot (pode ser outro Chatwoot)."""
     externo = _NOTIF_CHATWOOT_EXTERNO.get(account_id)
@@ -272,6 +289,22 @@ async def executar_tool(nome: str, args: dict, config: dict, conversation_id: in
                         status="inviavel", inviability_reason=args.get("motivo"))
         except Exception as e:
             logger.warning(f"Supabase erro (cliente_inviavel): {e}")
+        # Notificar grupo de novos leads sobre inviável
+        try:
+            notif_conv_id = _get_grupo_novos_leads(account_id, config)
+            if notif_conv_id:
+                motivo_inviavel = args.get("motivo", "sem motivo informado")
+                msg_notif = (
+                    f"🚫 LEAD INVIÁVEL\n\n"
+                    f"Nome: {contact_name}\n"
+                    f"Número: {contact_phone}\n"
+                    f"Motivo: {motivo_inviavel}\n"
+                    f"Conversa: {conversation_id}"
+                )
+                await _enviar_notificacao(config, account_id, int(notif_conv_id), msg_notif)
+                logger.info(f"[notificação] Inviável notificado no grupo novos leads — conv={conversation_id}")
+        except Exception as e:
+            logger.warning(f"[notificação] Erro ao notificar inviável — conv={conversation_id}: {e}")
         logger.info(f"Tool: cliente_inviavel — {args.get('motivo')}")
         return json.dumps({"status": "ok"})
 
