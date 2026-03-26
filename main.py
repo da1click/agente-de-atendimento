@@ -2700,8 +2700,8 @@ async def listar_todas_sugestoes(status: str = "pendente", user: dict = Depends(
     if user.get("role") not in ("admin", "super_admin"):
         raise HTTPException(status_code=403, detail="Acesso restrito a administradores")
     from db import listar_sugestoes_por_status, listar_todas_sugestoes_recentes
-    if status == "todas" and user.get("role") == "super_admin":
-        sugestoes = listar_todas_sugestoes_recentes()
+    if status == "todas":
+        sugestoes = listar_todas_sugestoes_recentes(limit=100)
     else:
         sugestoes = listar_sugestoes_por_status(status)
     # Admin: filtrar apenas sugestões das contas que ele tem acesso

@@ -4885,11 +4885,12 @@ async function _salvarSugestao() {
 // ══════════════════════════════════════════════
 // PAGE: SUGESTÕES (Admin)
 // ══════════════════════════════════════════════
-let _sugestoesFiltro = 'pendente';
+let _sugestoesFiltro = null;
 
 async function renderPageSugestoes() {
   const el = document.getElementById('page-content');
   const isSuperAdmin = currentUser?.role === 'super_admin';
+  if (!_sugestoesFiltro) _sugestoesFiltro = isSuperAdmin ? 'todas' : 'pendente';
 
   el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);">Carregando sugestões...</div>';
   try {
