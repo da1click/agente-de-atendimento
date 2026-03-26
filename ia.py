@@ -1297,6 +1297,22 @@ async def processar_mensagem(config: dict, account_id: int, conversation_id: int
             await kanban_mover_card(config["chatwoot_url"], config["chatwoot_token"], account_id, conversation_id, contact_name, "TransferHuman")
         except Exception:
             pass
+        # Conta 8: notificar grupo "clientes existentes" (conv 77) quando for trabalhista
+        if account_id == 8:
+            palavras_trab = ["trabalhista", "demissao", "demissão", "rescisao", "rescisão", "verbas", "desvio de funcao", "desvio de função", "assedio", "assédio", "insalubridade", "horas extras", "carteira não assinada", "carteira nao assinada"]
+            hist_lower = historico_texto.lower()
+            if any(p in hist_lower for p in palavras_trab):
+                try:
+                    msg_notif = (
+                        f"⚖️ LEAD TRABALHISTA (fora do escopo da IA)\n\n"
+                        f"Nome: {contact_name}\n"
+                        f"Número: {contact_phone}\n"
+                        f"Conversa: {conversation_id}"
+                    )
+                    await _enviar_notificacao(config, account_id, 77, msg_notif)
+                    logger.info(f"[notificação] Lead trabalhista conta 8 notificado no grupo 77")
+                except Exception as e:
+                    logger.warning(f"[notificação] Erro ao notificar lead trabalhista conta 8: {e}")
         return
 
     context = {
