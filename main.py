@@ -1798,8 +1798,8 @@ async def proxy_chatwoot_groups(account_id: int):
 
     # Grupos permitidos por conta no Chatwoot externo (conversation_id → label)
     _GRUPOS_PERMITIDOS = {
-        8: {191: "Novos Leads", 192: "Clientes Existentes"},
-        11: {204: "Novos Leads", 203: "Clientes Existentes"},
+        8: {75: "Novos Leads", 77: "Clientes Existentes"},
+        11: {76: "Novos Leads", 74: "Clientes Existentes"},
     }
 
     # Se conta tem grupos pré-definidos, retorna direto sem buscar na API

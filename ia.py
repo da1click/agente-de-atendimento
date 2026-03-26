@@ -218,8 +218,6 @@ def _gerar_resumo_caso(historico_texto: str, openai_api_key: str = None) -> str:
 # Contas que usam Chatwoot externo para notificações de grupo
 # account_id_externo: ID da conta no Chatwoot externo (pode diferir do account_id local)
 _NOTIF_CHATWOOT_EXTERNO = {
-    8: {"url": "https://atendai.pro", "token": "LdX2bF9jjTG4onNd7cpGRBC5", "account_id_externo": 1},
-    11: {"url": "https://atendai.pro", "token": "LdX2bF9jjTG4onNd7cpGRBC5", "account_id_externo": 1},
 }
 
 
