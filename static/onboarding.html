@@ -566,7 +566,7 @@ function renderEscritorio() {
     <div class="fields-grid">
       <div class="field-group full">
         <label>Nome do Escritorio *</label>
-        <input type="text" id="f-esc-nome" value="${esc(d.nome)}" placeholder="Ex: Pinheiro Advocacia" />
+        <input type="text" id="f-esc-nome" value="${esc(d.nome)}" placeholder="Ex: Silva & Souza Advocacia" />
       </div>
       <div class="field-group full">
         <label>Endereco completo</label>
@@ -618,7 +618,7 @@ function renderResponsavel() {
     <div class="fields-grid">
       <div class="field-group full">
         <label>Nome do responsavel pelos testes *</label>
-        <input type="text" id="f-resp-nome" value="${esc(d.nome)}" placeholder="Ex: Dr. Josinaldo" />
+        <input type="text" id="f-resp-nome" value="${esc(d.nome)}" placeholder="Ex: Dr. Carlos Silva" />
       </div>
       <div class="field-group full">
         <label>Numeros de WhatsApp para testes</label>
@@ -683,7 +683,7 @@ function renderAdvCard(adv, i) {
       <div class="fields-grid">
         <div class="field-group">
           <label>Nome *</label>
-          <input type="text" id="adv-${i}-nome" value="${esc(adv.nome)}" placeholder="Ex: Dr. Josinaldo" />
+          <input type="text" id="adv-${i}-nome" value="${esc(adv.nome)}" placeholder="Ex: Dr. Carlos Silva" />
         </div>
         <div class="field-group">
           <label>Especialidade(s)</label>
@@ -783,15 +783,15 @@ function renderPersonalidade() {
       </div>
       <div class="field-group full">
         <label>Como a IA deve se apresentar?</label>
-        <textarea id="f-pers-apresentacao" placeholder="Ex: Aqui e a Clara, da equipe do Dr. Josinaldo. Como posso te ajudar?">${esc(d.apresentacao)}</textarea>
+        <textarea id="f-pers-apresentacao" placeholder="Ex: Aqui e a Clara, da equipe do Dr. Carlos Silva. Como posso te ajudar?">${esc(d.apresentacao)}</textarea>
         <span class="field-hint">Escreva exemplos de como gostaria que a IA abrisse a conversa</span>
       </div>
       <div class="field-group full">
         <label>A IA deve usar o nome do escritorio ou do advogado?</label>
         <select id="f-pers-referencia">
           <option value="" ${!d.referencia?'selected':''}>-- Selecione --</option>
-          <option value="escritorio" ${d.referencia==='escritorio'?'selected':''}>Nome do escritorio (ex: Escritorio Pinheiro)</option>
-          <option value="advogado" ${d.referencia==='advogado'?'selected':''}>Nome do advogado (ex: equipe do Dr. Josinaldo)</option>
+          <option value="escritorio" ${d.referencia==='escritorio'?'selected':''}>Nome do escritorio (ex: Escritorio Silva)</option>
+          <option value="advogado" ${d.referencia==='advogado'?'selected':''}>Nome do advogado (ex: equipe do Dr. Carlos Silva)</option>
           <option value="nenhum" ${d.referencia==='nenhum'?'selected':''}>Nao precisa mencionar</option>
         </select>
       </div>
