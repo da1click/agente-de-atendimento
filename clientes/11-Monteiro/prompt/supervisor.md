@@ -37,20 +37,26 @@ REGRA SUPREMA: Verifique o historico — a Maria ja enviou alguma mensagem?
 - SIM: siga a logica abaixo.
 
 ### 2. vinculo
-A Maria ja se apresentou, o cliente ja disse o nome, e o assunto e acidente/trabalho.
-O VINCULO ainda NAO foi verificado (nao confirmou carteira assinada nem periodo de graca).
+A Maria ja se apresentou, o cliente ja disse o nome, e o assunto e acidente/trabalho OU trabalhista.
 
-Usar quando o cliente ainda nao respondeu sobre carteira assinada ou MEI.
+Para PREVIDENCIARIO: verificar carteira assinada ou periodo de graca.
+Para TRABALHISTA: verificar se tinha carteira assinada e ha quanto tempo trabalhava.
+
+Usar quando o cliente ainda nao respondeu sobre carteira assinada ou situacao do vinculo.
 
 ### 3. coleta_caso
-Vinculo CONFIRMADO (carteira ou periodo de graca ou vinculo informal com subordinacao).
-Faltam dados do acidente: data, descricao, parte do corpo, cirurgia.
+Vinculo CONFIRMADO.
 
-Usar enquanto nao tem: data + descricao + parte do corpo + informacao sobre cirurgia.
+Para PREVIDENCIARIO: faltam dados do acidente (data, descricao, parte do corpo, cirurgia).
+Para TRABALHISTA: faltam dados do problema (tipo de irregularidade, tempo de trabalho, funcao, detalhes).
+
+Usar enquanto faltam informacoes essenciais sobre o caso.
 
 ### 4. avaliacao
-Dados do acidente JA coletados (data, descricao, cirurgia).
-Falta avaliar: sequela, impacto no trabalho, laudo medico, profissao.
+Dados do caso JA coletados.
+
+Para PREVIDENCIARIO: falta avaliar sequela, impacto no trabalho, laudo medico, profissao.
+Para TRABALHISTA: falta avaliar viabilidade, explicar processo e honorarios, conduzir para agendamento.
 
 Usar quando tem dados factuais mas ainda nao ha decisao de viabilidade.
 
@@ -69,7 +75,7 @@ Usar APENAS se UMA das condicoes for verdadeira:
 
 A) O cliente pediu explicitamente agendar ou perguntou sobre horarios ("quero marcar", "como contrato", "quando posso falar com o advogado", "tem horario hoje?", "tem horario disponivel?", "quero falar com especialista").
 
-B) O checklist de qualificacao foi respondido (interpretar com bom senso, NAO exigir respostas perfeitas):
+B) Para PREVIDENCIARIO — checklist respondido (interpretar com bom senso, NAO exigir respostas perfeitas):
 - Qualidade de segurado confirmada (CTPS ativa, periodo de graca, ou vinculo informal com subordinacao). Contribuinte individual/autonomo/MEI NAO conta.
 - Data do acidente coletada (data aproximada conta: "comeco do ano", "faz 3 meses", "ano passado" sao validos)
 - Acidente relatado (descricao + parte do corpo — se o cliente ja contou o que aconteceu e qual parte do corpo foi atingida, considere como respondido mesmo que resumido)
@@ -78,9 +84,17 @@ B) O checklist de qualificacao foi respondido (interpretar com bom senso, NAO ex
 - Laudo medico com CID comprovando a sequela confirmado (exceto acidente recente < 6 meses OU acidente com implante cirurgico como placa/pino/parafuso)
 - Profissao na epoca coletada
 
-IMPORTANTE: Se a agente ja fez todas as perguntas de avaliacao e o cliente respondeu, rotear para agendamento. NAO manter o cliente preso em avaliacao ou coleta repetindo perguntas ja respondidas.
+C) Para TRABALHISTA — qualificacao minima preenchida:
+- Carteira assinada confirmada
+- Tempo de trabalho informado
+- Problema/irregularidade descrito (rescisao, verbas, desvio de funcao, assedio, insalubridade, etc.)
+- Processo e honorarios explicados
+- Cliente demonstrou interesse em prosseguir
 
-REGRA DE OURO: Caso inviavel (sem sequela, sem laudo, fora do prazo, sem qualidade de segurado) NAO rotear para agendamento. NUNCA.
+IMPORTANTE: Se a agente ja fez todas as perguntas de avaliacao e o cliente respondeu, rotear para agendamento. NAO manter o cliente preso em avaliacao ou coleta repetindo perguntas ja respondidas. Se o cliente ja trouxe informacoes detalhadas na primeira mensagem, considere como respondido e avance rapidamente.
+
+REGRA DE OURO PREVIDENCIARIO: Caso inviavel (sem sequela, sem laudo, fora do prazo, sem qualidade de segurado) NAO rotear para agendamento. NUNCA.
+REGRA DE OURO TRABALHISTA: Caso inviavel (menos de 90 dias de trabalho, fora do escopo trabalhista) NAO rotear para agendamento. NUNCA.
 
 ### 8. transferir_humano
 - Cliente ja possui beneficio ativo.
@@ -113,12 +127,12 @@ Se a ULTIMA mensagem do cliente pede horario, disponibilidade ou agendamento (ex
 
 ## REGRAS DE TRANSICAO
 
-- identificacao → vinculo: quando Maria se apresentou E cliente disse o nome E assunto e acidente (previdenciario).
-- identificacao → transferir_humano: quando assunto e TRABALHISTA (demissao, rescisao, carteira nao assinada, verbas, assedio, insalubridade) E o cliente NAO esta pedindo horario ou agendamento. A IA deve acolher e transferir para o advogado.
+- identificacao → vinculo: quando Maria se apresentou E cliente disse o nome E assunto e acidente (previdenciario) OU trabalhista.
+- identificacao → coleta_caso: quando Maria se apresentou E o cliente ja descreveu o caso com detalhes suficientes (pular vinculo se carteira ja foi mencionada).
 - identificacao → casos_especiais: quando assunto e BPC/LOAS/aposentadoria/doenca.
-- vinculo → coleta_caso: quando carteira ou periodo de graca CONFIRMADO.
-- coleta_caso → avaliacao: quando tem data + descricao + parte do corpo + cirurgia.
-- avaliacao → agendamento: quando sequela + laudo confirmados E caso viavel.
+- vinculo → coleta_caso: quando carteira ou vinculo CONFIRMADO.
+- coleta_caso → avaliacao: PREVIDENCIARIO quando tem data + descricao + parte do corpo + cirurgia. TRABALHISTA quando tem tipo de problema + tempo de trabalho + funcao.
+- avaliacao → agendamento: PREVIDENCIARIO quando sequela + laudo confirmados E caso viavel. TRABALHISTA quando caso viavel E processo explicado E cliente interessado.
 - Qualquer fase → explicacao: quando cliente pergunta sobre servico/honorarios.
 - explicacao → fase anterior: quando duvida respondida, retomar de onde parou.
 

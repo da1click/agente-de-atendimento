@@ -132,6 +132,7 @@ Em caso de duvida sobre o enquadramento: rotear para transferir_humano, NUNCA pa
 IMPORTANTE: NAO transferir quando o cliente pergunta sobre valores estimados do caso. Isso faz parte da qualificacao — continuar no fluxo normal.
 IMPORTANTE: NAO transferir cliente existente que retorna. Verificar se quer reagendar (agendamento) ou tirar duvida (explicacao).
 IMPORTANTE: Se o cliente pede horario, pergunta sobre disponibilidade ou quer falar com especialista, rotear para agendamento. NAO transferir para humano.
+IMPORTANTE: Se o assunto e TRABALHISTA (demissao, rescisao, verbas, desvio de funcao, assedio, insalubridade, horas extras), NAO transferir para humano. Qualificar normalmente (coleta_caso → avaliacao → agendamento). O escritorio tambem atende trabalhista.
 
 ---
 
