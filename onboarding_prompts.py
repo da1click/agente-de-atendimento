@@ -5,6 +5,7 @@ Usa templates padrao personalizados com as informacoes do formulario.
 import os
 import json
 import logging
+import subprocess
 
 logger = logging.getLogger(__name__)
 
@@ -804,7 +805,83 @@ Se nao tiver laudo ou limitacao nao atrapalha o trabalho: NAO avancar para agend
             json.dump(config, f, ensure_ascii=False, indent=2)
 
     logger.info(f"Prompts gerados para conta {account_id} em {pasta}")
+
+    # Auto-commit e push pro GitHub
+    _git_push_prompts(pasta, account_id, nome_conta)
+
     return pasta
+
+
+def _git_push_prompts(pasta: str, account_id: int, nome_conta: str):
+    """Faz commit e push dos prompts gerados para o GitHub."""
+    try:
+        repo_dir = os.path.dirname(os.path.abspath(__file__))
+        github_token = os.environ.get("GITHUB_TOKEN", "")
+        if not github_token:
+            logger.warning("GITHUB_TOKEN não encontrado, pulando git push")
+            return
+
+        remote_url = f"https://da1click:{github_token}@github.com/da1click/agente-de-atendimento.git"
+
+        env = os.environ.copy()
+        env["GIT_AUTHOR_NAME"] = "Da1Click Bot"
+        env["GIT_AUTHOR_EMAIL"] = "bot@da1click.com"
+        env["GIT_COMMITTER_NAME"] = "Da1Click Bot"
+        env["GIT_COMMITTER_EMAIL"] = "bot@da1click.com"
+
+        def run_git(*args):
+            return subprocess.run(
+                ["git"] + list(args),
+                cwd=repo_dir, env=env,
+                capture_output=True, text=True, timeout=60
+            )
+
+        # No container Docker, o diretório não é um repo git.
+        # Precisamos inicializar, puxar o histórico e fazer push.
+        git_dir = os.path.join(repo_dir, ".git")
+        if not os.path.isdir(git_dir):
+            logger.info("Inicializando repo git no container...")
+            run_git("init")
+            run_git("remote", "add", "origin", remote_url)
+            # Puxar o branch master sem checkout (para não sobrescrever arquivos)
+            fetch = run_git("fetch", "origin", "master")
+            if fetch.returncode != 0:
+                logger.error(f"Erro no git fetch: {fetch.stderr}")
+                return
+            # Apontar HEAD para o branch remoto sem alterar os arquivos
+            run_git("reset", "--soft", "origin/master")
+        else:
+            # Repo já existe, garantir remote atualizado e puxar mudanças
+            run_git("remote", "set-url", "origin", remote_url)
+            run_git("fetch", "origin", "master")
+            # Merge fast-forward se possível
+            run_git("merge", "--ff-only", "origin/master")
+
+        # Add apenas a pasta do cliente
+        pasta_rel = os.path.relpath(pasta, repo_dir)
+        run_git("add", pasta_rel)
+
+        # Verificar se tem algo pra commitar
+        status = run_git("diff", "--cached", "--name-only")
+        if not status.stdout.strip():
+            logger.info(f"Nenhuma mudança nos prompts da conta {account_id}")
+            return
+
+        # Commit e push
+        msg = f"feat(onboarding): gerar prompts automáticos para {nome_conta} (conta {account_id})"
+        commit = run_git("commit", "-m", msg)
+        if commit.returncode != 0:
+            logger.error(f"Erro no git commit: {commit.stderr}")
+            return
+
+        push = run_git("push", "origin", "HEAD:master")
+        if push.returncode != 0:
+            logger.error(f"Erro no git push: {push.stderr}")
+            return
+
+        logger.info(f"Prompts da conta {account_id} commitados e enviados ao GitHub")
+    except Exception as e:
+        logger.error(f"Erro ao fazer git push dos prompts: {e}")
 
 
 def _salvar(prompt_dir: str, nome_arquivo: str, conteudo: str):
