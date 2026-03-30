@@ -686,6 +686,47 @@ def deletar_advogado(advogado_id: str) -> bool:
     return bool(resp.data)
 
 
+# ── BLOQUEIOS DE AGENDA ──────────────────────────────────────
+
+def listar_bloqueios_agenda(account_id: int) -> list:
+    db = get_db()
+    resp = (
+        db.table("ia_bloqueios_agenda")
+        .select("*")
+        .eq("account_id", account_id)
+        .order("data_inicio", desc=False)
+        .execute()
+    )
+    return resp.data or []
+
+
+def inserir_bloqueio_agenda(dados: dict) -> dict:
+    db = get_db()
+    resp = db.table("ia_bloqueios_agenda").insert(dados).execute()
+    return resp.data[0] if resp.data else dados
+
+
+def deletar_bloqueio_agenda(bloqueio_id: str) -> bool:
+    db = get_db()
+    resp = db.table("ia_bloqueios_agenda").delete().eq("id", bloqueio_id).execute()
+    return bool(resp.data)
+
+
+def listar_bloqueios_agenda_ativos(account_id: int) -> list:
+    """Retorna bloqueios cujo data_fim ainda não passou."""
+    db = get_db()
+    from datetime import datetime, timezone, timedelta
+    agora = datetime.now(timezone(timedelta(hours=-3))).isoformat()
+    resp = (
+        db.table("ia_bloqueios_agenda")
+        .select("*")
+        .eq("account_id", account_id)
+        .gte("data_fim", agora)
+        .execute()
+    )
+    return resp.data or []
+
+
 # Mapa de sinônimos → especialidade padronizada
 _ESPECIALIDADE_SINONIMOS = {
     # Previdenciário

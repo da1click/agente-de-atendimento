@@ -1728,6 +1728,39 @@ def api_deletar_advogado(advogado_id: str):
     return {"status": "deletado"}
 
 
+# ── BLOQUEIOS DE AGENDA ───────────────────────────────────────
+
+@app.get("/api/bloqueios-agenda")
+def api_listar_bloqueios(account_id: int):
+    from db import listar_bloqueios_agenda
+    return listar_bloqueios_agenda(account_id)
+
+
+@app.post("/api/bloqueios-agenda")
+async def api_criar_bloqueio(request: Request):
+    from db import inserir_bloqueio_agenda
+    dados = await request.json()
+    campos = {
+        "account_id": dados.get("account_id"),
+        "advogado_id": dados.get("advogado_id"),  # None = todos
+        "advogado_nome": dados.get("advogado_nome", "Todos"),
+        "data_inicio": dados.get("data_inicio"),
+        "data_fim": dados.get("data_fim"),
+        "motivo": dados.get("motivo", ""),
+    }
+    if not campos["account_id"] or not campos["data_inicio"] or not campos["data_fim"]:
+        raise HTTPException(status_code=400, detail="account_id, data_inicio e data_fim são obrigatórios")
+    return inserir_bloqueio_agenda(campos)
+
+
+@app.delete("/api/bloqueios-agenda/{bloqueio_id}")
+def api_deletar_bloqueio(bloqueio_id: str):
+    from db import deletar_bloqueio_agenda
+    if not deletar_bloqueio_agenda(bloqueio_id):
+        raise HTTPException(status_code=404, detail="Bloqueio não encontrado")
+    return {"status": "deletado"}
+
+
 # ── CHATWOOT PROXY ────────────────────────────────────────────
 
 @app.get("/api/clientes/{account_id}/chatwoot/contatos/buscar")

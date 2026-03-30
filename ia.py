@@ -727,13 +727,41 @@ async def consultar_agenda_real(config: dict, especialidade: str = "") -> list:
     logger.info(f"[agenda] {len(events)} eventos recebidos do Google Calendar")
 
     # Calcular slots livres para cada advogado
-    return _calcular_slots_disponiveis(advogados, events, qtd_dias)
+    return _calcular_slots_disponiveis(advogados, events, qtd_dias, account_id)
 
 
-def _calcular_slots_disponiveis(advogados: list, events: list, qtd_dias: int) -> list:
+def _calcular_slots_disponiveis(advogados: list, events: list, qtd_dias: int, account_id: int = 0) -> list:
     """Calcula slots disponíveis subtraindo eventos ocupados da disponibilidade de cada advogado."""
     BR_TZ = timezone(timedelta(hours=-3))
     agora = datetime.now(BR_TZ)
+
+    # Carregar bloqueios de agenda do banco
+    bloqueios_por_adv: dict[str, list] = {}  # advogado_id → lista de {start, end}
+    bloqueios_todos: list = []  # bloqueiam todos os advogados
+    if account_id:
+        try:
+            from db import listar_bloqueios_agenda_ativos
+            bloqueios = listar_bloqueios_agenda_ativos(account_id)
+            for b in bloqueios:
+                try:
+                    b_start = datetime.fromisoformat(b["data_inicio"])
+                    b_end = datetime.fromisoformat(b["data_fim"])
+                    if b_start.tzinfo is None:
+                        b_start = b_start.replace(tzinfo=BR_TZ)
+                    if b_end.tzinfo is None:
+                        b_end = b_end.replace(tzinfo=BR_TZ)
+                    evento_bloq = {"start": b_start, "end": b_end}
+                    adv_id = b.get("advogado_id")
+                    if adv_id:
+                        bloqueios_por_adv.setdefault(adv_id, []).append(evento_bloq)
+                    else:
+                        bloqueios_todos.append(evento_bloq)
+                except Exception:
+                    continue
+            if bloqueios:
+                logger.info(f"[agenda] {len(bloqueios)} bloqueio(s) de agenda carregados")
+        except Exception as e:
+            logger.warning(f"[agenda] Erro ao carregar bloqueios: {e}")
 
     # Mapear advogados: nome → chave interna, cor → chave interna
     # Cada advogado tem uma chave única baseada no nome
@@ -803,8 +831,11 @@ def _calcular_slots_disponiveis(advogados: list, events: list, qtd_dias: int) ->
         if isinstance(disp_raw, str):
             disp_raw = json.loads(disp_raw)
 
-        # Eventos que bloqueiam este advogado: os dele (por nome/cor) + os bloqueantes gerais
-        eventos_adv = eventos_por_adv.get(nome_key, []) + eventos_bloqueantes
+        # Eventos que bloqueiam este advogado: os dele (por nome/cor) + os bloqueantes gerais + bloqueios de agenda
+        # Adicionar bloqueios do banco: específicos deste advogado + bloqueios para todos
+        adv_id = str(adv.get("id", ""))
+        bloqueios_adv = bloqueios_por_adv.get(adv_id, []) + bloqueios_todos
+        eventos_adv = eventos_por_adv.get(nome_key, []) + eventos_bloqueantes + bloqueios_adv
 
         horarios = []
         for dia_offset in range(qtd_dias):
