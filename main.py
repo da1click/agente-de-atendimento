@@ -1156,6 +1156,13 @@ async def chatwoot_webhook(request: Request):
         inboxes_permitidos = config.get("inboxes", [])
         inbox_permitido = not inboxes_permitidos or inbox_id in inboxes_permitidos
 
+        # Modo teste: se ativo, IA só responde conversas com label "ia-teste"
+        modo_teste = config.get("modo_teste", False)
+        conv_labels = payload.get("conversation", {}).get("labels", [])
+        if modo_teste and "ia-teste" not in conv_labels:
+            logger.info(f"[modo-teste] Ignorando conv={conversation_id} — sem label 'ia-teste' (account={account_id})")
+            continue
+
         # Verificar se IA deve responder nesta conversa (antes de qualquer efeito colateral)
         ia_ativa = config.get("ia_ativa", True) and ia_agent_id is not None and assignee_id == ia_agent_id and inbox_permitido
 

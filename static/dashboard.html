@@ -1489,6 +1489,11 @@ async function carregarFormConta(id) {
             <input type="checkbox" id="f-ia-ativa" ${(c.ia_ativa ?? true) ? 'checked' : ''} />
             <span class="toggle-slider"></span>
           </label>
+          <span class="toggle-label" title="Modo Teste: IA só responde conversas com a label 'ia-teste'">Modo Teste</span>
+          <label class="toggle">
+            <input type="checkbox" id="f-modo-teste" ${c.modo_teste ? 'checked' : ''} />
+            <span class="toggle-slider"></span>
+          </label>
           <span class="toggle-label">Transcrição</span>
           <label class="toggle">
             <input type="checkbox" id="f-transcricao-ativa" ${(c.transcricao_ativa ?? true) ? 'checked' : ''} />
@@ -1879,6 +1884,7 @@ async function salvarConta(id) {
     dia_ciclo:                  _intOrNull(document.getElementById('f-dia-ciclo').value),
     ativo:                      document.getElementById('f-ativo').checked,
     ia_ativa:                   document.getElementById('f-ia-ativa').checked,
+    modo_teste:                 document.getElementById('f-modo-teste').checked,
     transcricao_ativa:          document.getElementById('f-transcricao-ativa').checked,
     inatividade_ativa:          document.getElementById('f-inatividade-ativa').checked,
     nome_escritorio:            document.getElementById('f-nome-escritorio').value.trim(),
