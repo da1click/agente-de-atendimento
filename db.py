@@ -852,6 +852,7 @@ def inserir_campanha_remarketing(account_id: int, dados: dict) -> dict:
         "limite_diario": dados.get("limite_diario", 200),
         "mensagem": dados.get("mensagem", ""),
         "template_whatsapp": dados.get("template_whatsapp") or None,
+        "image_url": dados.get("image_url") or None,
         "ativo": dados.get("ativo", False),
     }
     resp = db.table("ia_remarketing_campanhas").insert(payload).execute()
@@ -861,7 +862,7 @@ def inserir_campanha_remarketing(account_id: int, dados: dict) -> dict:
 def atualizar_campanha_remarketing(campanha_id: int, dados: dict) -> dict | None:
     db = get_db()
     payload = {"updated_at": "now()"}
-    campos = ["nome", "dias_inatividade", "limite_diario", "mensagem", "template_whatsapp", "ativo"]
+    campos = ["nome", "dias_inatividade", "limite_diario", "mensagem", "template_whatsapp", "image_url", "ativo"]
     for c in campos:
         if c in dados:
             payload[c] = dados[c]

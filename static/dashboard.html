@@ -2890,12 +2890,17 @@ async function renderPageRemarketing() {
             <span class="field-hint">Texto direto para inboxes normais. Para WhatsApp Oficial, configure também o template abaixo.</span>
           </div>
           <div class="field-group full">
+            <label>URL da Imagem (opcional)</label>
+            <input type="url" id="remark-image-url" placeholder="https://exemplo.com/imagem.jpg" />
+            <span class="field-hint">Cole a URL de uma imagem para enviar junto com a mensagem. Funciona em inboxes normais.</span>
+          </div>
+          <div class="field-group full">
             <label>Template WhatsApp (opcional)</label>
             <div style="display:flex;align-items:center;gap:8px;">
               <div id="remark-template-wrap"></div>
               <span id="remark-tpl-status" style="font-size:11px;color:var(--text-muted);"></span>
             </div>
-            <span class="field-hint">Obrigatório para WhatsApp Oficial (janela 24h sempre expirada em remarketing)</span>
+            <span class="field-hint">Obrigatório para WhatsApp Oficial (janela 24h sempre expirada em remarketing). Templates com imagem já incluem a mídia.</span>
           </div>
           <div class="field-group" style="display:flex;align-items:center;gap:10px;">
             <label class="toggle">
@@ -3006,6 +3011,7 @@ function abrirFormRemarketing(campanha = null) {
   document.getElementById('remark-dias').value = campanha?.dias_inatividade || 30;
   document.getElementById('remark-limite').value = campanha?.limite_diario || 200;
   document.getElementById('remark-mensagem').value = campanha?.mensagem || '';
+  document.getElementById('remark-image-url').value = campanha?.image_url || '';
   document.getElementById('remark-ativo').checked = campanha?.ativo || false;
   _carregarTemplatesRemarketing(campanha?.template_whatsapp || '');
   document.getElementById('remark-form-card').scrollIntoView({ behavior: 'smooth' });
@@ -3028,6 +3034,7 @@ async function salvarCampanhaRemarketing() {
     dias_inatividade: parseInt(document.getElementById('remark-dias').value) || 30,
     limite_diario: parseInt(document.getElementById('remark-limite').value) || 200,
     mensagem: document.getElementById('remark-mensagem').value.trim(),
+    image_url: document.getElementById('remark-image-url').value.trim() || null,
     template_whatsapp: document.getElementById('remark-template').value.trim() || null,
     ativo: document.getElementById('remark-ativo').checked,
   };

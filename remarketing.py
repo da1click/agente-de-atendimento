@@ -40,12 +40,28 @@ def _minutos_desde_inicio() -> int:
 
 async def _enviar_mensagem_remarketing(
     chatwoot_url: str, token: str, account_id: int,
-    conversation_id: int, texto: str
+    conversation_id: int, texto: str, image_url: str = ""
 ):
-    """Envia mensagem de remarketing via Chatwoot."""
+    """Envia mensagem de remarketing via Chatwoot, com imagem opcional."""
     url = f"{chatwoot_url}/api/v1/accounts/{account_id}/conversations/{conversation_id}/messages"
-    headers = {"api_access_token": token, "Content-Type": "application/json"}
-    async with httpx.AsyncClient(timeout=15) as http:
+    headers = {"api_access_token": token}
+    async with httpx.AsyncClient(timeout=30) as http:
+        if image_url:
+            # Baixar imagem e enviar como multipart
+            try:
+                img_resp = await http.get(image_url, timeout=15)
+                img_resp.raise_for_status()
+                content_type = img_resp.headers.get("content-type", "image/jpeg")
+                ext = content_type.split("/")[-1].split(";")[0]
+                files = {"attachments[]": (f"image.{ext}", img_resp.content, content_type)}
+                data = {"content": texto or "", "message_type": "outgoing", "private": "false"}
+                resp = await http.post(url, headers=headers, data=data, files=files)
+                resp.raise_for_status()
+                return
+            except Exception as e:
+                logger.warning(f"[remarketing] Erro ao enviar imagem, tentando só texto: {e}")
+        # Fallback: só texto
+        headers["Content-Type"] = "application/json"
         resp = await http.post(url, headers=headers, json={
             "content": texto,
             "message_type": "outgoing",
@@ -117,6 +133,7 @@ async def processar_remarketing():
         limite_diario = campanha["limite_diario"] or 200
         mensagem = campanha.get("mensagem", "")
         template = (campanha.get("template_whatsapp") or "").strip()
+        image_url = (campanha.get("image_url") or "").strip()
 
         if not mensagem and not template:
             logger.warning(f"[remarketing] Campanha {campanha_id} sem mensagem nem template — pulando")
@@ -177,8 +194,8 @@ async def processar_remarketing():
                     continue
             else:
                 # Inbox normal: enviar texto direto
-                if mensagem:
-                    await _enviar_mensagem_remarketing(chatwoot_url, token, account_id, conversation_id, mensagem)
+                if mensagem or image_url:
+                    await _enviar_mensagem_remarketing(chatwoot_url, token, account_id, conversation_id, mensagem, image_url)
                     logger.info(f"[remarketing] Mensagem enviada — campanha={campanha_id} conv={conversation_id}")
                 else:
                     continue
