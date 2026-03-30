@@ -117,6 +117,29 @@ def inserir_agendamento(account_id: int, inbox_id: int, conversation_id: int, co
     }).execute()
 
 
+def listar_agendamentos_pendentes() -> list:
+    """Retorna agendamentos com status 'agendado' de hoje em diante."""
+    db = get_db()
+    from datetime import date
+    resp = (
+        db.table("ia_agendamentos")
+        .select("id,account_id,conversation_id,contact_name,contact_phone,scheduled_date,scheduled_time,advogada,lembrete_enviado")
+        .eq("status", "agendado")
+        .gte("scheduled_date", date.today().isoformat())
+        .execute()
+    )
+    return resp.data if resp and resp.data else []
+
+
+def marcar_lembrete_enviado(agendamento_id: int):
+    """Marca que o lembrete foi enviado para este agendamento."""
+    db = get_db()
+    db.table("ia_agendamentos").update({
+        "lembrete_enviado": True,
+        "updated_at": "now()",
+    }).eq("id", agendamento_id).execute()
+
+
 # ── TRANSCRIÇÕES ──────────────────────────────────────────────
 
 # ── INATIVIDADE ───────────────────────────────────────────────
@@ -262,7 +285,8 @@ _CONFIG_COLUMNS = (
     "ia_ativa,openai_api_key,transcricao_ativa,inatividade_ativa,limite_followup,email_agenda,"
     "disponibilidade,duracao_agendamento,horas_inicial_busca,quantidade_dias_a_buscar,"
     "dia_ciclo,meta_waba_id,meta_access_token,template_audiencia,"
-    "id_notificacao_cliente,id_notificacao_convertido"
+    "id_notificacao_cliente,id_notificacao_convertido,"
+    "config_lembrete_consulta"
 )
 
 

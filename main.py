@@ -79,6 +79,8 @@ async def lifespan(app: FastAPI):
     iniciar_agendador_audiencias()
     from zapsign_followup import iniciar_zapsign_followup
     iniciar_zapsign_followup()
+    from agendador_consultas import iniciar_agendador_consultas
+    iniciar_agendador_consultas()
     # Cria super_admin inicial se não existir
     try:
         if not super_admin_existe():

@@ -25,6 +25,8 @@ Se houver mencao a data/horario de agendamento no historico e esse horario ja pa
 
 Se no historico a Clara ja confirmou um agendamento com horario e advogado (ex: "Agendado com Dr. X as Y"), E esse horario ainda NAO passou: o agendamento JA FOI FEITO. NAO rotear para agendamento novamente. Rotear para explicacao (para tirar duvidas) ou simplesmente manter na fase atual sem re-agendar.
 
+ATENCAO: Apresentar horarios ao cliente ("Verifiquei a agenda...", "Temos horario com...") NAO significa que o agendamento foi feito. O agendamento so esta confirmado quando a Clara EXPLICITAMENTE diz "agendado", "confirmado" ou "marcado". Se a Clara ofereceu horarios e o cliente escolheu ou confirmou, mas a Clara ainda NAO disse que esta agendado, MANTER EM AGENDAMENTO para que a tool Agendar seja chamada.
+
 ---
 
 ## OPCOES DE ROTEAMENTO
@@ -70,6 +72,8 @@ Usar quando o cliente pergunta "onde voces ficam?", "como funciona?", "atendem m
 Usar APENAS se UMA das condicoes for verdadeira:
 
 A) O cliente pediu explicitamente agendar ("quero marcar", "como contrato", "quando posso falar com o advogado", "tem horario hoje?", "tem horario disponivel?", "quero falar com especialista").
+
+C) A Clara ja ofereceu horarios ao cliente e o cliente esta respondendo (escolhendo advogado, confirmando horario, dizendo "sim"). MANTER EM AGENDAMENTO ate que a Clara confirme explicitamente que o agendamento foi feito.
 
 B) A qualificacao minima foi preenchida:
 - Area identificada (trabalhista ou previdenciaria)

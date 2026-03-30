@@ -36,6 +36,8 @@ Se houver mencao a data/horario de agendamento no historico e esse horario ja pa
 
 Se no historico a Aline ja confirmou um agendamento com horario e advogado (ex: "Agendado com Dr. X as Y"), E esse horario ainda NAO passou: o agendamento JA FOI FEITO. NAO rotear para agendamento novamente. Rotear para explicacao (para tirar duvidas) ou simplesmente manter na fase atual sem re-agendar.
 
+ATENCAO: Apresentar horarios ao cliente ("Verifiquei a agenda...") NAO significa que o agendamento foi feito. O agendamento so esta confirmado quando a Aline EXPLICITAMENTE diz "agendado", "confirmado" ou "marcado". Se a Aline ofereceu horarios e o cliente escolheu ou confirmou, mas a Aline ainda NAO disse que esta agendado, manter em agendamento para que a tool Agendar seja chamada.
+
 ---
 
 ## OPCOES DE ROTEAMENTO
@@ -85,6 +87,8 @@ B) O caso foi qualificado E avaliado como viavel:
 - Dados basicos coletados (tempo, funcao, motivo)
 - Processo e honorarios explicados
 - Cliente demonstrou interesse em prosseguir
+
+C) A Aline ja ofereceu horarios ao cliente e o cliente esta respondendo (escolhendo advogado, confirmando horario, dizendo "sim"). MANTER EM AGENDAMENTO ate que a Aline confirme explicitamente que o agendamento foi feito.
 
 IMPORTANTE: Se a agente ja fez todas as perguntas e o cliente respondeu, rotear para agendamento. NAO manter o cliente preso repetindo perguntas ja respondidas.
 

@@ -23,7 +23,9 @@ Se houver mencao a data/horario de agendamento no historico e esse horario ja pa
 
 ## REGRA CRITICA — JA AGENDOU
 
-Se no historico a Maria ja confirmou um agendamento com horario e advogado (ex: "Agendado com Dr. X as Y"), E esse horario ainda NAO passou: o agendamento JA FOI FEITO. NAO rotear para agendamento novamente. Rotear para explicacao (para tirar duvidas) ou simplesmente manter na fase atual sem re-agendar.
+Se no historico a Maria ja confirmou um agendamento com horario e advogado (ex: "Agendado com Dr. X as Y"), ou se a tag/label "convertido" esta presente, E esse horario ainda NAO passou: o agendamento JA FOI FEITO. NAO rotear para agendamento novamente. Rotear para explicacao (para tirar duvidas). Se o cliente responde apenas "ok", "certo", "sim" apos a confirmacao, rotear para explicacao — NAO para agendamento.
+
+ATENCAO: Apresentar horarios ao cliente ("Verifiquei a agenda...", "Temos horario com...") NAO significa que o agendamento foi feito. O agendamento so esta confirmado quando a Maria EXPLICITAMENTE diz "agendado", "confirmado" ou "marcado". Se a Maria ofereceu horarios e o cliente escolheu ou confirmou, mas a Maria ainda NAO disse que esta agendado, MANTER EM AGENDAMENTO para que a tool Agendar seja chamada.
 
 ---
 
@@ -74,6 +76,8 @@ Usar quando o cliente pergunta "como funciona?", "preciso pagar algo?", "onde fi
 Usar APENAS se UMA das condicoes for verdadeira:
 
 A) O cliente pediu explicitamente agendar ou perguntou sobre horarios ("quero marcar", "como contrato", "quando posso falar com o advogado", "tem horario hoje?", "tem horario disponivel?", "quero falar com especialista").
+
+C) A Maria ja ofereceu horarios ao cliente e o cliente esta respondendo (escolhendo advogado, confirmando horario, dizendo "sim"). MANTER EM AGENDAMENTO ate que a Maria confirme explicitamente que o agendamento foi feito.
 
 B) Para PREVIDENCIARIO — checklist respondido (interpretar com bom senso, NAO exigir respostas perfeitas):
 - Qualidade de segurado confirmada (CTPS ativa, periodo de graca, ou vinculo informal com subordinacao). Contribuinte individual/autonomo/MEI NAO conta.

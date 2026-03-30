@@ -25,6 +25,8 @@ Se houver mencao a data/horario de agendamento no historico e esse horario ja pa
 
 Se no historico a Helena ja confirmou um agendamento com horario e advogado (ex: "Agendado com Dr. X as Y"), E esse horario ainda NAO passou: o agendamento JA FOI FEITO. NAO rotear para agendamento novamente. Rotear para explicacao (para tirar duvidas) ou simplesmente manter na fase atual sem re-agendar.
 
+ATENCAO: Apresentar horarios ao cliente ("Verifiquei a agenda...", "Temos horario com...") NAO significa que o agendamento foi feito. O agendamento so esta confirmado quando a Helena EXPLICITAMENTE diz "agendado", "confirmado" ou "marcado". Se a Helena ofereceu horarios e o cliente escolheu ou confirmou, mas a Helena ainda NAO disse que esta agendado, MANTER EM AGENDAMENTO para que a tool Agendar seja chamada.
+
 ---
 
 ## OPCOES DE ROTEAMENTO
@@ -41,6 +43,7 @@ A Helena ja se apresentou, o cliente ja disse o nome, e o assunto e acidente/tra
 O VINCULO ainda NAO foi verificado (nao confirmou carteira assinada nem periodo de graca).
 
 Usar quando o cliente ainda nao respondeu sobre carteira assinada ou MEI.
+IMPORTANTE: Mesmo que o cliente diga que e autonomo/MEI e nao teve carteira, manter em vinculo ate que TODAS as perguntas do fluxo sejam feitas (incluindo vinculo informal e subordinacao). NAO considerar vinculo encerrado so porque o cliente disse "autonomo".
 
 ### 3. coleta_caso
 Vinculo CONFIRMADO (carteira ativa OU periodo de graca validado com datas OU vinculo informal com subordinacao).
@@ -72,6 +75,8 @@ Usar quando o cliente pergunta "como funciona?", "preciso pagar algo?", "onde fi
 Usar APENAS se UMA das condicoes for verdadeira:
 
 A) O cliente pediu explicitamente agendar ("quero marcar", "como contrato", "quando posso falar com o advogado", "tem horario hoje?", "tem horario disponivel?", "quero falar com especialista").
+
+C) A Helena ja ofereceu horarios ao cliente e o cliente esta respondendo (escolhendo advogado, confirmando horario, dizendo "sim"). MANTER EM AGENDAMENTO ate que a Helena confirme explicitamente que o agendamento foi feito.
 
 B) O checklist de qualificacao foi respondido (interpretar com bom senso, NAO exigir respostas perfeitas):
 - Qualidade de segurado confirmada (CTPS ativa, periodo de graca, ou vinculo informal com subordinacao). Contribuinte individual/autonomo/MEI NAO conta.

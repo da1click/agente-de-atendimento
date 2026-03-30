@@ -19,12 +19,12 @@ _debounce_tasks: dict[int, asyncio.Task] = {}
 
 TOOLS_POR_FASE = {
     "identificacao": ["atualiza_contato"],
-    "vinculo": ["cliente_inviavel", "TransferHuman"],
-    "coleta_caso": ["cliente_inviavel", "TransferHuman"],
-    "avaliacao": ["cliente_inviavel", "TransferHuman"],
-    "casos_especiais": ["TransferHuman", "cliente_inviavel", "desqualificado", "nao_lead", "nao_alfabetizado"],
-    "explicacao": ["TransferHuman"],
-    "agendamento": ["ConsultarAgenda", "Agendar", "convertido"],
+    "vinculo": ["atualiza_contato", "cliente_inviavel", "TransferHuman"],
+    "coleta_caso": ["atualiza_contato", "cliente_inviavel", "TransferHuman"],
+    "avaliacao": ["atualiza_contato", "cliente_inviavel", "TransferHuman"],
+    "casos_especiais": ["atualiza_contato", "TransferHuman", "cliente_inviavel", "desqualificado", "nao_lead", "nao_alfabetizado"],
+    "explicacao": ["atualiza_contato", "TransferHuman"],
+    "agendamento": ["atualiza_contato", "ConsultarAgenda", "Agendar", "convertido"],
     "inatividade": ["aguardando_cliente", "desqualificado"],
 }
 
@@ -240,6 +240,30 @@ def _get_grupo_novos_leads(account_id: int, config: dict) -> int | None:
     return int(notif) if notif else None
 
 
+async def _notificar_transferencia_humano(
+    config: dict, account_id: int, conversation_id: int,
+    contact_name: str, contact_phone: str, tipo: str, motivo: str = "",
+):
+    """Notifica o grupo de clientes sobre transferência para humano (todas as contas com id_notificacao_cliente)."""
+    notif_conv_id = config.get("id_notificacao_cliente")
+    if not notif_conv_id:
+        return
+    try:
+        msg = (
+            f"🔀 TRANSFERÊNCIA PARA HUMANO\n\n"
+            f"Tipo: {tipo}\n"
+            f"Nome: {contact_name}\n"
+            f"Número: {contact_phone}\n"
+        )
+        if motivo:
+            msg += f"Motivo: {motivo}\n"
+        msg += f"Conversa: {conversation_id}"
+        await _enviar_notificacao(config, account_id, int(notif_conv_id), msg)
+        logger.info(f"[notificação] Transferência '{tipo}' notificada — conv={conversation_id}")
+    except Exception as e:
+        logger.warning(f"[notificação] Erro ao notificar transferência — conv={conversation_id}: {e}")
+
+
 async def _enviar_notificacao(config: dict, account_id: int, conv_id_notif: int, mensagem: str):
     """Envia notificação para o grupo do Chatwoot (pode ser outro Chatwoot)."""
     externo = _NOTIF_CHATWOOT_EXTERNO.get(account_id)
@@ -305,6 +329,7 @@ async def executar_tool(nome: str, args: dict, config: dict, conversation_id: in
                 logger.info(f"[notificação] Inviável notificado no grupo novos leads — conv={conversation_id}")
         except Exception as e:
             logger.warning(f"[notificação] Erro ao notificar inviável — conv={conversation_id}: {e}")
+        await _notificar_transferencia_humano(config, account_id, conversation_id, contact_name, contact_phone, "Cliente inviável", args.get("motivo", ""))
         logger.info(f"Tool: cliente_inviavel — {args.get('motivo')}")
         return json.dumps({"status": "ok"})
 
@@ -314,6 +339,7 @@ async def executar_tool(nome: str, args: dict, config: dict, conversation_id: in
             upsert_lead(account_id, inbox_id, conversation_id, contact_name, contact_phone, status="transferido")
         except Exception as e:
             logger.warning(f"Supabase erro (TransferHuman): {e}")
+        await _notificar_transferencia_humano(config, account_id, conversation_id, contact_name, contact_phone, "Solicitação do cliente", args.get("motivo", ""))
         logger.info(f"Tool: TransferHuman — {args.get('motivo')}")
         return json.dumps({"status": "ok"})
 
@@ -336,6 +362,7 @@ async def executar_tool(nome: str, args: dict, config: dict, conversation_id: in
             upsert_lead(account_id, inbox_id, conversation_id, contact_name, contact_phone, status="transferido")
         except Exception as e:
             logger.warning(f"Supabase erro (lead_disponivel): {e}")
+        await _notificar_transferencia_humano(config, account_id, conversation_id, contact_name, contact_phone, "Lead disponível (quer falar agora)")
         logger.info("Tool: lead_disponivel")
         return json.dumps({"status": "ok"})
 
@@ -439,6 +466,7 @@ async def executar_tool(nome: str, args: dict, config: dict, conversation_id: in
                         status="desqualificado", inviability_reason=args.get("motivo"))
         except Exception as e:
             logger.warning(f"Supabase erro (desqualificado): {e}")
+        await _notificar_transferencia_humano(config, account_id, conversation_id, contact_name, contact_phone, "Desqualificado", args.get("motivo", ""))
         logger.info(f"Tool: desqualificado — {args.get('motivo')}")
         return json.dumps({"status": "ok"})
 
@@ -450,6 +478,7 @@ async def executar_tool(nome: str, args: dict, config: dict, conversation_id: in
                         status="desqualificado", inviability_reason=args.get("motivo"))
         except Exception as e:
             logger.warning(f"Supabase erro (nao_lead): {e}")
+        await _notificar_transferencia_humano(config, account_id, conversation_id, contact_name, contact_phone, "Não é lead", args.get("motivo", ""))
         logger.info(f"Tool: nao_lead — {args.get('motivo')}")
         return json.dumps({"status": "ok"})
 
@@ -460,6 +489,7 @@ async def executar_tool(nome: str, args: dict, config: dict, conversation_id: in
             upsert_lead(account_id, inbox_id, conversation_id, contact_name, contact_phone, status="transferido")
         except Exception as e:
             logger.warning(f"Supabase erro (nao_alfabetizado): {e}")
+        await _notificar_transferencia_humano(config, account_id, conversation_id, contact_name, contact_phone, "Não alfabetizado")
         logger.info("Tool: nao_alfabetizado")
         return json.dumps({"status": "ok"})
 
@@ -1032,7 +1062,7 @@ def formatar_conversa_openai(messages: list) -> list:
     return resultado
 
 
-def dividir_mensagem(texto: str, limite: int = 250) -> list[str]:
+def dividir_mensagem(texto: str, limite: int = 600) -> list[str]:
     """Divide a resposta em partes de até `limite` caracteres."""
     partes = []
     atual = ""
@@ -1360,6 +1390,8 @@ async def processar_mensagem(config: dict, account_id: int, conversation_id: int
                     logger.info(f"[notificação] Lead trabalhista conta 8 notificado no grupo 77")
                 except Exception as e:
                     logger.warning(f"[notificação] Erro ao notificar lead trabalhista conta 8: {e}")
+        # Notificar transferência para humano (contas habilitadas)
+        await _notificar_transferencia_humano(config, account_id, conversation_id, contact_name, contact_phone, "Transferência pelo supervisor")
         return
 
     context = {
