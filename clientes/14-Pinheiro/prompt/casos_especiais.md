@@ -43,10 +43,10 @@ Se nao tiver laudo ou limitacao nao atrapalha o trabalho: NAO avancar para agend
 
 ---
 
-## ASSUNTO FORA DO ESCOPO
+## OUTRAS AREAS JURIDICAS
 
-Se o assunto nao for trabalhista nem previdenciario:
-Acionar TransferHuman com motivo.
+Se o assunto nao for trabalhista nem previdenciario (ex: civel, consumidor, criminal, familia, etc.):
+NAO recusar o caso. NAO dizer que o escritorio nao atende. Coletar o maximo de informacoes sobre o caso e acionar TransferHuman para que um especialista avalie.
 
 ---
 
