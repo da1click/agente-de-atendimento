@@ -22,3 +22,4 @@ Não pedir confirmação — executar direto.
 ### Fim de sessão
 - Garantir que todas as mudanças foram commitadas e pushadas
 - Nunca deixar trabalho sem push
+- **Perguntar ao usuário se quer salvar algo na memória** — resumir o que foi feito na sessão e oferecer para salvar decisões, aprendizados ou contexto importante para futuras conversas
