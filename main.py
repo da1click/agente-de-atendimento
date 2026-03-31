@@ -1164,11 +1164,16 @@ async def chatwoot_webhook(request: Request):
             continue
 
         # Verificar se IA deve responder nesta conversa (antes de qualquer efeito colateral)
-        ia_ativa = config.get("ia_ativa", True) and ia_agent_id is not None and assignee_id == ia_agent_id and inbox_permitido
+        # Modo teste com label "ia-teste": forçar IA ativa (não precisa de ia_ativa ligado na config)
+        if modo_teste and "ia-teste" in conv_labels:
+            ia_ativa = ia_agent_id is not None and assignee_id == ia_agent_id and inbox_permitido
+        else:
+            ia_ativa = config.get("ia_ativa", True) and ia_agent_id is not None and assignee_id == ia_agent_id and inbox_permitido
 
         # Race condition: se assignee_id é None ou diferente, pode ser que a atribuição
         # ainda não chegou. Aguardar 3s e re-checar via API.
-        if not ia_ativa and config.get("ia_ativa", True) and ia_agent_id is not None and inbox_permitido and conversation_id:
+        ia_config_ok = (modo_teste and "ia-teste" in conv_labels) or config.get("ia_ativa", True)
+        if not ia_ativa and ia_config_ok and ia_agent_id is not None and inbox_permitido and conversation_id:
             if assignee_id is None or assignee_id != ia_agent_id:
                 try:
                     await asyncio.sleep(3)
