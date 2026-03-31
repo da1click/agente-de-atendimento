@@ -122,7 +122,10 @@ async def processar_remarketing():
         return
 
     if not campanhas:
+        logger.info("[remarketing] Nenhuma campanha ativa encontrada")
         return
+
+    logger.info(f"[remarketing] {len(campanhas)} campanha(s) ativa(s) encontrada(s)")
 
     minutos = _minutos_desde_inicio()
 
@@ -141,8 +144,10 @@ async def processar_remarketing():
 
         config_cliente = carregar_config_cliente(account_id)
         if not config_cliente or not config_cliente.get("ativo", True):
+            logger.info(f"[remarketing] Campanha {campanha_id} — config_cliente ausente ou inativa para account={account_id}")
             continue
         if not config_cliente.get("chatwoot_token"):
+            logger.info(f"[remarketing] Campanha {campanha_id} — sem chatwoot_token para account={account_id}")
             continue
 
         chatwoot_url = config_cliente["chatwoot_url"]
@@ -156,12 +161,14 @@ async def processar_remarketing():
             continue
 
         if enviados_hoje >= limite_diario:
+            logger.info(f"[remarketing] Campanha {campanha_id} — limite diário atingido ({enviados_hoje}/{limite_diario})")
             continue
 
         # Distribuição uniforme: calcular quantos deveriam ter sido enviados até agora
         esperado = int(limite_diario * minutos / TOTAL_MINUTOS_COMERCIAL) if TOTAL_MINUTOS_COMERCIAL > 0 else 0
         if enviados_hoje >= esperado:
-            continue  # já está no ritmo certo, esperar
+            logger.info(f"[remarketing] Campanha {campanha_id} — ritmo ok, aguardando (enviados={enviados_hoje}, esperado={esperado})")
+            continue
 
         # Buscar 1 conversa elegível para envio
         try:
@@ -171,6 +178,7 @@ async def processar_remarketing():
             continue
 
         if not elegiveis:
+            logger.info(f"[remarketing] Campanha {campanha_id} — nenhuma conversa elegível (account={account_id}, dias={dias})")
             continue
 
         lead = elegiveis[0]
