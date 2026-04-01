@@ -907,10 +907,10 @@ def registrar_envio_remarketing(campanha_id: int, account_id: int, conversation_
     }).execute()
 
 
-def buscar_conversas_elegiveis_remarketing(account_id: int, campanha_id: int, dias_inatividade: int, limite: int) -> list:
+def buscar_conversas_elegiveis_remarketing(account_id: int, campanha_id: int, dias_inatividade: int, limite: int, inbox_id: int = None) -> list:
     """
     Busca leads inativos há X dias que ainda não foram contactados por esta campanha.
-    Usa ia_leads.updated_at como proxy de última atividade.
+    Se inbox_id for fornecido, filtra apenas leads dessa inbox.
     Ordena do mais antigo para o mais recente.
     """
     db = get_db()
@@ -927,20 +927,21 @@ def buscar_conversas_elegiveis_remarketing(account_id: int, campanha_id: int, di
     ja_enviados = {e["conversation_id"] for e in (envios_resp.data or [])}
 
     # Buscar leads inativos em lotes até encontrar suficientes não-contactados
-    offset = 0
+    _offset = 0
     batch_size = 100
     elegiveis = []
 
     while len(elegiveis) < limite:
-        resp = (
+        query = (
             db.table("ia_leads")
             .select("account_id,conversation_id,inbox_id,contact_name,contact_phone")
             .eq("account_id", account_id)
             .lte("updated_at", cutoff)
             .order("updated_at")
-            .range(offset, offset + batch_size - 1)
-            .execute()
         )
+        if inbox_id:
+            query = query.eq("inbox_id", inbox_id)
+        resp = query.range(_offset, _offset + batch_size - 1).execute()
         leads = resp.data or []
         if not leads:
             break
@@ -951,7 +952,7 @@ def buscar_conversas_elegiveis_remarketing(account_id: int, campanha_id: int, di
                 if len(elegiveis) >= limite:
                     break
 
-        offset += batch_size
+        _offset += batch_size
 
     return elegiveis[:limite]
 
@@ -980,18 +981,20 @@ def contar_total_envios_remarketing(campanha_id: int) -> int:
     return resp.count or 0
 
 
-def contar_elegiveis_remarketing(account_id: int, dias_inatividade: int) -> int:
+def contar_elegiveis_remarketing(account_id: int, dias_inatividade: int, inbox_id: int = None) -> int:
     """Conta quantas conversas estão elegíveis para remarketing."""
     db = get_db()
     from datetime import datetime, timezone, timedelta
     cutoff = (datetime.now(timezone.utc) - timedelta(days=dias_inatividade)).isoformat()
-    resp = (
+    query = (
         db.table("ia_leads")
         .select("id", count="exact")
         .eq("account_id", account_id)
         .lte("updated_at", cutoff)
-        .execute()
     )
+    if inbox_id:
+        query = query.eq("inbox_id", inbox_id)
+    resp = query.execute()
     return resp.count or 0
 
 

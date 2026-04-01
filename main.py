@@ -1506,14 +1506,18 @@ def stats_campanha(campanha_id: int):
     if not campanha:
         raise HTTPException(status_code=404, detail="Campanha não encontrada")
     account_id = campanha["account_id"]
+    campanha_inbox = campanha.get("inbox_id")
     from db import get_db as _get_db
     _db = _get_db()
-    total_leads = _db.table("ia_leads").select("id", count="exact").eq("account_id", account_id).execute().count or 0
+    q = _db.table("ia_leads").select("id", count="exact").eq("account_id", account_id)
+    if campanha_inbox:
+        q = q.eq("inbox_id", campanha_inbox)
+    total_leads = q.execute().count or 0
     return {
         "envios_hoje": contar_envios_remarketing_hoje(campanha_id),
         "total_envios": contar_total_envios_remarketing(campanha_id),
         "elegiveis": contar_elegiveis_remarketing(
-            account_id, campanha["dias_inatividade"]
+            account_id, campanha["dias_inatividade"], inbox_id=campanha_inbox
         ),
         "total_leads": total_leads,
         "dias": campanha["dias_inatividade"],

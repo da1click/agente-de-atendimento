@@ -151,6 +151,7 @@ async def processar_remarketing():
         mensagem = campanha.get("mensagem", "")
         template = (campanha.get("template_whatsapp") or "").strip()
         image_url = (campanha.get("image_url") or "").strip()
+        campanha_inbox_id = campanha.get("inbox_id")  # inbox específica da campanha
 
         if not mensagem and not template:
             logger.warning(f"[remarketing] Campanha {campanha_id} sem mensagem nem template — pulando")
@@ -186,7 +187,7 @@ async def processar_remarketing():
 
         # Buscar 1 conversa elegível para envio
         try:
-            elegiveis = buscar_conversas_elegiveis_remarketing(account_id, campanha_id, dias, 1)
+            elegiveis = buscar_conversas_elegiveis_remarketing(account_id, campanha_id, dias, 1, inbox_id=campanha_inbox_id)
         except Exception as e:
             logger.warning(f"[remarketing] Erro ao buscar elegíveis campanha={campanha_id}: {e}")
             continue
