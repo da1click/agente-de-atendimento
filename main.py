@@ -613,11 +613,12 @@ async def atualizar_cliente(account_id: int, request: Request, user: dict = Depe
     dados = await request.json()
     campos_editaveis = [
         "nome", "ativo", "ia_ativa", "transcricao_ativa", "inatividade_ativa", "limite_followup", "chatwoot_url", "chatwoot_token", "openai_api_key", "ia_agent_id",
-        "team_id", "inbox_id", "email_agenda", "horas_inicial_busca",
+        "team_id", "inbox_id", "inboxes", "email_agenda", "horas_inicial_busca",
         "quantidade_dias_a_buscar", "duracao_agendamento", "disponibilidade",
         "especialidade", "id_notificacao_convertido", "id_notificacao_cliente",
         "meta_waba_id", "meta_access_token", "template_audiencia",
         "nome_escritorio", "nome_completo", "telefone", "endereco",
+        "modo_teste", "config_lembrete_consulta",
     ]
     # Campos restritos ao super_admin
     if user.get("role") == "super_admin":
