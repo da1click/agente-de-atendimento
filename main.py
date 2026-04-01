@@ -1246,7 +1246,16 @@ async def chatwoot_webhook(request: Request):
         if attachments:
             tipos = [a.get('file_type', '?') for a in attachments]
             logger.info(f"📎 Anexos: {tipos}")
-        logger.info(f"🤖 IA ativa: {ia_ativa} (assignee={assignee_id}, ia_agent={ia_agent_id})")
+        if not ia_ativa and assignee_id == ia_agent_id:
+            # Assignee bate mas IA inativa — logar motivo detalhado
+            motivos = []
+            if not config.get("ia_ativa", True) and not (modo_teste and "ia-teste" in conv_labels):
+                motivos.append("ia_ativa=False na config")
+            if not inbox_permitido:
+                motivos.append(f"inbox {inbox_id} não está em inboxes={inboxes_permitidos}")
+            logger.info(f"🤖 IA ativa: False (assignee={assignee_id}, ia_agent={ia_agent_id}) — MOTIVO: {', '.join(motivos) or 'desconhecido'}")
+        else:
+            logger.info(f"🤖 IA ativa: {ia_ativa} (assignee={assignee_id}, ia_agent={ia_agent_id})")
 
         # Verificar se é áudio (só transcreve se transcricao_ativa)
         audio = next((a for a in attachments if a.get("file_type") == "audio"), None)
