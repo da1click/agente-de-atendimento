@@ -911,37 +911,48 @@ def buscar_conversas_elegiveis_remarketing(account_id: int, campanha_id: int, di
     """
     Busca leads inativos há X dias que ainda não foram contactados por esta campanha.
     Usa ia_leads.updated_at como proxy de última atividade.
+    Ordena do mais antigo para o mais recente.
     """
     db = get_db()
     from datetime import datetime, timezone, timedelta
     cutoff = (datetime.now(timezone.utc) - timedelta(days=dias_inatividade)).isoformat()
 
-    # Buscar leads inativos há X dias
-    resp = (
-        db.table("ia_leads")
-        .select("account_id,conversation_id,inbox_id,contact_name,contact_phone")
-        .eq("account_id", account_id)
-        .lte("updated_at", cutoff)
-        .limit(limite * 3)  # buscar mais para filtrar
-        .execute()
-    )
-    leads = resp.data or []
-    if not leads:
-        return []
-
-    # Buscar conversation_ids já contactados por esta campanha
-    conv_ids = [l["conversation_id"] for l in leads]
+    # Buscar todos os conversation_ids já contactados por esta campanha
     envios_resp = (
         db.table("ia_remarketing_envios")
         .select("conversation_id")
         .eq("campanha_id", campanha_id)
-        .in_("conversation_id", conv_ids)
         .execute()
     )
     ja_enviados = {e["conversation_id"] for e in (envios_resp.data or [])}
 
-    # Filtrar e limitar
-    elegiveis = [l for l in leads if l["conversation_id"] not in ja_enviados]
+    # Buscar leads inativos em lotes até encontrar suficientes não-contactados
+    offset = 0
+    batch_size = 100
+    elegiveis = []
+
+    while len(elegiveis) < limite:
+        resp = (
+            db.table("ia_leads")
+            .select("account_id,conversation_id,inbox_id,contact_name,contact_phone")
+            .eq("account_id", account_id)
+            .lte("updated_at", cutoff)
+            .order("updated_at")
+            .range(offset, offset + batch_size - 1)
+            .execute()
+        )
+        leads = resp.data or []
+        if not leads:
+            break
+
+        for l in leads:
+            if l["conversation_id"] not in ja_enviados:
+                elegiveis.append(l)
+                if len(elegiveis) >= limite:
+                    break
+
+        offset += batch_size
+
     return elegiveis[:limite]
 
 
