@@ -2830,7 +2830,7 @@ async function renderPageRemarketing() {
         <div style="flex:1;min-width:0;">
           <div style="font-weight:600;font-size:14px;color:var(--text);">${c.nome || 'Sem nome'}</div>
           <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">
-            ${c.dias_inatividade} dias de inatividade &middot; ${c.limite_diario} envios/dia${c.inbox_id ? ` &middot; Inbox #${c.inbox_id}` : ' &middot; Todas inboxes'}
+            ${c.dias_inatividade} dias de inatividade &middot; ${c.limite_diario} envios/dia &middot; Origem: ${c.inbox_id ? `#${c.inbox_id}` : 'Todas'}${c.inbox_envio_id ? ` &rarr; Envio: #${c.inbox_envio_id}` : ''}
           </div>
         </div>
         <div id="remark-stats-${c.id}" style="text-align:right;font-size:11px;color:var(--text-muted);min-width:80px;">
@@ -2890,10 +2890,15 @@ async function renderPageRemarketing() {
             <input type="number" id="remark-limite" value="200" min="1" max="10000" />
             <span class="field-hint">Máximo de envios por dia (distribuídos no horário comercial)</span>
           </div>
-          <div class="field-group full">
-            <label>Caixa de Entrada (Inbox)</label>
+          <div class="field-group">
+            <label>Inbox de Origem (buscar leads)</label>
             <select id="remark-inbox-id" style="width:100%;"></select>
-            <span class="field-hint">Selecione qual inbox será usada para enviar o remarketing. Apenas leads dessa inbox serão contactados.</span>
+            <span class="field-hint">De qual inbox buscar os leads inativos</span>
+          </div>
+          <div class="field-group">
+            <label>Inbox de Envio (enviar mensagem)</label>
+            <select id="remark-inbox-envio-id" style="width:100%;"></select>
+            <span class="field-hint">Por qual inbox enviar. Se diferente da origem, cria conversa nova</span>
           </div>
           <div class="field-group full">
             <label>Mensagem</label>
@@ -3026,25 +3031,33 @@ async function abrirFormRemarketing(campanha = null) {
   document.getElementById('remark-image-url').value = campanha?.image_url || '';
   document.getElementById('remark-ativo').checked = campanha?.ativo || false;
   _carregarTemplatesRemarketing(campanha?.template_whatsapp || '');
-  // Carregar inboxes
-  await _carregarInboxesRemarketing(campanha?.inbox_id || '');
+  // Carregar inboxes (origem e envio)
+  await _carregarInboxesRemarketing(campanha?.inbox_id || '', campanha?.inbox_envio_id || '');
   document.getElementById('remark-form-card').scrollIntoView({ behavior: 'smooth' });
 }
 
-async function _carregarInboxesRemarketing(currentVal) {
-  const sel = document.getElementById('remark-inbox-id');
-  sel.innerHTML = '<option value="">Todas as inboxes</option>';
+async function _carregarInboxesRemarketing(currentOrigem, currentEnvio) {
+  const selOrigem = document.getElementById('remark-inbox-id');
+  const selEnvio = document.getElementById('remark-inbox-envio-id');
+  selOrigem.innerHTML = '<option value="">Todas as inboxes</option>';
+  selEnvio.innerHTML = '<option value="">Mesma da origem</option>';
   try {
     const res = await fetch(`/api/clientes/${clienteAtivo}/chatwoot/inboxes`);
     if (res.ok) {
       const inboxes = await res.json();
       inboxes.forEach(i => {
         const tipo = (i.channel_type || '').replace('Channel::','');
-        const opt = document.createElement('option');
-        opt.value = i.id;
-        opt.textContent = `${i.name} — ${tipo} (ID: ${i.id})`;
-        if (String(i.id) === String(currentVal)) opt.selected = true;
-        sel.appendChild(opt);
+        const label = `${i.name} — ${tipo} (ID: ${i.id})`;
+        const opt1 = document.createElement('option');
+        opt1.value = i.id;
+        opt1.textContent = label;
+        if (String(i.id) === String(currentOrigem)) opt1.selected = true;
+        selOrigem.appendChild(opt1);
+        const opt2 = document.createElement('option');
+        opt2.value = i.id;
+        opt2.textContent = label;
+        if (String(i.id) === String(currentEnvio)) opt2.selected = true;
+        selEnvio.appendChild(opt2);
       });
     }
   } catch(e) {}
@@ -3070,6 +3083,7 @@ async function salvarCampanhaRemarketing() {
     image_url: document.getElementById('remark-image-url').value.trim() || null,
     template_whatsapp: document.getElementById('remark-template').value.trim() || null,
     inbox_id: parseInt(document.getElementById('remark-inbox-id').value) || null,
+    inbox_envio_id: parseInt(document.getElementById('remark-inbox-envio-id').value) || null,
     ativo: document.getElementById('remark-ativo').checked,
   };
 

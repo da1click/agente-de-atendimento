@@ -104,6 +104,31 @@ async def _enviar_nota_privada(chatwoot_url: str, token: str, account_id: int, c
         resp.raise_for_status()
 
 
+async def _criar_conversa_inbox(chatwoot_url: str, token: str, account_id: int, inbox_id: int, contact_phone: str) -> int | None:
+    """Cria ou busca conversa existente para o contato na inbox de envio. Retorna conversation_id."""
+    headers = {"api_access_token": token, "Content-Type": "application/json"}
+    async with httpx.AsyncClient(timeout=30) as http:
+        # Buscar contato pelo telefone
+        search_url = f"{chatwoot_url}/api/v1/accounts/{account_id}/contacts/search"
+        resp = await http.get(search_url, headers=headers, params={"q": contact_phone})
+        if not resp.is_success:
+            return None
+        contacts = resp.json().get("payload", [])
+        if not contacts:
+            return None
+        contact_id = contacts[0]["id"]
+
+        # Criar conversa na inbox de envio
+        conv_url = f"{chatwoot_url}/api/v1/accounts/{account_id}/conversations"
+        resp2 = await http.post(conv_url, headers=headers, json={
+            "contact_id": contact_id,
+            "inbox_id": inbox_id,
+        })
+        if resp2.is_success:
+            return resp2.json().get("id")
+        return None
+
+
 async def _get_inbox_channel_type(chatwoot_url: str, token: str, account_id: int, inbox_id: int) -> str:
     """Retorna channel_type do inbox."""
     if not inbox_id:
@@ -151,7 +176,8 @@ async def processar_remarketing():
         mensagem = campanha.get("mensagem", "")
         template = (campanha.get("template_whatsapp") or "").strip()
         image_url = (campanha.get("image_url") or "").strip()
-        campanha_inbox_id = campanha.get("inbox_id")  # inbox específica da campanha
+        campanha_inbox_id = campanha.get("inbox_id")  # inbox de origem (buscar leads)
+        inbox_envio_id = campanha.get("inbox_envio_id")  # inbox de envio (pode ser diferente)
 
         if not mensagem and not template:
             logger.warning(f"[remarketing] Campanha {campanha_id} sem mensagem nem template — pulando")
@@ -198,28 +224,41 @@ async def processar_remarketing():
 
         lead = elegiveis[0]
         conversation_id = lead["conversation_id"]
-        inbox_id = lead.get("inbox_id")
+        inbox_id_lead = lead.get("inbox_id")
+        contact_phone = lead.get("contact_phone", "")
 
-        # Verificar tipo de inbox para decidir texto vs template
+        # Se tem inbox de envio diferente, criar conversa na inbox de envio
+        envio_conv_id = conversation_id
+        envio_inbox_id = inbox_envio_id or inbox_id_lead
+
         try:
-            channel_type = await _get_inbox_channel_type(chatwoot_url, token, account_id, inbox_id)
+            if inbox_envio_id and inbox_envio_id != inbox_id_lead and contact_phone:
+                logger.info(f"[remarketing] Criando conversa na inbox {inbox_envio_id} para {contact_phone}")
+                nova_conv = await _criar_conversa_inbox(chatwoot_url, token, account_id, inbox_envio_id, contact_phone)
+                if nova_conv:
+                    envio_conv_id = nova_conv
+                    logger.info(f"[remarketing] Conversa criada/encontrada: conv={envio_conv_id} na inbox {inbox_envio_id}")
+                else:
+                    logger.warning(f"[remarketing] Não conseguiu criar conversa na inbox {inbox_envio_id} para {contact_phone} — pulando")
+                    registrar_envio_remarketing(campanha_id, account_id, conversation_id, status="erro")
+                    continue
+
+            # Verificar tipo de inbox de envio para decidir texto vs template
+            channel_type = await _get_inbox_channel_type(chatwoot_url, token, account_id, envio_inbox_id)
             is_whatsapp_oficial = "whatsapp" in channel_type.lower()
 
             if is_whatsapp_oficial:
-                # WhatsApp Oficial: remarketing sempre fora da janela 24h → precisa template
                 if template:
-                    await _enviar_template_remarketing(chatwoot_url, token, account_id, conversation_id, template)
-                    logger.info(f"[remarketing] Template '{template}' enviado — campanha={campanha_id} conv={conversation_id}")
+                    await _enviar_template_remarketing(chatwoot_url, token, account_id, envio_conv_id, template)
+                    logger.info(f"[remarketing] Template '{template}' enviado — campanha={campanha_id} conv={envio_conv_id}")
                 else:
-                    # Sem template + WhatsApp Oficial = não pode enviar
                     logger.warning(f"[remarketing] WhatsApp Oficial sem template — pulando conv={conversation_id}")
                     registrar_envio_remarketing(campanha_id, account_id, conversation_id, status="pulado_sem_template")
                     continue
             else:
-                # Inbox normal: enviar texto direto
                 if mensagem or image_url:
-                    await _enviar_mensagem_remarketing(chatwoot_url, token, account_id, conversation_id, mensagem, image_url)
-                    logger.info(f"[remarketing] Mensagem enviada — campanha={campanha_id} conv={conversation_id}")
+                    await _enviar_mensagem_remarketing(chatwoot_url, token, account_id, envio_conv_id, mensagem, image_url)
+                    logger.info(f"[remarketing] Mensagem enviada — campanha={campanha_id} conv={envio_conv_id}")
                 else:
                     continue
 
@@ -230,16 +269,17 @@ async def processar_remarketing():
                 conteudo_enviado = f"Template: {template}" if (is_whatsapp_oficial and template) else (mensagem or "(sem texto)")
                 if image_url and not is_whatsapp_oficial:
                     conteudo_enviado += f"\nImagem: {image_url}"
+                inbox_info = f"\nInbox origem: #{inbox_id_lead} → Inbox envio: #{envio_inbox_id}" if inbox_envio_id and inbox_envio_id != inbox_id_lead else ""
                 nota = (
                     f"📢 [Remarketing] Mensagem automática enviada\n"
                     f"Campanha: {nome_campanha}\n"
-                    f"Critério: {dias} dias de inatividade\n"
+                    f"Critério: {dias} dias de inatividade{inbox_info}\n"
                     f"Conteúdo enviado:\n{conteudo_enviado}"
                 )
-                await _enviar_nota_privada(chatwoot_url, token, account_id, conversation_id, nota)
-                logger.info(f"[remarketing] Nota privada enviada — conv={conversation_id}")
+                await _enviar_nota_privada(chatwoot_url, token, account_id, envio_conv_id, nota)
+                logger.info(f"[remarketing] Nota privada enviada — conv={envio_conv_id}")
             except Exception as e_nota:
-                logger.warning(f"[remarketing] Erro ao enviar nota privada conv={conversation_id}: {e_nota}")
+                logger.warning(f"[remarketing] Erro ao enviar nota privada conv={envio_conv_id}: {e_nota}")
 
         except Exception as e:
             logger.warning(f"[remarketing] Erro ao enviar — campanha={campanha_id} conv={conversation_id}: {e}")
