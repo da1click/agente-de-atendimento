@@ -236,6 +236,7 @@ async def processar_remarketing():
                     f"Conteúdo enviado:\n{conteudo_enviado}"
                 )
                 await _enviar_nota_privada(chatwoot_url, token, account_id, conversation_id, nota)
+                logger.info(f"[remarketing] Nota privada enviada — conv={conversation_id}")
             except Exception as e_nota:
                 logger.warning(f"[remarketing] Erro ao enviar nota privada conv={conversation_id}: {e_nota}")
 
