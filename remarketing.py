@@ -226,7 +226,15 @@ async def processar_remarketing():
 
             # Nota privada para visibilidade interna
             try:
-                nota = f"📢 [Remarketing] Mensagem automática enviada pela campanha \"{nome_campanha}\" ({dias} dias de inatividade)"
+                conteudo_enviado = f"Template: {template}" if (is_whatsapp_oficial and template) else (mensagem or "(sem texto)")
+                if image_url and not is_whatsapp_oficial:
+                    conteudo_enviado += f"\nImagem: {image_url}"
+                nota = (
+                    f"📢 [Remarketing] Mensagem automática enviada\n"
+                    f"Campanha: {nome_campanha}\n"
+                    f"Critério: {dias} dias de inatividade\n"
+                    f"Conteúdo enviado:\n{conteudo_enviado}"
+                )
                 await _enviar_nota_privada(chatwoot_url, token, account_id, conversation_id, nota)
             except Exception as e_nota:
                 logger.warning(f"[remarketing] Erro ao enviar nota privada conv={conversation_id}: {e_nota}")
