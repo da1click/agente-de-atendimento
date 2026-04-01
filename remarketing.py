@@ -91,6 +91,19 @@ async def _enviar_template_remarketing(
         resp.raise_for_status()
 
 
+async def _enviar_nota_privada(chatwoot_url: str, token: str, account_id: int, conversation_id: int, texto: str):
+    """Envia nota privada (interna) na conversa do Chatwoot."""
+    url = f"{chatwoot_url}/api/v1/accounts/{account_id}/conversations/{conversation_id}/messages"
+    headers = {"api_access_token": token, "Content-Type": "application/json"}
+    async with httpx.AsyncClient(timeout=15) as http:
+        resp = await http.post(url, headers=headers, json={
+            "content": texto,
+            "message_type": "outgoing",
+            "private": True,
+        })
+        resp.raise_for_status()
+
+
 async def _get_inbox_channel_type(chatwoot_url: str, token: str, account_id: int, inbox_id: int) -> str:
     """Retorna channel_type do inbox."""
     if not inbox_id:
@@ -134,6 +147,7 @@ async def processar_remarketing():
         account_id = campanha["account_id"]
         dias = campanha["dias_inatividade"]
         limite_diario = campanha["limite_diario"] or 200
+        nome_campanha = campanha.get("nome", f"Campanha {campanha_id}")
         mensagem = campanha.get("mensagem", "")
         template = (campanha.get("template_whatsapp") or "").strip()
         image_url = (campanha.get("image_url") or "").strip()
@@ -209,6 +223,13 @@ async def processar_remarketing():
                     continue
 
             registrar_envio_remarketing(campanha_id, account_id, conversation_id, status="enviado")
+
+            # Nota privada para visibilidade interna
+            try:
+                nota = f"📢 [Remarketing] Mensagem automática enviada pela campanha \"{nome_campanha}\" ({dias} dias de inatividade)"
+                await _enviar_nota_privada(chatwoot_url, token, account_id, conversation_id, nota)
+            except Exception as e_nota:
+                logger.warning(f"[remarketing] Erro ao enviar nota privada conv={conversation_id}: {e_nota}")
 
         except Exception as e:
             logger.warning(f"[remarketing] Erro ao enviar — campanha={campanha_id} conv={conversation_id}: {e}")

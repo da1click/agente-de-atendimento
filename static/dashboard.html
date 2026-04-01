@@ -2963,9 +2963,10 @@ async function carregarStatsRemarketing(campanha_id) {
     const el = document.getElementById(`remark-stats-${campanha_id}`);
     if (el) {
       el.innerHTML = `
-        <div>Hoje: <strong>${stats.envios_hoje || 0}</strong></div>
-        <div>Total: <strong>${stats.total_envios || 0}</strong></div>
-        <div>Elegíveis: <strong>${stats.elegiveis || 0}</strong></div>
+        <div>Leads no banco: <strong>${(stats.total_leads || 0).toLocaleString('pt-BR')}</strong></div>
+        <div>Elegíveis (${stats.dias || ''}): <strong style="color:#ea580c;">${(stats.elegiveis || 0).toLocaleString('pt-BR')}</strong></div>
+        <div>Enviados hoje: <strong>${stats.envios_hoje || 0}</strong></div>
+        <div>Total enviados: <strong>${stats.total_envios || 0}</strong></div>
       `;
     }
   } catch (e) {}
