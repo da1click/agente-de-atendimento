@@ -264,6 +264,17 @@ async def processar_remarketing():
 
             registrar_envio_remarketing(campanha_id, account_id, conversation_id, status="enviado")
 
+            # Se enviou por inbox diferente, re-resolver a conversa original para não reabrir
+            if inbox_envio_id and inbox_envio_id != inbox_id_lead and envio_conv_id != conversation_id:
+                try:
+                    await asyncio.sleep(2)  # aguardar Chatwoot processar
+                    resolve_url = f"{chatwoot_url}/api/v1/accounts/{account_id}/conversations/{conversation_id}/toggle_status"
+                    async with httpx.AsyncClient(timeout=10) as http:
+                        await http.post(resolve_url, headers={"api_access_token": token, "Content-Type": "application/json"}, json={"status": "resolved"})
+                    logger.info(f"[remarketing] Conversa original {conversation_id} (inbox {inbox_id_lead}) re-resolvida")
+                except Exception as e_resolve:
+                    logger.warning(f"[remarketing] Erro ao re-resolver conv original {conversation_id}: {e_resolve}")
+
             # Nota privada para visibilidade interna
             try:
                 conteudo_enviado = f"Template: {template}" if (is_whatsapp_oficial and template) else (mensagem or "(sem texto)")
