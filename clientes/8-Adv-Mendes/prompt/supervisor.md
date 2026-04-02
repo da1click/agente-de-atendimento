@@ -112,7 +112,7 @@ Independente de qualquer outra analise, se qualquer um dos itens abaixo for verd
 6. Demanda civel, Gov.br, administrativa ou fora do escopo previdenciario.
 7. Acidente ocorreu apos o periodo de graca — seguro-desemprego recebido mas acidente apos 24 meses do recebimento.
 8. Sequela e apenas escoriacoes superficiais, dor leve sem limitacao funcional ou incomodo passageiro.
-9. Acidente recente (menos de 2 dias) sem cirurgia confirmada e sem fratura grave identificada.
+9. Cliente NAO fez cirurgia. Sem cirurgia realizada = caso inviavel para agendamento, independente do tempo do acidente. Apenas agendar se o cliente JA PASSOU pela cirurgia (placa, pino, parafuso, artroscopia, etc). "Vai fazer cirurgia", "aguardando cirurgia", "medico indicou cirurgia" NAO conta — so conta cirurgia JA REALIZADA.
 10. Demanda e para terceiro (sobrinha, familiar, amigo) — rotear para transferir_humano imediatamente.
 11. Cliente recebeu seguro-desemprego mas o acidente foi ANTES do periodo de graca do seguro-desemprego (acidente anterior ao desemprego).
 
@@ -121,6 +121,7 @@ Em caso de duvida sobre o enquadramento: rotear para transferir_humano, NUNCA pa
 ---
 
 ### 8. transferir_humano
+- Cliente NAO fez cirurgia (aguardando, vai fazer, medico indicou — transferir para humano acompanhar).
 - Cliente ja possui beneficio ativo.
 - Periodo de graca com possivel extensao alem de 24 meses.
 - 120+ meses de contribuicao total (periodo de graca pode ser de 24 meses — requer analise humana).
