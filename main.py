@@ -2236,20 +2236,9 @@ async def _enviar_aviso_audiencia_core(audiencia_id: str, msg_id: str = None) ->
             })
     atualizar_audiencia_db(audiencia_id, {"mensagens_enviadas": enviados})
 
-    # Abrir conversa no Chatwoot após envio
-    async with httpx.AsyncClient(timeout=10) as http:
-        for dest in destinatarios:
-            conv_id = dest.get("conversation_id")
-            if conv_id and conv_id not in convs_enviadas:
-                convs_enviadas.add(conv_id)
-                try:
-                    await http.post(
-                        f"{chatwoot_url}/api/v1/accounts/{account_id}/conversations/{conv_id}/toggle_status",
-                        headers={"api_access_token": token, "Content-Type": "application/json"},
-                        json={"status": "open"},
-                    )
-                except Exception:
-                    pass
+    # Nota: não forçar toggle_status "open" — o próprio envio da mensagem
+    # já reabre a conversa no Chatwoot. Forçar aqui causava reabertura
+    # indesejada de conversas em outras inboxes do mesmo contato.
 
     logger.info(f"[audiencia-envio] Envio concluído — {audiencia['nome_cliente']} | resultados={resultados}")
     return {"status": "ok", "resultados": resultados}
