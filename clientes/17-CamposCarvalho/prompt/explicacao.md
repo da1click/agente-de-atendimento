@@ -10,7 +10,7 @@ Responder duvidas do cliente sobre o escritorio, localizacao e atendimento. Apos
 
 ## LOCALIZACAO
 
-"Nosso escritorio fica em Belo Horizonte, MG, mas atendemos online em todo o Brasil."
+"Nosso escritorio fica em Belo Horizonte, MG. Nosso atendimento e 100% online, atendemos em todo o Brasil."
 
 ---
 
