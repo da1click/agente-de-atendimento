@@ -240,17 +240,34 @@ def _get_grupo_novos_leads(account_id: int, config: dict) -> int | None:
     return int(notif) if notif else None
 
 
+# Cache de notificações de transferência já enviadas (evitar duplicação)
+_transferencias_notificadas: dict[str, bool] = {}
+
 async def _notificar_transferencia_humano(
     config: dict, account_id: int, conversation_id: int,
     contact_name: str, contact_phone: str, tipo: str, motivo: str = "",
 ):
-    """Notifica o grupo de clientes sobre transferência para humano (todas as contas com id_notificacao_cliente)."""
+    """Notifica o grupo de clientes sobre transferência para especialista (todas as contas com id_notificacao_cliente)."""
     notif_conv_id = config.get("id_notificacao_cliente")
     if not notif_conv_id:
         return
+
+    # Evitar duplicação: mesma conta + conversa + tipo = não notificar novamente
+    chave = f"{account_id}:{conversation_id}:{tipo}"
+    if chave in _transferencias_notificadas:
+        logger.info(f"[notificação] Transferência já notificada — conv={conversation_id} tipo='{tipo}' — ignorando duplicata")
+        return
+    _transferencias_notificadas[chave] = True
+    # Limitar tamanho do cache
+    if len(_transferencias_notificadas) > 5000:
+        # Remover metade mais antiga
+        keys = list(_transferencias_notificadas.keys())
+        for k in keys[:2500]:
+            del _transferencias_notificadas[k]
+
     try:
         msg = (
-            f"🔀 TRANSFERÊNCIA PARA HUMANO\n\n"
+            f"🔀 TRANSFERÊNCIA PARA ESPECIALISTA\n\n"
             f"Tipo: {tipo}\n"
             f"Nome: {contact_name}\n"
             f"Número: {contact_phone}\n"
@@ -1421,8 +1438,12 @@ async def processar_mensagem(config: dict, account_id: int, conversation_id: int
                     logger.info(f"[notificação] Lead trabalhista conta 8 notificado no grupo 77")
                 except Exception as e:
                     logger.warning(f"[notificação] Erro ao notificar lead trabalhista conta 8: {e}")
-        # Notificar transferência para humano (contas habilitadas)
-        await _notificar_transferencia_humano(config, account_id, conversation_id, contact_name, contact_phone, "Transferência pelo supervisor")
+        # Notificar transferência para especialista (contas habilitadas)
+        try:
+            resumo_transf = _gerar_resumo_caso(historico_texto, config.get("openai_api_key"))
+        except Exception:
+            resumo_transf = ""
+        await _notificar_transferencia_humano(config, account_id, conversation_id, contact_name, contact_phone, "Transferência pelo supervisor", resumo_transf)
         return
 
     context = {
