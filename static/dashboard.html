@@ -853,6 +853,13 @@
       <!-- COLUNA ESQUERDA: Formulário -->
       <div style="flex:1;min-width:0;">
         <div class="fields-grid" style="gap:12px;">
+          <div class="field-group full">
+            <label>Conta Meta (WABA)</label>
+            <select id="tpl-conta-sel" onchange="_tplOnContaChange()">
+              <option value="">Selecione a conta...</option>
+            </select>
+            <span class="field-hint">Escolha para qual conta da Meta este template será criado</span>
+          </div>
           <div class="field-group">
             <label>Nome do template</label>
             <input type="text" id="tpl-name" placeholder="ex: boas_vindas (snake_case)" oninput="this.value=this.value.toLowerCase().replace(/[^a-z0-9_]/g,'_')" />
@@ -2381,8 +2388,26 @@ function abrirModalTemplate() {
   document.getElementById('tpl-vars-list').innerHTML = '';
   _tplDetectedVars = [];
   tpl_btn_id = 0;
+  // Popular seletor de contas no modal
+  const sel = document.getElementById('tpl-conta-sel');
+  sel.innerHTML = '<option value="">Selecione a conta...</option>' +
+    clientes.map(c => `<option value="${c.account_id}" ${clienteAtivo === c.account_id ? 'selected' : ''}>${c.nome} (#${c.account_id})</option>`).join('');
   _tplAtualizarPreview();
   abrirModal('modal-template');
+}
+
+function _tplOnContaChange() {
+  // Reset upload handle quando troca de conta (mídia é por WABA)
+  _tplUploadedHandle = '';
+  const fileNameEl = document.getElementById('tpl-header-file-name');
+  if (fileNameEl) fileNameEl.textContent = 'Nenhum arquivo selecionado';
+  const statusEl = document.getElementById('tpl-header-upload-status');
+  if (statusEl) statusEl.innerHTML = '';
+}
+
+function _tplGetContaSelecionada() {
+  const sel = document.getElementById('tpl-conta-sel');
+  return sel ? parseInt(sel.value) || null : clienteAtivo;
 }
 
 let _tplUploadedHandle = '';
@@ -2427,8 +2452,8 @@ async function _tplOnFileSelect(input) {
   const statusEl = document.getElementById('tpl-header-upload-status');
   statusEl.innerHTML = '<span style="color:var(--purple);">Enviando para a Meta...</span>';
 
-  const accountId = clienteAtivo;
-  if (!accountId) { statusEl.innerHTML = '<span style="color:#f7768e;">Selecione uma conta primeiro</span>'; return; }
+  const accountId = _tplGetContaSelecionada();
+  if (!accountId) { statusEl.innerHTML = '<span style="color:#f7768e;">Selecione uma conta no formulário primeiro</span>'; return; }
 
   const formData = new FormData();
   formData.append('file', file);
@@ -2488,8 +2513,8 @@ function removerBotaoTemplate(id) {
 async function submeterTemplate() {
   const errEl = document.getElementById('tpl-error');
   errEl.classList.remove('show');
-  const accountId = clienteAtivo;
-  if (!accountId) { errEl.textContent = 'Selecione uma conta.'; errEl.classList.add('show'); return; }
+  const accountId = _tplGetContaSelecionada();
+  if (!accountId) { errEl.textContent = 'Selecione uma conta no campo acima.'; errEl.classList.add('show'); return; }
 
   const name = document.getElementById('tpl-name').value.trim();
   const body = document.getElementById('tpl-body').value.trim();
