@@ -1356,14 +1356,76 @@ def _get_meta_config(account_id: int) -> tuple[str, str]:
     return waba_id, token
 
 
+@app.get("/api/clientes/{account_id}/whatsapp-oficiais")
+async def listar_whatsapp_oficiais(account_id: int):
+    """Retorna todas as inboxes WhatsApp oficiais (com WABA ID e token) da conta."""
+    config = carregar_config_cliente(account_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    chatwoot_url = config.get("chatwoot_url", "").strip().rstrip("/")
+    chatwoot_token = config.get("chatwoot_token", "").strip()
+    if not chatwoot_url or not chatwoot_token:
+        raise HTTPException(status_code=400, detail="Chatwoot não configurado para esta conta")
+
+    url = f"{chatwoot_url}/api/v1/accounts/{account_id}/inboxes"
+    async with httpx.AsyncClient(timeout=15) as client:
+        r = await client.get(url, headers={"api_access_token": chatwoot_token})
+    if not r.is_success:
+        raise HTTPException(status_code=r.status_code, detail="Erro ao buscar inboxes do Chatwoot")
+
+    data = r.json()
+    inboxes = data.get("payload", data) if isinstance(data, dict) else data
+
+    # Filtrar só inboxes WhatsApp que tenham business_account_id (WABA) e api_key (token)
+    oficiais = []
+    for inbox in inboxes:
+        channel = (inbox.get("channel_type") or "").lower()
+        if "whatsapp" not in channel:
+            continue
+        pc = inbox.get("provider_config") or {}
+        waba_id = (pc.get("business_account_id") or "").strip()
+        api_key = (pc.get("api_key") or "").strip()
+        if not waba_id or not api_key:
+            continue
+        phone = inbox.get("phone_number") or pc.get("phone_number") or ""
+        oficiais.append({
+            "inbox_id": inbox["id"],
+            "name": inbox.get("name", ""),
+            "phone": phone,
+            "waba_id": waba_id,
+            "token": api_key,
+        })
+
+    # Também incluir o WABA configurado direto na conta (meta_waba_id), se existir
+    config_waba = config.get("meta_waba_id", "").strip()
+    config_token = config.get("meta_access_token", "").strip()
+    if config_waba and config_token:
+        # Verificar se já não está na lista (evitar duplicata)
+        already = any(o["waba_id"] == config_waba for o in oficiais)
+        if not already:
+            oficiais.insert(0, {
+                "inbox_id": None,
+                "name": f"Config da conta ({config.get('nome', '')})",
+                "phone": "",
+                "waba_id": config_waba,
+                "token": config_token,
+            })
+
+    return oficiais
+
+
 @app.get("/api/clientes/{account_id}/templates")
-async def listar_templates(account_id: int, status: str = ""):
-    waba_id, token = _get_meta_config(account_id)
+async def listar_templates(account_id: int, status: str = "", waba_id: str = "", waba_token: str = ""):
+    # Se recebeu waba_id e token via query, usar esses (vindo do seletor de API oficial)
+    if waba_id and waba_token:
+        w_id, tok = waba_id.strip(), waba_token.strip()
+    else:
+        w_id, tok = _get_meta_config(account_id)
     params = {"fields": META_TEMPLATE_FIELDS, "limit": 100}
     if status:
         params["status"] = status.upper()
     async with httpx.AsyncClient(timeout=30) as client:
-        r = await client.get(f"{META_GRAPH}/{waba_id}/message_templates", headers=_meta_headers(token), params=params)
+        r = await client.get(f"{META_GRAPH}/{w_id}/message_templates", headers=_meta_headers(tok), params=params)
     if r.status_code != 200:
         raise HTTPException(status_code=r.status_code, detail=r.json())
     return r.json()
@@ -1371,8 +1433,14 @@ async def listar_templates(account_id: int, status: str = ""):
 
 @app.post("/api/clientes/{account_id}/templates")
 async def criar_template(account_id: int, request: Request):
-    waba_id, token = _get_meta_config(account_id)
     payload = await request.json()
+    # Extrair waba_id e token do payload se fornecidos (vindo do seletor de API oficial)
+    custom_waba = (payload.pop("_waba_id", "") or "").strip()
+    custom_token = (payload.pop("_waba_token", "") or "").strip()
+    if custom_waba and custom_token:
+        waba_id, token = custom_waba, custom_token
+    else:
+        waba_id, token = _get_meta_config(account_id)
     async with httpx.AsyncClient(timeout=30) as client:
         r = await client.post(
             f"{META_GRAPH}/{waba_id}/message_templates",
@@ -1385,10 +1453,14 @@ async def criar_template(account_id: int, request: Request):
 
 
 @app.post("/api/clientes/{account_id}/templates/upload-media")
-async def upload_media_template(account_id: int, file: UploadFile = File(...)):
+async def upload_media_template(account_id: int, file: UploadFile = File(...), waba_id: str = "", waba_token: str = ""):
     """Faz upload de mídia para a Meta e retorna o handle para usar em templates."""
     from io import BytesIO
-    waba_id, token = _get_meta_config(account_id)
+    # Usar WABA/token custom se fornecidos via query params
+    if waba_id.strip() and waba_token.strip():
+        w_id, tok = waba_id.strip(), waba_token.strip()
+    else:
+        w_id, tok = _get_meta_config(account_id)
 
     # Ler arquivo
     file_bytes = await file.read()
@@ -1399,7 +1471,7 @@ async def upload_media_template(account_id: int, file: UploadFile = File(...)):
         # Upload via resumable upload API
         r = await client.post(
             f"{META_GRAPH}/app/uploads",
-            headers=_meta_headers(token),
+            headers=_meta_headers(tok),
             params={
                 "file_name": file_name,
                 "file_length": len(file_bytes),
@@ -1417,7 +1489,7 @@ async def upload_media_template(account_id: int, file: UploadFile = File(...)):
         r2 = await client.post(
             f"{META_GRAPH}/{upload_session_id}",
             headers={
-                "Authorization": f"OAuth {token}",
+                "Authorization": f"OAuth {tok}",
                 "file_offset": "0",
                 "Content-Type": file.content_type or "application/octet-stream",
             },
@@ -1434,12 +1506,15 @@ async def upload_media_template(account_id: int, file: UploadFile = File(...)):
 
 
 @app.delete("/api/clientes/{account_id}/templates/{template_name}")
-async def deletar_template(account_id: int, template_name: str):
-    waba_id, token = _get_meta_config(account_id)
+async def deletar_template(account_id: int, template_name: str, waba_id: str = "", waba_token: str = ""):
+    if waba_id.strip() and waba_token.strip():
+        w_id, tok = waba_id.strip(), waba_token.strip()
+    else:
+        w_id, tok = _get_meta_config(account_id)
     async with httpx.AsyncClient(timeout=30) as client:
         r = await client.delete(
-            f"{META_GRAPH}/{waba_id}/message_templates",
-            headers=_meta_headers(token),
+            f"{META_GRAPH}/{w_id}/message_templates",
+            headers=_meta_headers(tok),
             params={"name": template_name},
         )
     if r.status_code not in (200, 204):

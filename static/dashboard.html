@@ -854,11 +854,11 @@
       <div style="flex:1;min-width:0;">
         <div class="fields-grid" style="gap:12px;">
           <div class="field-group full">
-            <label>Conta Meta (WABA)</label>
-            <select id="tpl-conta-sel" onchange="_tplOnContaChange()">
-              <option value="">Selecione a conta...</option>
+            <label>API Oficial (WhatsApp)</label>
+            <select id="tpl-api-sel" onchange="_tplOnApiChange()">
+              <option value="">Carregando APIs oficiais...</option>
             </select>
-            <span class="field-hint">Escolha para qual conta da Meta este template será criado</span>
+            <span class="field-hint" id="tpl-api-hint">Escolha para qual número oficial da Meta este template será criado</span>
           </div>
           <div class="field-group">
             <label>Nome do template</label>
@@ -2011,6 +2011,9 @@ function aplicarInboxMeta(idx) {
 // ══════════════════════════════════════════════
 // PAGE: TEMPLATES META
 // ══════════════════════════════════════════════
+let _tplPageApis = [];
+let _tplPageApiAtiva = null;
+
 function renderPageTemplates() {
   const el = document.getElementById('page-content');
   if (!clienteAtivo) {
@@ -2021,9 +2024,15 @@ function renderPageTemplates() {
   document.getElementById('topbar-sub').textContent = `Templates — Conta #${clienteAtivo}`;
 
   el.innerHTML = `
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
       <div style="font-size:14px;font-weight:600;">${clientes.find(c=>c.account_id==clienteAtivo)?.nome || ''} (#${clienteAtivo})</div>
       <button class="btn btn-primary" onclick="abrirModalTemplate()">+ Novo Template</button>
+    </div>
+    <div style="margin-bottom:16px;">
+      <label style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;display:block;">API Oficial</label>
+      <select id="tpl-page-api-sel" onchange="_tplPageApiChanged()" style="min-width:280px;">
+        <option value="">Carregando APIs oficiais...</option>
+      </select>
     </div>
     <div class="template-search">
       <input type="text" id="tpl-search" placeholder="Buscar por nome..." oninput="filtrarTemplates()" />
@@ -2036,10 +2045,51 @@ function renderPageTemplates() {
       </select>
     </div>
     <div id="tpl-list">
-      <div style="color:var(--text-muted);font-size:13px;">Carregando templates...</div>
+      <div style="color:var(--text-muted);font-size:13px;">Selecione uma API oficial acima...</div>
     </div>
   `;
 
+  _tplCarregarApisOficiaisPagina();
+}
+
+async function _tplCarregarApisOficiaisPagina() {
+  const sel = document.getElementById('tpl-page-api-sel');
+  try {
+    const res = await fetch(`/api/clientes/${clienteAtivo}/whatsapp-oficiais`);
+    if (!res.ok) {
+      sel.innerHTML = '<option value="">Erro ao buscar APIs</option>';
+      return;
+    }
+    _tplPageApis = await res.json();
+    if (!_tplPageApis.length) {
+      sel.innerHTML = '<option value="">Nenhuma API oficial encontrada</option>';
+      document.getElementById('tpl-list').innerHTML = `
+        <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:16px;font-size:13px;color:#991b1b;">
+          Nenhuma API oficial (WhatsApp com WABA) configurada nesta conta.
+        </div>`;
+      return;
+    }
+    sel.innerHTML = (_tplPageApis.length > 1 ? '<option value="">Selecione a API oficial...</option>' : '') +
+      _tplPageApis.map((api, i) => {
+        const phone = api.phone ? ` — ${api.phone}` : '';
+        return `<option value="${i}" ${_tplPageApis.length === 1 ? 'selected' : ''}>${api.name}${phone} (WABA: ...${api.waba_id.slice(-6)})</option>`;
+      }).join('');
+    // Se só tem uma, já carrega os templates
+    if (_tplPageApis.length === 1) _tplPageApiChanged();
+  } catch(e) {
+    sel.innerHTML = '<option value="">Erro ao carregar</option>';
+  }
+}
+
+function _tplPageApiChanged() {
+  const sel = document.getElementById('tpl-page-api-sel');
+  const idx = parseInt(sel.value);
+  if (isNaN(idx) || !_tplPageApis[idx]) {
+    _tplPageApiAtiva = null;
+    document.getElementById('tpl-list').innerHTML = '<div style="color:var(--text-muted);font-size:13px;">Selecione uma API oficial acima...</div>';
+    return;
+  }
+  _tplPageApiAtiva = _tplPageApis[idx];
   carregarTemplates();
 }
 
@@ -2052,7 +2102,12 @@ async function carregarTemplates() {
   document.getElementById('tpl-list').innerHTML = '<div style="color:var(--text-muted);font-size:13px;">Carregando...</div>';
 
   try {
-    const res = await fetch(`/api/clientes/${accountId}/templates`);
+    let url = `/api/clientes/${accountId}/templates`;
+    if (_tplPageApiAtiva) {
+      const params = new URLSearchParams({ waba_id: _tplPageApiAtiva.waba_id, waba_token: _tplPageApiAtiva.token });
+      url += `?${params}`;
+    }
+    const res = await fetch(url);
     if (!res.ok) {
       const err = await res.json();
       const msg = typeof err.detail === 'string' ? err.detail : JSON.stringify(err.detail);
@@ -2234,7 +2289,12 @@ function _escHtml(str) {
 async function deletarTemplate(name) {
   if (!confirm(`Deletar o template "${name}"?\n\nIsso remove TODAS as versões de idioma.`)) return;
   const accountId = clienteAtivo;
-  const res = await fetch(`/api/clientes/${accountId}/templates/${name}`, { method: 'DELETE' });
+  let delUrl = `/api/clientes/${accountId}/templates/${name}`;
+  if (_tplPageApiAtiva) {
+    const params = new URLSearchParams({ waba_id: _tplPageApiAtiva.waba_id, waba_token: _tplPageApiAtiva.token });
+    delUrl += `?${params}`;
+  }
+  const res = await fetch(delUrl, { method: 'DELETE' });
   if (res.ok) {
     await carregarTemplates();
   } else {
@@ -2375,6 +2435,8 @@ function _tplAtualizarPreview() {
   }
 }
 
+let _tplApisOficiais = [];
+
 function abrirModalTemplate() {
   document.getElementById('tpl-name').value = '';
   document.getElementById('tpl-body').value = '';
@@ -2388,16 +2450,56 @@ function abrirModalTemplate() {
   document.getElementById('tpl-vars-list').innerHTML = '';
   _tplDetectedVars = [];
   tpl_btn_id = 0;
-  // Popular seletor de contas no modal
-  const sel = document.getElementById('tpl-conta-sel');
-  sel.innerHTML = '<option value="">Selecione a conta...</option>' +
-    clientes.map(c => `<option value="${c.account_id}" ${clienteAtivo === c.account_id ? 'selected' : ''}>${c.nome} (#${c.account_id})</option>`).join('');
+  _tplUploadedHandle = '';
+  // Buscar APIs oficiais da conta
+  const sel = document.getElementById('tpl-api-sel');
+  sel.innerHTML = '<option value="">Carregando APIs oficiais...</option>';
   _tplAtualizarPreview();
   abrirModal('modal-template');
+  _tplCarregarApisOficiais();
 }
 
-function _tplOnContaChange() {
-  // Reset upload handle quando troca de conta (mídia é por WABA)
+async function _tplCarregarApisOficiais() {
+  const sel = document.getElementById('tpl-api-sel');
+  const hint = document.getElementById('tpl-api-hint');
+  const accountId = clienteAtivo;
+  if (!accountId) {
+    sel.innerHTML = '<option value="">Selecione uma conta primeiro</option>';
+    return;
+  }
+  try {
+    const res = await fetch(`/api/clientes/${accountId}/whatsapp-oficiais`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      sel.innerHTML = '<option value="">Erro ao buscar APIs</option>';
+      hint.textContent = typeof err.detail === 'string' ? err.detail : 'Erro ao buscar APIs oficiais';
+      hint.style.color = 'var(--red)';
+      return;
+    }
+    _tplApisOficiais = await res.json();
+    if (!_tplApisOficiais.length) {
+      sel.innerHTML = '<option value="">Nenhuma API oficial encontrada</option>';
+      hint.textContent = 'Configure uma inbox WhatsApp com WABA ID no Chatwoot ou nas configurações da conta';
+      hint.style.color = 'var(--red)';
+      return;
+    }
+    hint.textContent = 'Escolha para qual número oficial da Meta este template será criado';
+    hint.style.color = '';
+    sel.innerHTML = (_tplApisOficiais.length > 1 ? '<option value="">Selecione a API oficial...</option>' : '') +
+      _tplApisOficiais.map((api, i) => {
+        const phone = api.phone ? ` — ${api.phone}` : '';
+        const label = `${api.name}${phone} (WABA: ${api.waba_id.slice(-6)})`;
+        return `<option value="${i}" ${_tplApisOficiais.length === 1 ? 'selected' : ''}>${label}</option>`;
+      }).join('');
+  } catch(e) {
+    sel.innerHTML = '<option value="">Erro ao carregar</option>';
+    hint.textContent = e.message;
+    hint.style.color = 'var(--red)';
+  }
+}
+
+function _tplOnApiChange() {
+  // Reset upload handle quando troca de API (mídia é por WABA)
   _tplUploadedHandle = '';
   const fileNameEl = document.getElementById('tpl-header-file-name');
   if (fileNameEl) fileNameEl.textContent = 'Nenhum arquivo selecionado';
@@ -2405,9 +2507,11 @@ function _tplOnContaChange() {
   if (statusEl) statusEl.innerHTML = '';
 }
 
-function _tplGetContaSelecionada() {
-  const sel = document.getElementById('tpl-conta-sel');
-  return sel ? parseInt(sel.value) || null : clienteAtivo;
+function _tplGetApiSelecionada() {
+  const sel = document.getElementById('tpl-api-sel');
+  const idx = sel ? parseInt(sel.value) : -1;
+  if (isNaN(idx) || idx < 0 || !_tplApisOficiais[idx]) return null;
+  return _tplApisOficiais[idx];
 }
 
 let _tplUploadedHandle = '';
@@ -2452,14 +2556,16 @@ async function _tplOnFileSelect(input) {
   const statusEl = document.getElementById('tpl-header-upload-status');
   statusEl.innerHTML = '<span style="color:var(--purple);">Enviando para a Meta...</span>';
 
-  const accountId = _tplGetContaSelecionada();
-  if (!accountId) { statusEl.innerHTML = '<span style="color:#f7768e;">Selecione uma conta no formulário primeiro</span>'; return; }
+  const api = _tplGetApiSelecionada();
+  if (!api) { statusEl.innerHTML = '<span style="color:#f7768e;">Selecione uma API oficial primeiro</span>'; return; }
+  const accountId = clienteAtivo;
 
   const formData = new FormData();
   formData.append('file', file);
 
   try {
-    const res = await fetch(`/api/clientes/${accountId}/templates/upload-media`, {
+    const params = new URLSearchParams({ waba_id: api.waba_id, waba_token: api.token });
+    const res = await fetch(`/api/clientes/${accountId}/templates/upload-media?${params}`, {
       method: 'POST',
       body: formData,
     });
@@ -2513,8 +2619,9 @@ function removerBotaoTemplate(id) {
 async function submeterTemplate() {
   const errEl = document.getElementById('tpl-error');
   errEl.classList.remove('show');
-  const accountId = _tplGetContaSelecionada();
-  if (!accountId) { errEl.textContent = 'Selecione uma conta no campo acima.'; errEl.classList.add('show'); return; }
+  const accountId = clienteAtivo;
+  const api = _tplGetApiSelecionada();
+  if (!api) { errEl.textContent = 'Selecione uma API oficial no campo acima.'; errEl.classList.add('show'); return; }
 
   const name = document.getElementById('tpl-name').value.trim();
   const body = document.getElementById('tpl-body').value.trim();
@@ -2572,6 +2679,8 @@ async function submeterTemplate() {
     category: document.getElementById('tpl-category').value,
     language: document.getElementById('tpl-language').value,
     components,
+    _waba_id: api.waba_id,
+    _waba_token: api.token,
   };
 
   const btn = document.getElementById('btn-tpl-criar');
