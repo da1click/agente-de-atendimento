@@ -36,6 +36,7 @@ Area do caso NAO identificada (trabalhista ou previdenciaria).
 
 ### 3. coleta_caso
 Area identificada, faltam dados essenciais.
+IMPORTANTE: Se o cliente quer sair da empresa mas a empresa se recusa a formalizar/aceitar, isso e RESCISAO INDIRETA — manter em coleta_caso para coletar dados e orientar. NAO e pedido de demissao.
 
 ### 4. avaliacao
 Dados coletados, falta encerrar triagem.
