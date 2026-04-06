@@ -31,6 +31,11 @@ Obter: situacao do vinculo, tempo de trabalho, forma de desligamento, resumo do 
 "Voce pediu demissao, foi dispensado(a) ou quer sair?"
 "Pode me contar melhor o que aconteceu?"
 
+### Subfluxo — Pedido de demissao
+Se o cliente informou que PEDIU DEMISSAO, perguntar:
+"Eles homologaram o seu pedido de demissao no sindicato?"
+NAO perguntar sobre formalizacao, data/assinatura ou se ja saiu. Ir direto para a pergunta do sindicato.
+
 ### Subfluxo — Trabalho sem carteira assinada
 "Por quanto tempo voce trabalhou la?"
 "Qual era o servico que voce realizava?"
