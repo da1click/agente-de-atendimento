@@ -32,17 +32,18 @@ Inicio da conversa OU a Diana NAO se apresentou.
 REGRA: a Diana ja enviou mensagem? NAO = identificacao (sem excecao).
 
 ### 2. vinculo
-Area do caso NAO identificada (trabalhista ou previdenciaria).
+Area do caso NAO identificada ou NAO confirmada como trabalhista.
+IMPORTANTE: Se o cliente mencionar INSS, beneficio, aposentadoria, BPC, LOAS, auxilio-doenca ou qualquer assunto previdenciario — rotear para transferir_humano. O escritorio NAO atende previdenciario.
 
 ### 3. coleta_caso
-Area identificada, faltam dados essenciais.
+Caso TRABALHISTA confirmado, faltam dados essenciais.
 IMPORTANTE: Se o cliente quer sair da empresa mas a empresa se recusa a formalizar/aceitar, isso e RESCISAO INDIRETA — manter em coleta_caso para coletar dados e orientar. NAO e pedido de demissao.
 
 ### 4. avaliacao
 Dados coletados, falta encerrar triagem.
 
 ### 5. casos_especiais
-BPC, LOAS, aposentadoria por invalidez, doenca ocupacional.
+NAO USAR — o escritorio nao atende previdenciario. Se chegar aqui, rotear para transferir_humano.
 
 ### 6. explicacao
 Duvida sobre escritorio, localizacao, atendimento.
@@ -52,7 +53,7 @@ APENAS se: cliente pediu OU qualificacao minima preenchida com caso viavel.
 REGRA DE OURO: caso inviavel NUNCA vai para agendamento.
 
 ### 8. transferir_humano
-Cliente existente, menos de 90 dias, aguardando cirurgia, fora do escopo, pede humano.
+Cliente existente, caso previdenciario/INSS, fora do escopo trabalhista, pede humano.
 
 ---
 
