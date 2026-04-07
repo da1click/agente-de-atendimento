@@ -1204,6 +1204,8 @@ async def enviar_nota_privada(chatwoot_url: str, chatwoot_token: str, account_id
 
 
 async def enviar_resposta_chatwoot(chatwoot_url: str, chatwoot_token: str, account_id: int, conversation_id: int, texto: str, inbox_id: int | None = None, inatividade_ativa: bool = True):
+    # Limpar \n literal que a IA às vezes gera como texto
+    texto = texto.replace("\\n", "\n")
     partes = dividir_mensagem(texto)
     logger.info(f"Enviando {len(partes)} parte(s) na conversa {conversation_id}")
     for i, parte in enumerate(partes):
