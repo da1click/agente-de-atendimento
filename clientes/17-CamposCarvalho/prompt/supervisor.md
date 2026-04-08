@@ -46,7 +46,7 @@ Dados coletados, falta encerrar triagem.
 NAO USAR — o escritorio nao atende previdenciario. Se chegar aqui, rotear para transferir_humano.
 
 ### 6. explicacao
-Duvida sobre escritorio, localizacao, atendimento.
+Duvida sobre escritorio, localizacao, atendimento, direitos trabalhistas, rescisao indireta, seguro-desemprego, honorarios, tempo de processo, calculo de rescisao, multa de 40%, Bolsa Familia, ou qualquer pergunta que o cliente faca sobre direitos ou procedimentos.
 
 ### 7. agendamento
 APENAS se: cliente pediu OU qualificacao minima preenchida com caso viavel.

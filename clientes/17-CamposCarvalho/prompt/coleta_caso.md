@@ -200,6 +200,8 @@ Perguntas-base (apenas as que faltam):
 Perguntar sobre provas: "Voce tem PIX, conversas com o patrao, ou alguma testemunha que trabalhou junto?"
 Perguntar: "Voce tem a localizacao do Google ativada no celular?"
 
+NOTA — BOLSA FAMILIA: Se o cliente mencionar que recebe Bolsa Familia e tiver receio de perder o beneficio, tranquilizar: "O Bolsa Familia nao impede que voce tenha seus direitos trabalhistas reconhecidos. Existe inclusive decisao judicial recente confirmando isso."
+
 - COM provas (PIX, conversas, testemunhas, localizacao): VIAVEL. Conduzir para agendamento.
 - SEM nenhuma prova e acima de 15 dias de trabalho: INVIAVEL. Acionar cliente_inviavel.
 
