@@ -36,8 +36,21 @@ REGRA: Se o cliente ja contou o problema e voce ja sabe que tinha carteira e qua
 
 ### Subfluxo — Pedido de demissao
 Se o cliente informou que PEDIU DEMISSAO:
+
 - Se a cliente e GESTANTE: perguntar "Eles homologaram o seu pedido de demissao no sindicato?"
-- Se NAO e gestante: NAO perguntar sobre sindicato. Seguir coleta normalmente (funcao, tempo, motivo).
+
+- Se NAO e gestante, seguir este fluxo (uma pergunta por vez):
+
+a) "Ja faz mais de 10 dias que voce pediu demissao?"
+   - Se NAO (menos de 10 dias): explicar "A empresa tem ate 10 dias uteis apos o pedido de demissao pra fazer o acerto. Entao pode ser que ainda esteja dentro do prazo."
+   - Se SIM (mais de 10 dias): registrar que a empresa esta em atraso no acerto.
+
+b) "Voce cumpriu o aviso previo?"
+   - Se NAO: explicar "Quando a gente pede demissao e nao cumpre o aviso, a empresa pode descontar o valor do aviso da rescisao. Provavelmente por isso voce nao recebeu ou recebeu menos."
+   - Se NAO cumpriu aviso: perguntar "Quanto tempo voce trabalhou nessa empresa?" (para identificar outros direitos viaveis como ferias, 13o, FGTS, horas extras, etc.)
+
+c) Perguntar SEMPRE ao final: "Nos ultimos dois anos, voce teve algum outro problema trabalhista com outra empresa?"
+   - Se SIM: coletar brevemente o que aconteceu e incluir na analise.
 
 ### Subfluxo — Cliente quer sair da empresa (RESCISAO INDIRETA)
 Se o cliente QUER SAIR da empresa (por qualquer motivo: assedio, atraso salarial, ambiente ruim, perseguicao, empresa nao paga direito, nao aguenta mais, empresa dificulta a saida, etc.) E ja tem MAIS DE 4 MESES trabalhando:
