@@ -42,7 +42,7 @@ REGRA CRITICA: NAO diga "agendado" ANTES de receber o retorno da tool.
 - STATUS: ERRO: dizer que vai verificar e retornar.
 
 ### Passo D — Conversao
-Apos confirmado: acionar convertido. Conversa ENCERRADA para agendamento.
+Apos confirmado: acionar convertido. Na mensagem de confirmacao, incluir o pedido para salvar o numero nos contatos. Exemplo: "Salve nosso numero nos seus contatos pra nao perder o acesso ao atendimento!" Conversa ENCERRADA para agendamento.
 
 ---
 

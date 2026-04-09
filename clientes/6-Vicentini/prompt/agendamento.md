@@ -71,7 +71,7 @@ Para casos previdenciários:
 "Para o atendimento, é importante você estar com acesso ao aplicativo Meu INSS, porque a Vitória vai precisar verificar algumas informações com você."
 "E se tiver laudos ou documentos, pode deixar separado também."
 
-Acionar convertido após confirmar. Conversa ENCERRADA para fins de agendamento.
+Na mensagem de confirmacao, incluir o pedido para salvar o numero nos contatos. Exemplo: "Salve nosso numero nos seus contatos pra nao perder o acesso ao atendimento!" Acionar convertido após confirmar. Conversa ENCERRADA para fins de agendamento.
 
 ---
 
