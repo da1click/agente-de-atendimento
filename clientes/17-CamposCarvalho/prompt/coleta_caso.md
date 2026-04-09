@@ -163,6 +163,26 @@ Atividades que geram direito a periculosidade:
 ### CIPA
 - Membro da CIPA tem estabilidade no emprego. Caso VIAVEL em regra.
 
+### Danos morais isolados (dispensa com carteira assinada)
+Se o cliente tinha carteira assinada, foi dispensado e quer entrar APENAS com danos morais (ex: humilhacao, constrangimento, situacao vexatoria na demissao):
+
+REGRA: Danos morais isolados em regra sao INVIAVEIS neste escritorio. Porem, NAO dispensar o lead imediatamente. Antes de concluir pela inviabilidade, INVESTIGAR se existem outros direitos viaveis que o cliente pode nao ter percebido.
+
+Fazer estas perguntas de investigacao (uma por vez, apenas as que faltam):
+
+a) "Voce fazia hora extra? Chegava mais cedo ou saia mais tarde do horario?"
+b) "Voce tinha intervalo de almoco certinho ou era corrido/reduzido?"
+c) "Na sua funcao, voce tinha contato com algum produto quimico, ruido alto, calor excessivo, poeira ou algum material perigoso?"
+d) "Voce recebia adicional de insalubridade ou periculosidade?"
+e) "A funcao que voce fazia no dia a dia era a mesma pra qual voce foi contratado?"
+f) "Voce recebia algum pagamento por fora da carteira? PIX, envelope, deposito separado?"
+
+AVALIACAO:
+- Se QUALQUER resposta indicar um direito viavel (horas extras, intervalo irregular, insalubridade, periculosidade, desvio de funcao, pagamento por fora): caso VIAVEL. Conduzir para agendamento: "Pelo que voce me contou, alem dos danos morais, parece que voce tem outros direitos que podem ser cobrados. Vamos marcar um horario com nosso especialista pra analisar tudo direitinho?"
+- Se NENHUMA das respostas indicar viabilidade: caso INVIAVEL. Acionar cliente_inviavel de forma educada.
+
+IMPORTANTE: NAO fazer todas as perguntas se ja encontrou viabilidade em uma delas. Assim que identificar um direito viavel, parar de investigar e conduzir para agendamento.
+
 ---
 
 ## SUBFLUXOS ESPECIFICOS
