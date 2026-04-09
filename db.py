@@ -1000,6 +1000,131 @@ def contar_elegiveis_remarketing(account_id: int, dias_inatividade: int, inbox_i
     return resp.count or 0
 
 
+# ── CAMPANHAS DE ENVIO ──────────────────────────────────────
+
+def listar_campanhas_envio(account_id: int) -> list:
+    db = get_db()
+    resp = (
+        db.table("ia_campanhas_envio")
+        .select("*")
+        .eq("account_id", account_id)
+        .order("created_at", desc=True)
+        .execute()
+    )
+    return resp.data or []
+
+
+def listar_todas_campanhas_envio_ativas() -> list:
+    db = get_db()
+    resp = (
+        db.table("ia_campanhas_envio")
+        .select("*")
+        .eq("ativo", True)
+        .execute()
+    )
+    return resp.data or []
+
+
+def get_campanha_envio(campanha_id: int) -> dict | None:
+    db = get_db()
+    resp = (
+        db.table("ia_campanhas_envio")
+        .select("*")
+        .eq("id", campanha_id)
+        .maybe_single()
+        .execute()
+    )
+    return resp.data if resp else None
+
+
+def inserir_campanha_envio(account_id: int, dados: dict) -> dict:
+    db = get_db()
+    payload = {
+        "account_id": account_id,
+        "nome": dados.get("nome", ""),
+        "tipo_filtro": dados.get("tipo_filtro", "etiqueta"),
+        "valor_filtro": dados.get("valor_filtro", ""),
+        "limite_diario": dados.get("limite_diario", 200),
+        "mensagem": dados.get("mensagem", ""),
+        "template_whatsapp": dados.get("template_whatsapp") or None,
+        "image_url": dados.get("image_url") or None,
+        "inbox_envio_id": dados.get("inbox_envio_id") or None,
+        "ativo": dados.get("ativo", False),
+    }
+    resp = db.table("ia_campanhas_envio").insert(payload).execute()
+    return (resp.data or [{}])[0]
+
+
+def atualizar_campanha_envio(campanha_id: int, dados: dict) -> dict | None:
+    db = get_db()
+    payload = {"updated_at": "now()"}
+    campos = ["nome", "tipo_filtro", "valor_filtro", "limite_diario", "mensagem",
+              "template_whatsapp", "image_url", "inbox_envio_id", "ativo"]
+    for c in campos:
+        if c in dados:
+            payload[c] = dados[c]
+    resp = (
+        db.table("ia_campanhas_envio")
+        .update(payload)
+        .eq("id", campanha_id)
+        .execute()
+    )
+    return (resp.data or [None])[0]
+
+
+def deletar_campanha_envio(campanha_id: int) -> bool:
+    db = get_db()
+    resp = db.table("ia_campanhas_envio").delete().eq("id", campanha_id).execute()
+    return bool(resp.data)
+
+
+def contar_envios_campanha_hoje(campanha_id: int) -> int:
+    db = get_db()
+    from datetime import datetime, timezone, timedelta
+    tz_br = timezone(timedelta(hours=-3))
+    hoje = datetime.now(tz_br).strftime("%Y-%m-%d")
+    resp = (
+        db.table("ia_campanhas_envio_log")
+        .select("id", count="exact")
+        .eq("campanha_id", campanha_id)
+        .gte("enviado_em", f"{hoje}T00:00:00-03:00")
+        .execute()
+    )
+    return resp.count or 0
+
+
+def registrar_envio_campanha(campanha_id: int, account_id: int, conversation_id: int, status: str = "enviado"):
+    db = get_db()
+    db.table("ia_campanhas_envio_log").insert({
+        "campanha_id": campanha_id,
+        "account_id": account_id,
+        "conversation_id": conversation_id,
+        "status": status,
+    }).execute()
+
+
+def get_conversation_ids_ja_enviados_campanha(campanha_id: int) -> set:
+    db = get_db()
+    resp = (
+        db.table("ia_campanhas_envio_log")
+        .select("conversation_id")
+        .eq("campanha_id", campanha_id)
+        .execute()
+    )
+    return {e["conversation_id"] for e in (resp.data or [])}
+
+
+def contar_total_envios_campanha(campanha_id: int) -> int:
+    db = get_db()
+    resp = (
+        db.table("ia_campanhas_envio_log")
+        .select("id", count="exact")
+        .eq("campanha_id", campanha_id)
+        .execute()
+    )
+    return resp.count or 0
+
+
 # ── ONBOARDING ──────────────────────────────────────────────
 
 def criar_onboarding(account_id: int, token: str) -> dict:

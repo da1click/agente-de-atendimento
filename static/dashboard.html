@@ -593,6 +593,10 @@
       <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg></span>
       <span class="nav-label">Remarketing</span>
     </div>
+    <div class="nav-item" id="nav-campanhas" onclick="navTo('campanhas')">
+      <span class="nav-icon"><svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span>
+      <span class="nav-label">Campanhas</span>
+    </div>
     <div class="nav-item" id="nav-relatorios" onclick="navTo('relatorios')">
       <span class="nav-icon"><svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span>
       <span class="nav-label">Relatórios</span>
@@ -1389,9 +1393,9 @@ function navTo(secao) {
   closeSidebarMobile();
   // Verificar permissão — redireciona se não tem acesso
   const PERMS_NAV = {
-    super_admin: ['contas','templates','inatividade','remarketing','relatorios','audiencias','advogados','config','usuarios','terminal','prompt','sugestoes','zapsign','tutoriais'],
-    admin:       ['contas','templates','inatividade','remarketing','relatorios','audiencias','advogados','config','prompt','sugestoes','zapsign','tutoriais'],
-    moderador:   ['remarketing','relatorios','audiencias','prompt','tutoriais'],
+    super_admin: ['contas','templates','inatividade','remarketing','campanhas','relatorios','audiencias','advogados','config','usuarios','terminal','prompt','sugestoes','zapsign','tutoriais'],
+    admin:       ['contas','templates','inatividade','remarketing','campanhas','relatorios','audiencias','advogados','config','prompt','sugestoes','zapsign','tutoriais'],
+    moderador:   ['remarketing','campanhas','relatorios','audiencias','prompt','tutoriais'],
     agente:      ['templates','inatividade','audiencias','prompt','tutoriais'],
   };
   const allowedNav = PERMS_NAV[currentUser?.role] || ['contas','prompt'];
@@ -1403,14 +1407,14 @@ function navTo(secao) {
   localStorage.setItem('da1click_secao_ativa', secao);
   if (clienteAtivo) localStorage.setItem('da1click_conta_ativa', clienteAtivo);
   // Update nav highlights (only for non-conta sections)
-  ['templates','inatividade','remarketing','relatorios','audiencias','advogados','config','usuarios','terminal','prompt','sugestoes','zapsign','tutoriais'].forEach(s => {
+  ['templates','inatividade','remarketing','campanhas','relatorios','audiencias','advogados','config','usuarios','terminal','prompt','sugestoes','zapsign','tutoriais'].forEach(s => {
     document.getElementById(`nav-${s}`)?.classList.toggle('active', s === secao);
   });
   renderSidebarAccounts();
 
   const titles = {
     contas: 'Contas', templates: 'Templates Meta',
-    inatividade: 'Inatividade', remarketing: 'Remarketing',
+    inatividade: 'Inatividade', remarketing: 'Remarketing', campanhas: 'Campanhas',
     relatorios: 'Relatórios', audiencias: 'Aviso de Audiência', advogados: 'Advogados',
     config: 'Configurações', usuarios: 'Gerenciar Usuários', terminal: 'Terminal IA',
     prompt: 'Prompt da IA', sugestoes: 'Sugestões de Prompt', zapsign: 'ZapSign', tutoriais: 'Tutoriais',
@@ -1418,7 +1422,7 @@ function navTo(secao) {
   document.getElementById('topbar-title').textContent = titles[secao] || secao;
 
   const pages = { contas: renderPageContas, templates: renderPageTemplates,
-    inatividade: renderPageInatividade, remarketing: renderPageRemarketing,
+    inatividade: renderPageInatividade, remarketing: renderPageRemarketing, campanhas: renderPageCampanhas,
     relatorios: renderPageRelatorios, audiencias: renderPageAvisoAudiencia, advogados: renderPageAdvogados,
     config: renderPageConfig, usuarios: renderPageUsuarios, terminal: renderPageTerminal,
     prompt: renderPagePrompt, sugestoes: renderPageSugestoes, zapsign: renderPageZapSign, tutoriais: renderPageTutoriais };
@@ -3246,6 +3250,368 @@ async function deletarCampanhaRemarketing(id, nome) {
   if (!confirm(`Excluir campanha "${nome}"? Os envios já realizados serão mantidos no histórico.`)) return;
   const res = await fetch(`/api/remarketing/campanhas/${id}`, { method: 'DELETE' });
   if (res.ok) renderPageRemarketing();
+}
+
+// ══════════════════════════════════════════════
+// PAGE: CAMPANHAS DE ENVIO
+// ══════════════════════════════════════════════
+let _campEnvioCampanhas = [];
+let _campEnvioTemplates = [];
+let _campEnvioLabels = [];
+let _campEnvioFunnels = [];
+
+async function renderPageCampanhas() {
+  const el = document.getElementById('page-content');
+  if (!clienteAtivo) {
+    document.getElementById('topbar-sub').textContent = 'Selecione uma conta';
+    el.innerHTML = '<div class="empty-state"><p>Selecione uma conta no menu</p></div>';
+    return;
+  }
+  document.getElementById('topbar-sub').textContent = `Campanhas — Conta #${clienteAtivo}`;
+  el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:20px 0;">Carregando...</div>';
+
+  try {
+    const res = await fetch(`/api/campanhas-envio?account_id=${clienteAtivo}`);
+    _campEnvioCampanhas = await res.json();
+  } catch (e) { _campEnvioCampanhas = []; }
+
+  const tipoLabel = v => v === 'etapa_kanban' ? 'Etapa Kanban' : 'Etiqueta';
+
+  const listHtml = _campEnvioCampanhas.length === 0
+    ? '<div style="text-align:center;padding:32px 0;color:var(--text-muted);font-size:14px;">Nenhuma campanha criada ainda</div>'
+    : _campEnvioCampanhas.map(c => `
+      <div class="camp-card" style="display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:10px;
+                  margin-bottom:8px;background:${c.ativo ? '#f0fdf4' : '#fafafa'};
+                  border:1.5px solid ${c.ativo ? '#bbf7d0' : 'var(--border)'};">
+        <div style="width:10px;height:10px;border-radius:50%;flex-shrink:0;
+                    background:${c.ativo ? '#22c55e' : '#d1d5db'};"></div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:600;font-size:14px;color:var(--text);">${c.nome || 'Sem nome'}</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-top:2px;">
+            ${tipoLabel(c.tipo_filtro)}: <strong>${c.valor_filtro || '-'}</strong> &middot; ${c.limite_diario} envios/dia${c.inbox_envio_id ? ` &middot; Inbox: #${c.inbox_envio_id}` : ''}
+          </div>
+        </div>
+        <div id="camp-stats-${c.id}" style="text-align:right;font-size:11px;color:var(--text-muted);min-width:80px;">...</div>
+        <div style="display:flex;gap:6px;flex-shrink:0;">
+          <button class="btn btn-secondary" style="padding:6px 10px;font-size:12px;" onclick="editarCampanhaEnvio(${c.id})">Editar</button>
+          <button class="btn btn-secondary" style="padding:6px 10px;font-size:12px;color:var(--red);border-color:#fecaca;" onclick="deletarCampanhaEnvio(${c.id},'${(c.nome||'').replace(/'/g,"\\'")}')">Excluir</button>
+        </div>
+      </div>
+    `).join('');
+
+  el.innerHTML = `
+    <div style="max-width:760px;">
+      <div class="card">
+        <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div class="card-icon" style="font-size:18px;background:#fef3c7;color:#d97706;">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            </div>
+            <div>
+              <div class="card-title">Campanhas de Envio</div>
+              <div class="card-sub">Envie mensagens por etiqueta ou etapa do kanban</div>
+            </div>
+          </div>
+          <button class="btn btn-primary" style="padding:8px 16px;font-size:13px;" onclick="abrirFormCampanhaEnvio()">+ Nova Campanha</button>
+        </div>
+        ${listHtml}
+      </div>
+
+      <!-- Form -->
+      <div class="card" id="camp-form-card" style="margin-top:16px;display:none;">
+        <div class="card-header">
+          <div class="card-icon" style="font-size:16px;background:#eff6ff;color:#3b82f6;">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          </div>
+          <div>
+            <div class="card-title" id="camp-form-title">Nova Campanha</div>
+            <div class="card-sub">Configure os filtros e mensagem da campanha</div>
+          </div>
+        </div>
+        <input type="hidden" id="camp-edit-id" value="" />
+        <div class="fields-grid" style="gap:14px;">
+          <div class="field-group full">
+            <label>Nome da Campanha</label>
+            <input type="text" id="camp-nome" placeholder="Ex: Envio para convertidos" />
+          </div>
+          <div class="field-group">
+            <label>Tipo de Filtro</label>
+            <select id="camp-tipo-filtro" onchange="_onTipoFiltroCampChange()" style="width:100%;">
+              <option value="etiqueta">Etiqueta (Label)</option>
+              <option value="etapa_kanban">Etapa do Kanban</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <label>Filtro</label>
+            <div id="camp-filtro-wrap">
+              <select id="camp-valor-filtro" style="width:100%;"><option value="">Carregando...</option></select>
+            </div>
+            <span class="field-hint" id="camp-filtro-hint">Selecione a etiqueta para filtrar os contatos</span>
+          </div>
+          <div class="field-group">
+            <label>Limite Diario</label>
+            <input type="number" id="camp-limite" value="200" min="1" max="10000" />
+            <span class="field-hint">Maximo de envios por dia (distribuidos no horario comercial)</span>
+          </div>
+          <div class="field-group">
+            <label>Inbox de Envio</label>
+            <select id="camp-inbox-envio-id" style="width:100%;"></select>
+            <span class="field-hint">Por qual inbox enviar a mensagem</span>
+          </div>
+          <div class="field-group full">
+            <label>Mensagem</label>
+            <textarea id="camp-mensagem" rows="4" placeholder="Texto que sera enviado..." style="width:100%;resize:vertical;font-family:inherit;"></textarea>
+            <span class="field-hint">Texto direto para inboxes normais. Para WhatsApp Oficial, configure o template abaixo.</span>
+          </div>
+          <div class="field-group full">
+            <label>URL da Imagem (opcional)</label>
+            <input type="url" id="camp-image-url" placeholder="https://exemplo.com/imagem.jpg" />
+          </div>
+          <div class="field-group full">
+            <label>Template WhatsApp (opcional)</label>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div id="camp-template-wrap"></div>
+              <span id="camp-tpl-status" style="font-size:11px;color:var(--text-muted);"></span>
+            </div>
+            <span class="field-hint">Obrigatorio para WhatsApp Oficial (janela 24h expirada).</span>
+          </div>
+          <div class="field-group" style="display:flex;align-items:center;gap:10px;">
+            <label class="toggle">
+              <input type="checkbox" id="camp-ativo" />
+              <span class="toggle-slider"></span>
+            </label>
+            <span style="font-size:13px;font-weight:600;">Campanha Ativa</span>
+          </div>
+        </div>
+        <div class="card-actions" style="margin-top:16px;">
+          <button class="btn btn-primary" onclick="salvarCampanhaEnvio()">Salvar</button>
+          <button class="btn btn-secondary" onclick="fecharFormCampanhaEnvio()">Cancelar</button>
+          <span class="save-msg" id="camp-save-msg">Salvo</span>
+        </div>
+      </div>
+
+      <!-- Info -->
+      <div class="card" style="margin-top:16px;">
+        <div class="card-header" style="margin-bottom:12px;padding-bottom:12px;">
+          <div class="card-icon" style="font-size:16px;background:#eff6ff;color:#3b82f6;">?</div>
+          <div><div class="card-title" style="font-size:14px;">Como funcionam as Campanhas</div></div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px;font-size:13px;color:var(--text-secondary);line-height:1.6;">
+          <div style="display:flex;gap:10px;align-items:flex-start;">
+            <span style="background:#fef3c7;color:#92400e;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600;flex-shrink:0;margin-top:2px;">Filtro</span>
+            <span>Envia para conversas que possuem uma etiqueta especifica ou estao em uma etapa do kanban.</span>
+          </div>
+          <div style="display:flex;gap:10px;align-items:flex-start;">
+            <span style="background:#eff6ff;color:#1e40af;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600;flex-shrink:0;margin-top:2px;">Unico</span>
+            <span>Cada conversa recebe <strong>apenas 1 mensagem por campanha</strong>. Nao repete.</span>
+          </div>
+          <div style="display:flex;gap:10px;align-items:flex-start;">
+            <span style="background:#fff7ed;color:#92400e;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600;flex-shrink:0;margin-top:2px;">Limite</span>
+            <span>Envios distribuidos uniformemente no horario comercial (8h-19h).</span>
+          </div>
+          <div style="display:flex;gap:10px;align-items:flex-start;">
+            <span style="background:#fff1f2;color:#9f1239;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600;flex-shrink:0;margin-top:2px;">WhatsApp</span>
+            <span>Para WhatsApp Oficial, o template e obrigatorio.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  _campEnvioCampanhas.forEach(c => _carregarStatsCampEnvio(c.id));
+}
+
+async function _carregarStatsCampEnvio(campanha_id) {
+  try {
+    const res = await fetch(`/api/campanhas-envio/${campanha_id}/stats`);
+    const stats = await res.json();
+    const el = document.getElementById(`camp-stats-${campanha_id}`);
+    if (el) {
+      el.innerHTML = `
+        <div>Enviados hoje: <strong>${stats.envios_hoje || 0}</strong></div>
+        <div>Total enviados: <strong>${stats.total_envios || 0}</strong></div>
+      `;
+    }
+  } catch (e) {}
+}
+
+async function _onTipoFiltroCampChange() {
+  const tipo = document.getElementById('camp-tipo-filtro').value;
+  const hint = document.getElementById('camp-filtro-hint');
+  if (tipo === 'etiqueta') {
+    hint.textContent = 'Selecione a etiqueta para filtrar os contatos';
+    await _carregarLabelsCampanha('');
+  } else {
+    hint.textContent = 'Selecione o funil e a etapa do kanban';
+    await _carregarFunnelsCampanha('');
+  }
+}
+
+async function _carregarLabelsCampanha(currentVal) {
+  const wrap = document.getElementById('camp-filtro-wrap');
+  wrap.innerHTML = '<select id="camp-valor-filtro" style="width:100%;"><option value="">Carregando...</option></select>';
+  try {
+    const res = await fetch(`/api/clientes/${clienteAtivo}/chatwoot/labels`);
+    if (res.ok) {
+      _campEnvioLabels = await res.json();
+      const opts = ['<option value="">-- selecione --</option>']
+        .concat(_campEnvioLabels.map(l => {
+          const title = l.title || l;
+          return `<option value="${title}" ${title === currentVal ? 'selected' : ''}>${title}</option>`;
+        })).join('');
+      wrap.innerHTML = `<select id="camp-valor-filtro" style="width:100%;">${opts}</select>`;
+    }
+  } catch(e) {
+    wrap.innerHTML = `<input type="text" id="camp-valor-filtro" value="${currentVal || ''}" placeholder="nome_da_etiqueta" style="width:100%;" />`;
+  }
+}
+
+async function _carregarFunnelsCampanha(currentVal) {
+  const wrap = document.getElementById('camp-filtro-wrap');
+  wrap.innerHTML = '<select id="camp-valor-filtro" style="width:100%;"><option value="">Carregando...</option></select>';
+  try {
+    const res = await fetch(`/api/clientes/${clienteAtivo}/chatwoot/funnels`);
+    if (res.ok) {
+      _campEnvioFunnels = await res.json();
+      const opts = ['<option value="">-- selecione --</option>'];
+      (_campEnvioFunnels || []).forEach(f => {
+        const steps = f.funnel_steps || [];
+        steps.forEach(s => {
+          const val = `${f.id}:${s.id}`;
+          opts.push(`<option value="${val}" ${val === currentVal ? 'selected' : ''}>${f.title || f.identifier} &rarr; ${s.title || s.identifier}</option>`);
+        });
+      });
+      wrap.innerHTML = `<select id="camp-valor-filtro" style="width:100%;">${opts.join('')}</select>`;
+    }
+  } catch(e) {
+    wrap.innerHTML = `<input type="text" id="camp-valor-filtro" value="${currentVal || ''}" placeholder="funnel_id:step_id" style="width:100%;" />`;
+  }
+}
+
+async function _carregarInboxesCampanha(currentEnvio) {
+  const sel = document.getElementById('camp-inbox-envio-id');
+  sel.innerHTML = '<option value="">-- selecione --</option>';
+  try {
+    const res = await fetch(`/api/clientes/${clienteAtivo}/chatwoot/inboxes`);
+    if (res.ok) {
+      const inboxes = await res.json();
+      inboxes.forEach(i => {
+        const tipo = (i.channel_type || '').replace('Channel::','');
+        const opt = document.createElement('option');
+        opt.value = i.id;
+        opt.textContent = `${i.name} — ${tipo} (ID: ${i.id})`;
+        if (String(i.id) === String(currentEnvio)) opt.selected = true;
+        sel.appendChild(opt);
+      });
+    }
+  } catch(e) {}
+}
+
+function _renderCampTemplateSelector(currentVal) {
+  if (_campEnvioTemplates.length > 0) {
+    const opts = [`<option value="">— nenhum —</option>`]
+      .concat(_campEnvioTemplates.map(t =>
+        `<option value="${t.name}" ${t.name === currentVal ? 'selected' : ''}>${t.name}</option>`
+      )).join('');
+    return `<select id="camp-template" style="min-width:220px;padding:5px 8px;font-size:12px;">${opts}</select>`;
+  }
+  return `<input type="text" id="camp-template" value="${currentVal || ''}" placeholder="nome_do_template" style="width:220px;padding:5px 8px;font-size:12px;" />`;
+}
+
+async function _carregarTemplatesCampanha(currentVal) {
+  const wrap = document.getElementById('camp-template-wrap');
+  const status = document.getElementById('camp-tpl-status');
+  if (!clienteAtivo) { _campEnvioTemplates = []; if (wrap) wrap.innerHTML = _renderCampTemplateSelector(currentVal); return; }
+  if (status) { status.textContent = 'Carregando...'; status.style.color = 'var(--text-muted)'; }
+  try {
+    const res = await fetch(`/api/clientes/${clienteAtivo}/templates`);
+    if (!res.ok) throw new Error('Sem credenciais Meta');
+    const data = await res.json();
+    _campEnvioTemplates = (data.data || []).filter(t => t.status === 'APPROVED');
+    if (status) { status.textContent = `${_campEnvioTemplates.length} template${_campEnvioTemplates.length !== 1 ? 's' : ''}`; status.style.color = 'var(--green)'; }
+  } catch(e) {
+    _campEnvioTemplates = [];
+    if (status) { status.textContent = e.message; status.style.color = 'var(--red)'; }
+  }
+  if (wrap) wrap.innerHTML = _renderCampTemplateSelector(currentVal);
+}
+
+async function abrirFormCampanhaEnvio(campanha = null) {
+  document.getElementById('camp-form-card').style.display = '';
+  document.getElementById('camp-form-title').textContent = campanha ? 'Editar Campanha' : 'Nova Campanha';
+  document.getElementById('camp-edit-id').value = campanha ? campanha.id : '';
+  document.getElementById('camp-nome').value = campanha?.nome || '';
+  document.getElementById('camp-tipo-filtro').value = campanha?.tipo_filtro || 'etiqueta';
+  document.getElementById('camp-limite').value = campanha?.limite_diario || 200;
+  document.getElementById('camp-mensagem').value = campanha?.mensagem || '';
+  document.getElementById('camp-image-url').value = campanha?.image_url || '';
+  document.getElementById('camp-ativo').checked = campanha?.ativo || false;
+
+  const tipo = campanha?.tipo_filtro || 'etiqueta';
+  if (tipo === 'etiqueta') {
+    await _carregarLabelsCampanha(campanha?.valor_filtro || '');
+  } else {
+    await _carregarFunnelsCampanha(campanha?.valor_filtro || '');
+  }
+  await _carregarInboxesCampanha(campanha?.inbox_envio_id || '');
+  _carregarTemplatesCampanha(campanha?.template_whatsapp || '');
+  document.getElementById('camp-form-card').scrollIntoView({ behavior: 'smooth' });
+}
+
+function fecharFormCampanhaEnvio() {
+  document.getElementById('camp-form-card').style.display = 'none';
+}
+
+async function editarCampanhaEnvio(id) {
+  const campanha = _campEnvioCampanhas.find(c => c.id === id);
+  if (campanha) abrirFormCampanhaEnvio(campanha);
+}
+
+async function salvarCampanhaEnvio() {
+  const editId = document.getElementById('camp-edit-id').value;
+  const body = {
+    account_id: clienteAtivo,
+    nome: document.getElementById('camp-nome').value.trim(),
+    tipo_filtro: document.getElementById('camp-tipo-filtro').value,
+    valor_filtro: document.getElementById('camp-valor-filtro').value.trim(),
+    limite_diario: parseInt(document.getElementById('camp-limite').value) || 200,
+    mensagem: document.getElementById('camp-mensagem').value.trim(),
+    image_url: document.getElementById('camp-image-url').value.trim() || null,
+    template_whatsapp: document.getElementById('camp-template').value.trim() || null,
+    inbox_envio_id: parseInt(document.getElementById('camp-inbox-envio-id').value) || null,
+    ativo: document.getElementById('camp-ativo').checked,
+  };
+
+  if (!body.valor_filtro) {
+    alert('Selecione um filtro (etiqueta ou etapa do kanban)');
+    return;
+  }
+
+  const url = editId ? `/api/campanhas-envio/${editId}` : '/api/campanhas-envio';
+  const method = editId ? 'PUT' : 'POST';
+
+  const res = await fetch(url, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  const msg = document.getElementById('camp-save-msg');
+  if (res.ok) {
+    msg.textContent = 'Salvo';
+    msg.style.color = '';
+    msg.classList.add('show');
+    setTimeout(() => msg.classList.remove('show'), 2500);
+    fecharFormCampanhaEnvio();
+    renderPageCampanhas();
+  } else {
+    const err = await res.json().catch(() => ({}));
+    msg.textContent = `Erro: ${err.detail || res.status}`;
+    msg.style.color = 'var(--red)';
+    msg.classList.add('show');
+    setTimeout(() => { msg.classList.remove('show'); msg.textContent = 'Salvo'; msg.style.color = ''; }, 4000);
+  }
+}
+
+async function deletarCampanhaEnvio(id, nome) {
+  if (!confirm(`Excluir campanha "${nome}"? Os envios ja realizados serao mantidos no historico.`)) return;
+  const res = await fetch(`/api/campanhas-envio/${id}`, { method: 'DELETE' });
+  if (res.ok) renderPageCampanhas();
 }
 
 // ══════════════════════════════════════════════

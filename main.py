@@ -38,6 +38,13 @@ from db import (
     contar_elegiveis_remarketing,
 )
 from db import (
+    listar_campanhas_envio, get_campanha_envio,
+    inserir_campanha_envio, atualizar_campanha_envio,
+    deletar_campanha_envio, contar_envios_campanha_hoje,
+    contar_total_envios_campanha,
+    get_conversation_ids_ja_enviados_campanha,
+)
+from db import (
     criar_onboarding, get_onboarding_by_token, get_onboarding_by_account,
     atualizar_onboarding_draft, submeter_onboarding,
 )
@@ -52,6 +59,7 @@ from db import (
 from auth import hash_password, verify_password, create_token, get_current_user, require_super_admin
 from inatividade import registrar_atividade, iniciar_monitoramento
 from remarketing import iniciar_remarketing
+from campanhas import iniciar_campanhas
 import asyncio
 import httpx
 import json
@@ -75,6 +83,7 @@ _MSG_IDS_MAX = 500
 async def lifespan(app: FastAPI):
     iniciar_monitoramento()
     iniciar_remarketing()
+    iniciar_campanhas()
     from agendador_audiencias import iniciar_agendador_audiencias
     iniciar_agendador_audiencias()
     from zapsign_followup import iniciar_zapsign_followup
@@ -1607,6 +1616,86 @@ def stats_campanha(campanha_id: int):
         "total_leads": total_leads,
         "dias": campanha["dias_inatividade"],
     }
+
+
+# ── CAMPANHAS DE ENVIO ────────────────────────────────────────
+
+@app.get("/api/campanhas-envio")
+def api_listar_campanhas_envio(account_id: int):
+    return listar_campanhas_envio(account_id)
+
+
+@app.get("/api/campanhas-envio/{campanha_id}")
+def api_get_campanha_envio(campanha_id: int):
+    c = get_campanha_envio(campanha_id)
+    if not c:
+        raise HTTPException(status_code=404, detail="Campanha não encontrada")
+    return c
+
+
+@app.post("/api/campanhas-envio")
+async def api_criar_campanha_envio(request: Request):
+    dados = await request.json()
+    account_id = dados.get("account_id")
+    if not account_id:
+        raise HTTPException(status_code=400, detail="account_id obrigatório")
+    return inserir_campanha_envio(account_id, dados)
+
+
+@app.put("/api/campanhas-envio/{campanha_id}")
+async def api_atualizar_campanha_envio(campanha_id: int, request: Request):
+    dados = await request.json()
+    result = atualizar_campanha_envio(campanha_id, dados)
+    if not result:
+        raise HTTPException(status_code=404, detail="Campanha não encontrada")
+    return result
+
+
+@app.delete("/api/campanhas-envio/{campanha_id}")
+def api_deletar_campanha_envio(campanha_id: int):
+    if not deletar_campanha_envio(campanha_id):
+        raise HTTPException(status_code=404, detail="Campanha não encontrada")
+    return {"status": "deletado"}
+
+
+@app.get("/api/campanhas-envio/{campanha_id}/stats")
+def api_stats_campanha_envio(campanha_id: int):
+    campanha = get_campanha_envio(campanha_id)
+    if not campanha:
+        raise HTTPException(status_code=404, detail="Campanha não encontrada")
+    return {
+        "envios_hoje": contar_envios_campanha_hoje(campanha_id),
+        "total_envios": contar_total_envios_campanha(campanha_id),
+        "filtro": f"{campanha.get('tipo_filtro', '')}: {campanha.get('valor_filtro', '')}",
+    }
+
+
+@app.get("/api/clientes/{account_id}/chatwoot/labels")
+async def proxy_chatwoot_labels(account_id: int):
+    config = carregar_config_cliente(account_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    url = f"{config['chatwoot_url'].rstrip('/')}/api/v1/accounts/{account_id}/labels"
+    async with httpx.AsyncClient(timeout=10) as client:
+        r = await client.get(url, headers={"api_access_token": config["chatwoot_token"]})
+    if not r.is_success:
+        raise HTTPException(status_code=r.status_code, detail=r.text)
+    data = r.json()
+    return data.get("payload", data)
+
+
+@app.get("/api/clientes/{account_id}/chatwoot/funnels")
+async def proxy_chatwoot_funnels(account_id: int):
+    config = carregar_config_cliente(account_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    url = f"{config['chatwoot_url'].rstrip('/')}/api/v1/accounts/{account_id}/funnels"
+    async with httpx.AsyncClient(timeout=10) as client:
+        r = await client.get(url, headers={"api_access_token": config["chatwoot_token"]})
+    if not r.is_success:
+        raise HTTPException(status_code=r.status_code, detail=r.text)
+    data = r.json()
+    return data.get("payload", data)
 
 
 # ── AUDIÊNCIAS ────────────────────────────────────────────────
