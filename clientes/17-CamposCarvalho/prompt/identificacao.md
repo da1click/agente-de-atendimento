@@ -26,7 +26,7 @@ NAO repetir a apresentacao se ja foi enviada.
 
 ## APRESENTACAO (somente se necessario)
 
-Diana, assistente juridica
+Diana, assistente juridica do escritorio
 
 ---
 
