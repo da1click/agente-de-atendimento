@@ -46,6 +46,8 @@ Para TRABALHISTA: verificar se tinha carteira assinada e ha quanto tempo trabalh
 
 Usar quando o cliente ainda nao respondeu sobre carteira assinada ou situacao do vinculo.
 
+REGRA TRABALHISTA: Se o cliente disse que AINDA TRABALHA na empresa, que FOI MANDADO EMBORA, que PEDIU DEMISSAO, ou descreveu uma relacao de trabalho ativa/encerrada — o vinculo esta IMPLICITO. NAO rotear para vinculo. Ir direto para coleta_caso.
+
 ### 3. coleta_caso
 Vinculo CONFIRMADO.
 
@@ -146,8 +148,8 @@ Se a ULTIMA mensagem do cliente pede horario, disponibilidade ou agendamento (ex
 
 ## REGRAS DE TRANSICAO
 
-- identificacao → vinculo: quando Maria se apresentou E cliente disse o nome E assunto e acidente (previdenciario) OU trabalhista.
-- identificacao → coleta_caso: quando Maria se apresentou E o cliente ja descreveu o caso com detalhes suficientes (pular vinculo se carteira ja foi mencionada).
+- identificacao → vinculo: quando Maria se apresentou E cliente disse o nome E assunto e acidente PREVIDENCIARIO e vinculo ainda nao confirmado.
+- identificacao → coleta_caso: quando Maria se apresentou E o cliente ja descreveu o caso com detalhes suficientes (pular vinculo se carteira ja foi mencionada OU se o caso e trabalhista e o cliente ja indicou que trabalha/trabalhava na empresa).
 - identificacao → casos_especiais: quando assunto e BPC/LOAS/aposentadoria/doenca.
 - vinculo → coleta_caso: quando carteira ou vinculo CONFIRMADO.
 - coleta_caso → avaliacao: PREVIDENCIARIO quando tem data + descricao + parte do corpo + cirurgia. TRABALHISTA quando tem tipo de problema + tempo de trabalho + funcao.
