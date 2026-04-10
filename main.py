@@ -1055,8 +1055,10 @@ def _detectar_zapsign_url_webhook(texto: str, account_id: int, conversation_id: 
     proximo = (datetime.now(timezone.utc) + timedelta(hours=first_stage["horas"])).isoformat()
 
     for url in urls:
-        match = _ZAPSIGN_TOKEN_PATTERN.search(url)
-        doc_token = match.group(1) if match else url
+        # Limpar caracteres de formatação markdown (backticks, underscores)
+        url_limpa = url.rstrip('`_*>')
+        match = _ZAPSIGN_TOKEN_PATTERN.search(url_limpa)
+        doc_token = match.group(1) if match else url_limpa
 
         try:
             upsert_zapsign_followup(account_id, conversation_id, inbox_id, doc_token, 1, proximo)
@@ -1106,6 +1108,7 @@ async def chatwoot_webhook(request: Request):
         telefone = contact.get("phone_number", "")
 
         # Salvar mensagem no histórico (todas: incoming + outgoing)
+        conteudo_msg = msg.get("content") or msg.get("body") or ""
         try:
             from db import salvar_mensagem
             tipo_str = "incoming" if msg_type in (0, "incoming") else "outgoing"
@@ -1114,27 +1117,23 @@ async def chatwoot_webhook(request: Request):
             salvar_mensagem(
                 account_id=account_id, conversation_id=conversation_id, inbox_id=inbox_id or 0,
                 chatwoot_message_id=msg.get("id", 0), message_type=tipo_str,
-                content=msg.get("content", ""), sender_name=nome, sender_phone=telefone,
+                content=conteudo_msg, sender_name=nome, sender_phone=telefone,
                 attachments=att_resumo, created_at=msg.get("created_at"),
             )
         except Exception as e:
             logger.debug(f"Erro ao salvar mensagem no histórico: {e}")
 
-        # Mensagens outgoing (agente humano ou IA): detectar URL ZapSign para follow-up
-        if msg_type not in (0, "incoming"):
+        # Detectar URL ZapSign em QUALQUER mensagem (incoming ou outgoing)
+        # Links ZapSign são enviados por agentes mas podem chegar com msg_type variado
+        if conteudo_msg and "zapsign" in conteudo_msg.lower():
             try:
-                conteudo = msg.get("content") or ""
-                # Também verificar content_attributes e body (variações de payload Chatwoot)
-                if not conteudo:
-                    conteudo = msg.get("body") or ""
-                if not conteudo:
-                    ca = msg.get("content_attributes") or {}
-                    conteudo = ca.get("email", {}).get("text_content", {}).get("full", "") if isinstance(ca, dict) else ""
-                if conteudo and "zapsign" in conteudo.lower():
-                    logger.info(f"[zapsign-followup] URL ZapSign detectada em outgoing — conv={conversation_id} account={account_id}")
-                    _detectar_zapsign_url_webhook(conteudo, account_id, conversation_id, inbox_id)
+                logger.info(f"[zapsign-followup] URL ZapSign detectada — conv={conversation_id} account={account_id} msg_type={msg_type}")
+                _detectar_zapsign_url_webhook(conteudo_msg, account_id, conversation_id, inbox_id)
             except Exception as e:
-                logger.warning(f"[zapsign-followup] Erro ao detectar URL em outgoing: {e}")
+                logger.warning(f"[zapsign-followup] Erro ao detectar URL: {e}")
+
+        # Mensagens outgoing (agente humano ou IA): não processar como IA
+        if msg_type not in (0, "incoming"):
             continue
 
         # Deduplicação: ignorar mensagens já processadas (webhook retry)
