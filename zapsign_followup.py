@@ -7,6 +7,7 @@ from datetime import datetime, timezone, timedelta
 from db import (
     get_zapsign_followups_pendentes,
     upsert_zapsign_followup,
+    avancar_zapsign_followup,
     desativar_zapsign_followup_conversa,
     get_zapsign_config,
 )
@@ -106,9 +107,35 @@ async def disparar_followup(config_cliente: dict, zapsign_cfg: dict, row: dict):
         desativar_zapsign_followup_conversa(account_id, conversation_id)
         return
 
-    # Nota: NÃO verificamos assignee aqui — o follow-up ZapSign deve funcionar
-    # independente de quem está atribuído (agente humano ou IA), pois o link
-    # geralmente é enviado por um agente humano.
+    # Verificar se o documento já foi assinado via API ZapSign antes de enviar
+    api_token = zapsign_cfg.get("api_token", "")
+    doc_tokens_list = row.get("doc_tokens") or [doc_token]
+    if isinstance(doc_tokens_list, str):
+        import json as _json
+        doc_tokens_list = _json.loads(doc_tokens_list)
+
+    if api_token and doc_tokens_list:
+        todos_assinados = True
+        for dt in doc_tokens_list:
+            try:
+                async with httpx.AsyncClient(timeout=10) as http:
+                    r = await http.get(
+                        f"https://api.zapsign.com.br/api/v1/docs/{dt}/",
+                        headers={"Authorization": f"Bearer {api_token}"}
+                    )
+                    if r.is_success:
+                        status_doc = r.json().get("status", "")
+                        if status_doc in ("signed", "closed"):
+                            logger.info(f"[zapsign-followup] Doc {dt[:12]}... já assinado — pulando")
+                        else:
+                            todos_assinados = False
+            except Exception:
+                todos_assinados = False  # na dúvida, não desativa
+
+        if todos_assinados and doc_tokens_list:
+            logger.info(f"[zapsign-followup] Todos docs já assinados — desativando conv={conversation_id}")
+            desativar_zapsign_followup_conversa(account_id, conversation_id)
+            return
 
     chatwoot_url = config_cliente["chatwoot_url"]
     token = config_cliente["chatwoot_token"]
@@ -132,9 +159,12 @@ async def disparar_followup(config_cliente: dict, zapsign_cfg: dict, row: dict):
     prox_info = _get_estagio_info(estagios, proximo_stagio)
     if prox_info:
         proximo = _proximo_disparo(prox_info["horas"])
-        upsert_zapsign_followup(account_id, conversation_id, row.get("inbox_id"),
-                                doc_token, proximo_stagio, proximo)
-        logger.info(f"[zapsign-followup] Agendado estágio {proximo_stagio} para {proximo}")
+        try:
+            avancar_zapsign_followup(account_id, conversation_id, proximo_stagio, proximo)
+            logger.info(f"[zapsign-followup] Avançado para estágio {proximo_stagio} — conv={conversation_id} próximo={proximo}")
+        except Exception as e:
+            logger.error(f"[zapsign-followup] ERRO ao avançar estágio — desativando conv={conversation_id}: {e}")
+            desativar_zapsign_followup_conversa(account_id, conversation_id)
     else:
         desativar_zapsign_followup_conversa(account_id, conversation_id)
         logger.info(f"[zapsign-followup] Todos estágios esgotados — conv={conversation_id}")

@@ -1289,6 +1289,16 @@ def upsert_zapsign_followup(account_id: int, conversation_id: int, inbox_id: int
         }).execute()
 
 
+def avancar_zapsign_followup(account_id: int, conversation_id: int, novo_stagio: int, proximo_disparo: str):
+    """Avança o estágio de um follow-up existente (NÃO usa upsert)."""
+    db = get_db()
+    db.table("ia_zapsign_followup").update({
+        "stagio": novo_stagio,
+        "proximo_disparo": proximo_disparo,
+        "updated_at": "now()",
+    }).eq("account_id", account_id).eq("conversation_id", conversation_id).eq("ativo", True).execute()
+
+
 def get_zapsign_followups_pendentes() -> list:
     """Busca follow-ups ativos com proximo_disparo <= agora."""
     db = get_db()
