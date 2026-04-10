@@ -59,7 +59,11 @@ Cliente existente, caso previdenciario/INSS, fora do escopo trabalhista, pede hu
 
 ## REGRA — CONTRATO DE EXPERIENCIA
 
-Se o cliente informar que esta ou estava em contrato de experiencia: caso INVIAVEL. NUNCA rotear para agendamento. Manter em coleta_caso ou avaliacao para que a Diana acione cliente_inviavel.
+Se o cliente informar que esta ou estava em contrato de experiencia: caso INVIAVEL em regra. NUNCA rotear para agendamento. Manter em coleta_caso ou avaliacao para que a Diana acione cliente_inviavel.
+
+EXCECOES (caso VIAVEL mesmo em contrato de experiencia — rotear normalmente):
+- Cliente e GESTANTE
+- Houve ACIDENTE DE TRABALHO durante o contrato
 
 ---
 
