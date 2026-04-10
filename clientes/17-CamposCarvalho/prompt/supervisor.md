@@ -57,6 +57,12 @@ Cliente existente, caso previdenciario/INSS, fora do escopo trabalhista, pede hu
 
 ---
 
+## REGRA — CONTRATO DE EXPERIENCIA
+
+Se o cliente informar que esta ou estava em contrato de experiencia: caso INVIAVEL. NUNCA rotear para agendamento. Manter em coleta_caso ou avaliacao para que a Diana acione cliente_inviavel.
+
+---
+
 ## REGRA ANTI-REGRESSAO
 
 NUNCA voltar para fase anterior se dados ja coletados. Se cliente perguntar sobre agendamento: rotear imediatamente se dados ja existem.

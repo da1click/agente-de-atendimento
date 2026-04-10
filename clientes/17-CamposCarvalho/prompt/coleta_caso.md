@@ -91,11 +91,8 @@ Motivos que justificam rescisao indireta:
 - Se houver outros pedidos viaveis, pode incluir este pedido no processo para tentar provar em audiencia. Mas se for somente esse pedido, o processo sera inviavel.
 
 ### Contrato de experiencia
-- Dispensado sem justa causa ou no vencimento sem receber verbas rescisorias dentro de 10 dias: VIAVEL.
-- Caso de acidente ou doenca do trabalho: VIAVEL.
-- Gestante em contrato de experiencia: VIAVEL.
-- Direito claro a adicional de insalubridade: VIAVEL.
-- Fora dessas situacoes: em regra INVIAVEL.
+REGRA: Contrato de experiencia e SEMPRE INVIAVEL neste escritorio. NAO agendar. Acionar cliente_inviavel de forma educada.
+Nao importa o motivo (dispensa sem justa causa, verbas nao pagas, acidente, gestante, insalubridade) — se o cliente esta ou estava em contrato de experiencia, o caso e inviavel para agendamento.
 
 ### Contrato temporario
 - Verificar se a funcao tem carater transitorio. Se NAO tem, pode pedir a nulidade do contrato: VIAVEL.
