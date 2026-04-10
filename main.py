@@ -1031,10 +1031,17 @@ def _detectar_zapsign_url_webhook(texto: str, account_id: int, conversation_id: 
 
     urls = _ZAPSIGN_URL_PATTERN.findall(texto)
     if not urls:
+        logger.info(f"[zapsign-followup] Nenhuma URL ZapSign encontrada no texto — account={account_id} conv={conversation_id}")
         return
 
+    logger.info(f"[zapsign-followup] {len(urls)} URL(s) ZapSign encontrada(s) — account={account_id} conv={conversation_id}: {urls}")
+
     zapsign_cfg = get_zapsign_config(account_id)
-    if not zapsign_cfg or not zapsign_cfg.get("followup_ativo", False):
+    if not zapsign_cfg:
+        logger.warning(f"[zapsign-followup] Sem config ZapSign para account={account_id} — follow-up NÃO criado")
+        return
+    if not zapsign_cfg.get("followup_ativo", False):
+        logger.warning(f"[zapsign-followup] followup_ativo=False para account={account_id} — follow-up NÃO criado")
         return
 
     estagios = zapsign_cfg.get("followup_estagios", [])
@@ -1117,10 +1124,17 @@ async def chatwoot_webhook(request: Request):
         if msg_type not in (0, "incoming"):
             try:
                 conteudo = msg.get("content") or ""
+                # Também verificar content_attributes e body (variações de payload Chatwoot)
+                if not conteudo:
+                    conteudo = msg.get("body") or ""
+                if not conteudo:
+                    ca = msg.get("content_attributes") or {}
+                    conteudo = ca.get("email", {}).get("text_content", {}).get("full", "") if isinstance(ca, dict) else ""
                 if conteudo and "zapsign" in conteudo.lower():
+                    logger.info(f"[zapsign-followup] URL ZapSign detectada em outgoing — conv={conversation_id} account={account_id}")
                     _detectar_zapsign_url_webhook(conteudo, account_id, conversation_id, inbox_id)
             except Exception as e:
-                logger.debug(f"[zapsign-followup] Erro ao detectar URL em outgoing: {e}")
+                logger.warning(f"[zapsign-followup] Erro ao detectar URL em outgoing: {e}")
             continue
 
         # Deduplicação: ignorar mensagens já processadas (webhook retry)
