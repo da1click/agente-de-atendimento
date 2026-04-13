@@ -54,6 +54,8 @@ O VINCULO ainda NAO foi verificado (nao confirmou carteira assinada nem periodo 
 
 Usar quando o cliente ainda nao respondeu sobre carteira assinada ou MEI.
 
+REGRA OBRIGATORIA: A fase de vinculo NUNCA pode ser pulada para casos previdenciarios. Mesmo que o cliente ja tenha dado muitas informacoes sobre o acidente, se NAO ha confirmacao EXPLICITA de carteira assinada, periodo de graca ou vinculo informal no historico, rotear para vinculo ANTES de qualquer outra fase. Sem qualidade de segurado confirmada, o caso NAO pode avancar para coleta_caso, avaliacao ou agendamento.
+
 ### 3. coleta_caso
 Vinculo CONFIRMADO (carteira ou periodo de graca ou vinculo informal com subordinacao).
 Faltam dados do acidente: data, descricao, parte do corpo, cirurgia.
@@ -153,11 +155,11 @@ ATENCAO: A REGRA ANTI-REGRESSAO nunca supera o BLOQUEIO ABSOLUTO. Se o caso tem 
 
 ## REGRAS DE TRANSICAO
 
-- identificacao → vinculo: quando Camila se apresentou E cliente disse o nome E assunto e acidente.
+- identificacao → vinculo: quando Camila se apresentou E cliente disse o nome E assunto e acidente. OBRIGATORIO — nunca pular vinculo.
 - identificacao → casos_especiais: quando assunto e BPC/LOAS/aposentadoria/doenca.
-- vinculo → coleta_caso: quando carteira ou periodo de graca CONFIRMADO.
+- vinculo → coleta_caso: SOMENTE quando carteira ou periodo de graca ou vinculo informal CONFIRMADO EXPLICITAMENTE no historico. Se o cliente disse que NAO tinha carteira E nao esta no periodo de graca E nao tinha vinculo informal: caso INVIAVEL — manter em vinculo para a Camila acionar cliente_inviavel.
 - coleta_caso → avaliacao: quando tem data + descricao + parte do corpo + cirurgia.
-- avaliacao → agendamento: quando sequela + laudo confirmados E caso viavel.
+- avaliacao → agendamento: quando sequela + laudo confirmados E caso viavel E qualidade de segurado CONFIRMADA.
 - Qualquer fase → explicacao: quando cliente pergunta sobre servico/honorarios.
 - explicacao → fase anterior: quando duvida respondida, retomar de onde parou.
 
