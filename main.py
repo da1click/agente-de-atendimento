@@ -1194,27 +1194,31 @@ async def chatwoot_webhook(request: Request):
             ia_ativa = config.get("ia_ativa", True) and ia_agent_id is not None and assignee_id == ia_agent_id and inbox_permitido
 
         # Race condition: se assignee_id é None ou diferente, pode ser que a atribuição
-        # ainda não chegou. Aguardar 3s e re-checar via API.
+        # ainda não chegou. Aguardar e re-checar via API (2 tentativas com intervalo crescente).
         ia_config_ok = (modo_teste and "ia-teste" in conv_labels) or config.get("ia_ativa", True)
         if not ia_ativa and ia_config_ok and ia_agent_id is not None and inbox_permitido and conversation_id:
             if assignee_id is None or assignee_id != ia_agent_id:
-                try:
-                    await asyncio.sleep(3)
-                    chatwoot_url_rc = config["chatwoot_url"].rstrip("/")
-                    chatwoot_token_rc = config["chatwoot_token"]
-                    async with httpx.AsyncClient(timeout=10) as hc:
-                        url_rc = f"{chatwoot_url_rc}/api/v1/accounts/{account_id}/conversations/{conversation_id}"
-                        resp_rc = await hc.get(url_rc, headers={"api_access_token": chatwoot_token_rc})
-                        if resp_rc.is_success:
-                            rc_json = resp_rc.json()
-                            rc_assignee = rc_json.get("meta", {}).get("assignee") or rc_json.get("assignee")
-                            rc_assignee_id = rc_assignee.get("id") if isinstance(rc_assignee, dict) else None
-                            if rc_assignee_id == ia_agent_id:
-                                assignee_id = rc_assignee_id
-                                ia_ativa = True
-                                logger.info(f"[race-condition] IA atribuída após re-check — conv={conversation_id}")
-                except Exception as e:
-                    logger.warning(f"[race-condition] Erro no re-check de assignee — conv={conversation_id}: {e}")
+                chatwoot_url_rc = config["chatwoot_url"].rstrip("/")
+                chatwoot_token_rc = config["chatwoot_token"]
+                for tentativa, espera in enumerate([3, 5], 1):
+                    try:
+                        await asyncio.sleep(espera)
+                        async with httpx.AsyncClient(timeout=10) as hc:
+                            url_rc = f"{chatwoot_url_rc}/api/v1/accounts/{account_id}/conversations/{conversation_id}"
+                            resp_rc = await hc.get(url_rc, headers={"api_access_token": chatwoot_token_rc})
+                            if resp_rc.is_success:
+                                rc_json = resp_rc.json()
+                                rc_assignee = rc_json.get("meta", {}).get("assignee") or rc_json.get("assignee")
+                                rc_assignee_id = rc_assignee.get("id") if isinstance(rc_assignee, dict) else None
+                                if rc_assignee_id == ia_agent_id:
+                                    assignee_id = rc_assignee_id
+                                    ia_ativa = True
+                                    logger.info(f"[race-condition] IA atribuída após tentativa {tentativa} — conv={conversation_id}")
+                                    break
+                                else:
+                                    logger.info(f"[race-condition] Tentativa {tentativa}: assignee={rc_assignee_id} != ia_agent={ia_agent_id} — conv={conversation_id}")
+                    except Exception as e:
+                        logger.warning(f"[race-condition] Erro tentativa {tentativa} — conv={conversation_id}: {e}")
 
         # Registrar lead no Supabase (sempre — independente da IA)
         try:
