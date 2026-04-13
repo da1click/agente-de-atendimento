@@ -1317,8 +1317,11 @@ async def chamar_agente(config: dict, fase: str, messages_openai: list, conversa
 async def _executar_com_debounce(config: dict, account_id: int, conversation_id: int, inbox_id: int | None):
     await asyncio.sleep(10)
     _debounce_tasks.pop(conversation_id, None)
-    logger.info(f"[debounce] Processando conversa {conversation_id}")
-    await processar_mensagem(config, account_id, conversation_id, inbox_id)
+    logger.info(f"[debounce] Processando conversa {conversation_id} (account={account_id})")
+    try:
+        await processar_mensagem(config, account_id, conversation_id, inbox_id)
+    except Exception as e:
+        logger.error(f"[debounce] ERRO FATAL ao processar conv={conversation_id} account={account_id}: {e}", exc_info=True)
 
 
 def agendar_processamento(config: dict, account_id: int, conversation_id: int, inbox_id: int | None = None):
