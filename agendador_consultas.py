@@ -1,8 +1,8 @@
 """
 Lembrete automático de consultas agendadas.
 Roda em background a cada 2 minutos, verifica ia_agendamentos
-e envia lembrete ao lead antes do horário marcado.
-Funciona para todas as contas por padrão (10 min antes).
+e envia lembretes ao lead antes do horário marcado.
+Suporta múltiplos lembretes por agendamento (ex: 24h, 3h, 30min antes).
 """
 import asyncio
 import logging
@@ -12,13 +12,18 @@ logger = logging.getLogger(__name__)
 
 BR_TZ = timezone(timedelta(hours=-3))
 
-_MINUTOS_ANTES_PADRAO = 10
-_MENSAGEM_PADRAO = "{nome}, só passando para lembrar que seu atendimento com {advogada} é daqui a pouco, às {horario}. Até já!"
+_LEMBRETES_PADRAO = [
+    {"minutos": 10, "mensagem": "{nome}, só passando para lembrar que seu atendimento com {advogada} é daqui a pouco, às {horario}. Até já!"}
+]
+
+# Cache de lembretes já enviados: set de (agendamento_id, minutos_antes)
+_lembretes_enviados: set[tuple[int, int]] = set()
+_MAX_CACHE = 5000
 
 
 def _dentro_horario_comercial() -> bool:
     hora = datetime.now(BR_TZ).hour
-    return 7 <= hora < 20
+    return 7 <= hora < 22
 
 
 async def _loop():
@@ -52,9 +57,6 @@ async def processar_lembretes():
 
     for ag in agendamentos:
         try:
-            if ag.get("lembrete_enviado"):
-                continue
-
             date_str = ag.get("scheduled_date", "")
             time_str = (ag.get("scheduled_time", "") or "")[:5]
             if not date_str or not time_str:
@@ -66,10 +68,13 @@ async def processar_lembretes():
             except ValueError:
                 continue
 
+            # Agendamento já passou
             if ag_dt < now:
                 continue
 
             account_id = ag["account_id"]
+            ag_id = ag["id"]
+
             if account_id not in config_cache:
                 config_cache[account_id] = carregar_config_cliente(account_id)
             config = config_cache[account_id]
@@ -78,15 +83,16 @@ async def processar_lembretes():
 
             # Config personalizada ou padrão
             cfg_lembrete = config.get("config_lembrete_consulta") or {}
-            # Se a conta desativou explicitamente, pular
             if cfg_lembrete.get("ativo") is False:
                 continue
 
-            minutos_antes = cfg_lembrete.get("minutos_antes", _MINUTOS_ANTES_PADRAO)
-            send_time = ag_dt - timedelta(minutes=minutos_antes)
-
-            if not (send_time <= now <= send_time + timedelta(minutes=30)):
-                continue
+            # Suportar formato antigo (minutos_antes + mensagem) e novo (lembretes: lista)
+            lembretes_config = cfg_lembrete.get("lembretes")
+            if not lembretes_config:
+                # Formato antigo ou padrão
+                minutos = cfg_lembrete.get("minutos_antes", 10)
+                msg = cfg_lembrete.get("mensagem", _LEMBRETES_PADRAO[0]["mensagem"])
+                lembretes_config = [{"minutos": minutos, "mensagem": msg}]
 
             conversation_id = ag.get("conversation_id")
             if not conversation_id:
@@ -96,28 +102,59 @@ async def processar_lembretes():
             advogada = ag.get("advogada", "")
             horario = time_str
 
-            mensagem_template = cfg_lembrete.get("mensagem", _MENSAGEM_PADRAO)
-            mensagem = (
-                mensagem_template
-                .replace("{nome}", nome)
-                .replace("{advogada}", advogada)
-                .replace("{horario}", horario)
-                .replace("{data}", date_str)
-            )
-
             chatwoot_url = config["chatwoot_url"].rstrip("/")
             token = config["chatwoot_token"]
 
-            try:
-                await enviar_parte_chatwoot(chatwoot_url, token, account_id, conversation_id, mensagem)
-                marcar_lembrete_enviado(ag["id"])
-                enviados += 1
-                logger.info(f"[lembrete-consulta] Enviado para {ag.get('contact_name','')} — agendamento {ag['id']}")
-            except Exception as e:
-                logger.error(f"[lembrete-consulta] Erro ao enviar: {e}")
+            # Verificar cada lembrete configurado
+            algum_enviado = False
+            todos_enviados = True
+            for lembrete in lembretes_config:
+                minutos_antes = lembrete.get("minutos", 10)
+                cache_key = (ag_id, minutos_antes)
+
+                # Já enviou este lembrete?
+                if cache_key in _lembretes_enviados:
+                    continue
+
+                send_time = ag_dt - timedelta(minutes=minutos_antes)
+
+                # Janela de envio: do momento ideal até 30min depois
+                if not (send_time <= now <= send_time + timedelta(minutes=30)):
+                    todos_enviados = False
+                    continue
+
+                mensagem_template = lembrete.get("mensagem", _LEMBRETES_PADRAO[0]["mensagem"])
+                mensagem = (
+                    mensagem_template
+                    .replace("{nome}", nome)
+                    .replace("{advogada}", advogada)
+                    .replace("{horario}", horario)
+                    .replace("{data}", date_str)
+                )
+
+                try:
+                    await enviar_parte_chatwoot(chatwoot_url, token, account_id, conversation_id, mensagem)
+                    _lembretes_enviados.add(cache_key)
+                    algum_enviado = True
+                    enviados += 1
+                    logger.info(f"[lembrete-consulta] Enviado ({minutos_antes}min antes) para {ag.get('contact_name','')} — ag {ag_id}")
+                except Exception as e:
+                    logger.error(f"[lembrete-consulta] Erro ao enviar: {e}")
+                    todos_enviados = False
+
+            # Marcar lembrete_enviado no banco apenas quando TODOS foram enviados
+            if todos_enviados and ag.get("lembrete_enviado") is not True:
+                try:
+                    marcar_lembrete_enviado(ag_id)
+                except Exception:
+                    pass
 
         except Exception as e:
             logger.error(f"[lembrete-consulta] Erro ao processar agendamento {ag.get('id')}: {e}")
+
+    # Limpar cache se ficou muito grande
+    if len(_lembretes_enviados) > _MAX_CACHE:
+        _lembretes_enviados.clear()
 
     if enviados:
         logger.info(f"[lembrete-consulta] Ciclo — {enviados} lembrete(s) enviado(s)")
