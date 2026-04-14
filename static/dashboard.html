@@ -2773,7 +2773,7 @@ async function renderPageInatividade() {
   document.getElementById('topbar-sub').textContent = `Inatividade — Conta #${clienteAtivo}`;
   el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:20px 0;">Carregando...</div>';
 
-  const res = await fetch('/api/config/inatividade');
+  const res = await fetch(`/api/config/inatividade${clienteAtivo ? '?account_id=' + clienteAtivo : ''}`);
   _inativCfg = await res.json();
 
   const stageColors = ['','#f0fdf4','#fffbeb','#fff1f2','#f5f3ff','#eff6ff','#fff7ed'];
@@ -2926,7 +2926,7 @@ async function salvarInatividade() {
   await fetch('/api/config/inatividade', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ..._inativCfg, estagios }),
+    body: JSON.stringify({ ..._inativCfg, estagios, account_id: clienteAtivo }),
   });
 
   _inativCfg = { ..._inativCfg, estagios };

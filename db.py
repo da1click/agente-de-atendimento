@@ -286,7 +286,7 @@ _CONFIG_COLUMNS = (
     "disponibilidade,duracao_agendamento,horas_inicial_busca,quantidade_dias_a_buscar,"
     "dia_ciclo,meta_waba_id,meta_access_token,template_audiencia,"
     "id_notificacao_cliente,id_notificacao_convertido,"
-    "config_lembrete_consulta,modo_teste"
+    "config_lembrete_consulta,config_inatividade,modo_teste"
 )
 
 

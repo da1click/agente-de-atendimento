@@ -17,16 +17,35 @@ LIMITE_INATIVIDADE = 3
 
 # ── CONFIG ────────────────────────────────────────────────────
 
-def carregar_config_inatividade() -> dict:
+def _carregar_config_global() -> dict:
+    """Carrega config global (fallback) do arquivo."""
     path = os.path.join(BASE_DIR, "config", "inatividade.json")
     with open(path, encoding="utf-8") as f:
         return json.load(f)
 
 
-def _estagio_info(stagio: int) -> dict | None:
+def carregar_config_inatividade(account_id: int = None) -> dict:
+    """Carrega config de inatividade: primeiro tenta por conta, depois fallback global."""
+    if account_id:
+        try:
+            from db import carregar_config_cliente
+            config = carregar_config_cliente(account_id)
+            if config:
+                cfg_conta = config.get("config_inatividade")
+                if cfg_conta:
+                    if isinstance(cfg_conta, str):
+                        cfg_conta = json.loads(cfg_conta)
+                    if cfg_conta.get("estagios"):
+                        return cfg_conta
+        except Exception:
+            pass
+    return _carregar_config_global()
+
+
+def _estagio_info(stagio: int, account_id: int = None) -> dict | None:
     """Retorna {'horas': X, 'label': Y} para o estágio dado, ou None se não existir."""
-    cfg = carregar_config_inatividade()
-    for e in cfg["estagios"]:
+    cfg = carregar_config_inatividade(account_id)
+    for e in cfg.get("estagios", []):
         if e["stagio"] == stagio:
             return e
     return None
@@ -124,7 +143,7 @@ async def _buscar_historico(chatwoot_url: str, token: str, account_id: int, conv
 
 async def _atualizar_labels(chatwoot_url: str, token: str, account_id: int, conversation_id: int, nova_label: str):
     """Remove todas as labels de inatividade e adiciona a nova."""
-    cfg = carregar_config_inatividade()
+    cfg = carregar_config_inatividade(account_id)
     labels_remover = set(cfg.get("labels_remover", []))
     headers = {"api_access_token": token}
     labels_url = f"{chatwoot_url}/api/v1/accounts/{account_id}/conversations/{conversation_id}/labels"
@@ -297,7 +316,7 @@ async def disparar_estagio(config_cliente: dict, row: dict):
         desativar_inatividade(account_id, conversation_id)
         return
 
-    info = _estagio_info(stagio)
+    info = _estagio_info(stagio, account_id)
     if not info:
         logger.warning(f"[inatividade] Estágio {stagio} não encontrado no config — desativando")
         desativar_inatividade(account_id, conversation_id)

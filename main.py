@@ -627,7 +627,7 @@ async def atualizar_cliente(account_id: int, request: Request, user: dict = Depe
         "especialidade", "id_notificacao_convertido", "id_notificacao_cliente",
         "meta_waba_id", "meta_access_token", "template_audiencia",
         "nome_escritorio", "nome_completo", "telefone", "endereco",
-        "modo_teste", "config_lembrete_consulta",
+        "modo_teste", "config_lembrete_consulta", "config_inatividade",
     ]
     # Campos restritos ao super_admin
     if user.get("role") == "super_admin":
@@ -1551,7 +1551,18 @@ async def deletar_template(account_id: int, template_name: str, waba_id: str = "
 # ── CONFIG INATIVIDADE ────────────────────────────────────────
 
 @app.get("/api/config/inatividade")
-def get_inatividade_config():
+def get_inatividade_config(account_id: int = None):
+    # Se tem account_id, buscar config por conta primeiro
+    if account_id:
+        config = carregar_config_cliente(account_id)
+        if config:
+            cfg_conta = config.get("config_inatividade")
+            if cfg_conta:
+                if isinstance(cfg_conta, str):
+                    cfg_conta = json.loads(cfg_conta)
+                if cfg_conta.get("estagios"):
+                    return cfg_conta
+    # Fallback: config global
     path = os.path.join(BASE_DIR, "config", "inatividade.json")
     with open(path, encoding="utf-8") as f:
         return json.load(f)
@@ -1560,10 +1571,19 @@ def get_inatividade_config():
 @app.put("/api/config/inatividade")
 async def put_inatividade_config(request: Request):
     dados = await request.json()
+    account_id = dados.pop("account_id", None)
+    if account_id:
+        # Salvar por conta no banco
+        config = carregar_config_cliente(account_id)
+        if config:
+            config["config_inatividade"] = dados
+            salvar_config_cliente(account_id, config)
+            return {"status": "ok", "scope": "account"}
+    # Fallback: salvar global (arquivo)
     path = os.path.join(BASE_DIR, "config", "inatividade.json")
     with open(path, "w", encoding="utf-8") as f:
         json.dump(dados, f, indent=2, ensure_ascii=False)
-    return {"status": "ok"}
+    return {"status": "ok", "scope": "global"}
 
 
 # ── REMARKETING ──────────────────────────────────────────────
