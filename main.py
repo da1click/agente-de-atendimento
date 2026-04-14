@@ -1088,6 +1088,9 @@ async def _processar_reengajamento(config: dict, account_id: int, conversation_i
             except Exception:
                 pass
 
+            mensagem_enviada = ""
+            metodo = ""
+
             if fora_janela:
                 # Fora da janela: enviar template
                 template_name = texto_custom if texto_custom else _REENGAJAMENTO_TEMPLATE
@@ -1106,22 +1109,35 @@ async def _processar_reengajamento(config: dict, account_id: int, conversation_i
                     async with httpx.AsyncClient(timeout=15) as http:
                         resp = await http.post(url_msg, headers=headers_msg, json=payload_tpl)
                         if resp.is_success:
+                            mensagem_enviada = f"Template: {template_name}"
+                            metodo = "template (fora da janela 24h)"
                             logger.info(f"[@@] Template '{template_name}' enviado — conv={conversation_id}")
                         else:
                             logger.warning(f"[@@] Erro ao enviar template: {resp.status_code} {resp.text[:200]}")
                             # Fallback: tentar texto direto
-                            await enviar_parte_chatwoot(chatwoot_url, token, account_id, conversation_id, texto_custom or _REENGAJAMENTO_MSG_PADRAO)
+                            msg_fallback = texto_custom or _REENGAJAMENTO_MSG_PADRAO
+                            await enviar_parte_chatwoot(chatwoot_url, token, account_id, conversation_id, msg_fallback)
+                            mensagem_enviada = msg_fallback
+                            metodo = "texto (fallback — template falhou)"
                 except Exception as e:
                     logger.warning(f"[@@] Erro template: {e}")
+                    mensagem_enviada = f"ERRO: {e}"
+                    metodo = "erro"
             else:
                 # Dentro da janela: enviar texto
                 mensagem = texto_custom or _REENGAJAMENTO_MSG_PADRAO
                 await enviar_parte_chatwoot(chatwoot_url, token, account_id, conversation_id, mensagem)
+                mensagem_enviada = mensagem
+                metodo = "texto (dentro da janela 24h)"
                 logger.info(f"[@@] Mensagem de texto enviada (dentro da janela) — conv={conversation_id}")
         else:
             # API não oficial: IA gera o texto ou usa customizado/padrão
+            metodo = ""
+            mensagem_enviada = ""
             if texto_custom:
                 await enviar_parte_chatwoot(chatwoot_url, token, account_id, conversation_id, texto_custom)
+                mensagem_enviada = texto_custom
+                metodo = "texto customizado"
                 logger.info(f"[@@] Mensagem customizada enviada — conv={conversation_id}")
             else:
                 # Gerar texto com IA baseado no histórico
@@ -1151,21 +1167,31 @@ async def _processar_reengajamento(config: dict, account_id: int, conversation_i
                     )
                     mensagem = resp.choices[0].message.content.strip()
                     await enviar_parte_chatwoot(chatwoot_url, token, account_id, conversation_id, mensagem)
+                    mensagem_enviada = mensagem
+                    metodo = "texto gerado pela IA"
                     logger.info(f"[@@] Mensagem IA enviada — conv={conversation_id}: {mensagem[:80]}")
                 except Exception as e:
                     logger.warning(f"[@@] Erro ao gerar com IA, usando padrão: {e}")
                     await enviar_parte_chatwoot(chatwoot_url, token, account_id, conversation_id, _REENGAJAMENTO_MSG_PADRAO)
+                    mensagem_enviada = _REENGAJAMENTO_MSG_PADRAO
+                    metodo = "texto padrão (IA falhou)"
 
-        # Nota privada confirmando o envio
+        # Nota privada com detalhes do envio
         try:
             from ia import enviar_nota_privada
-            await enviar_nota_privada(chatwoot_url, token, account_id, conversation_id,
-                                      "✅ Mensagem de reengajamento enviada via comando @@")
+            nota = f"✅ Reengajamento @@ enviado\nMétodo: {metodo}\n\nMensagem:\n{mensagem_enviada[:500]}"
+            await enviar_nota_privada(chatwoot_url, token, account_id, conversation_id, nota)
         except Exception:
             pass
 
     except Exception as e:
         logger.error(f"[@@] Erro ao processar reengajamento conv={conversation_id}: {e}")
+        try:
+            from ia import enviar_nota_privada
+            await enviar_nota_privada(chatwoot_url, token, account_id, conversation_id,
+                                      f"❌ Erro ao enviar reengajamento: {str(e)[:100]}")
+        except Exception:
+            pass
 
 
 def _detectar_zapsign_url_webhook(texto: str, account_id: int, conversation_id: int, inbox_id: int | None):
