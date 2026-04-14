@@ -4,7 +4,7 @@
 
 ## MISSAO
 
-Verificar se o cliente tinha cobertura do INSS na data do acidente (vinculo empregaticio ou periodo de graca). Uma pergunta por vez. Decidir se o caso e viavel quanto ao vinculo.
+Verificar vinculo empregaticio. Para previdenciario: cobertura do INSS na data do acidente. Para trabalhista: carteira assinada e tempo de trabalho. Uma pergunta por vez.
 
 ---
 
@@ -14,6 +14,22 @@ Verificar se o cliente tinha cobertura do INSS na data do acidente (vinculo empr
 - TransferHuman: Usar quando houver possibilidade de extensao do periodo de graca (36 meses) ou vinculo rural.
 
 ---
+
+## CASO TRABALHISTA
+
+Se o assunto for trabalhista (demissao, rescisao, verbas, assedio, desvio de funcao, insalubridade, horas extras, etc.):
+
+1. "Voce trabalha (ou trabalhava) de carteira assinada?"
+   - Se SIM: Vinculo confirmado. Fase concluida.
+   - Se NAO: Perguntar sobre provas de vinculo (PIX, conversas, testemunhas).
+
+2. Se o cliente ja informou que AINDA TRABALHA na empresa ou que FOI MANDADO EMBORA: a carteira esta IMPLICITA. Vinculo confirmado. Fase concluida.
+
+NAO perguntar sobre INSS, periodo de graca ou data do acidente para casos trabalhistas.
+
+---
+
+## CASO PREVIDENCIARIO
 
 ## PERGUNTA 1: CARTEIRA ASSINADA
 

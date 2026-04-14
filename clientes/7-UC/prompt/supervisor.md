@@ -46,13 +46,19 @@ Usar quando o cliente ainda nao respondeu sobre carteira assinada ou MEI.
 
 ### 3. coleta_caso
 Vinculo CONFIRMADO (carteira ou periodo de graca ou vinculo informal com subordinacao).
-Faltam dados do acidente: data, descricao, parte do corpo, cirurgia.
 
-Usar enquanto nao tem: data + descricao + parte do corpo + informacao sobre cirurgia.
+Para PREVIDENCIARIO: faltam dados do acidente (data, descricao, parte do corpo, cirurgia).
+Para TRABALHISTA: faltam dados do problema (tempo de trabalho, funcao, tipo de irregularidade, detalhes).
+
+Usar enquanto faltam informacoes essenciais sobre o caso.
+
+REGRA TRABALHISTA: Se o cliente disse que AINDA TRABALHA ou FOI MANDADO EMBORA, o vinculo esta implicito. Ir direto para coleta_caso sem passar por vinculo.
 
 ### 4. avaliacao
-Dados do acidente JA coletados (data, descricao, cirurgia).
-Falta avaliar: sequela, impacto no trabalho, laudo medico, profissao.
+Dados do caso JA coletados.
+
+Para PREVIDENCIARIO: falta avaliar sequela, impacto no trabalho, laudo medico, profissao.
+Para TRABALHISTA: falta avaliar viabilidade e conduzir para agendamento.
 
 Usar quando tem dados factuais mas ainda nao ha decisao de viabilidade.
 
