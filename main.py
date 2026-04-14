@@ -1023,6 +1023,150 @@ async def criar_usuarios_chatwoot(request: Request):
 _ZAPSIGN_URL_PATTERN = re.compile(r'https?://(?:app\.)?zapsign\.com\.br/[^\s)\]]+')
 _ZAPSIGN_TOKEN_PATTERN = re.compile(r'/(?:verificar|doc|assinar)/([a-f0-9-]+)')
 
+_REENGAJAMENTO_MSG_PADRAO = (
+    "Olá, tudo bem?\n\n"
+    "Fui revisar os atendimentos e vi que o seu ficou em aberto, "
+    "então passei aqui pra não te deixar sem retorno.\n\n"
+    "Ficou alguma dúvida, faltou tempo ou não era bem o que você esperava?\n\n"
+    "Me conta pra gente continuar seu atendimento do jeito certo pra você!"
+)
+
+_REENGAJAMENTO_TEMPLATE = "followup_global"  # template padrão para WhatsApp Oficial
+
+
+async def _processar_reengajamento(config: dict, account_id: int, conversation_id: int, inbox_id: int | None, conteudo: str):
+    """Envia mensagem de reengajamento ao cliente quando agente envia @@ em nota privada."""
+    from ia import enviar_parte_chatwoot
+
+    chatwoot_url = config["chatwoot_url"].rstrip("/")
+    token = config["chatwoot_token"]
+
+    # Texto customizado após @@ (ex: "@@Oi, tudo bem? Vamos retomar?")
+    texto_custom = conteudo.strip()[2:].strip()  # remove @@
+
+    try:
+        # Verificar tipo de inbox (oficial ou não)
+        channel_type = ""
+        try:
+            async with httpx.AsyncClient(timeout=10) as http:
+                r = await http.get(
+                    f"{chatwoot_url}/api/v1/accounts/{account_id}/inboxes",
+                    headers={"api_access_token": token}
+                )
+                if r.is_success:
+                    for ib in r.json().get("payload", []):
+                        if ib.get("id") == inbox_id:
+                            channel_type = ib.get("channel_type", "")
+                            break
+        except Exception:
+            pass
+
+        is_whatsapp_oficial = "whatsapp" in channel_type.lower()
+
+        if is_whatsapp_oficial:
+            # WhatsApp Oficial: verificar janela de 24h
+            # Buscar última mensagem incoming para checar se está dentro da janela
+            fora_janela = True
+            try:
+                async with httpx.AsyncClient(timeout=10) as http:
+                    msgs_url = f"{chatwoot_url}/api/v1/accounts/{account_id}/conversations/{conversation_id}/messages"
+                    r = await http.get(msgs_url, headers={"api_access_token": token})
+                    if r.is_success:
+                        from datetime import datetime, timezone, timedelta
+                        msgs = r.json().get("payload", [])
+                        for m in sorted(msgs, key=lambda x: x.get("created_at", ""), reverse=True):
+                            if m.get("message_type") == 0:  # incoming
+                                created = m.get("created_at", "")
+                                if created:
+                                    try:
+                                        msg_time = datetime.fromisoformat(created.replace("Z", "+00:00"))
+                                        if datetime.now(timezone.utc) - msg_time < timedelta(hours=24):
+                                            fora_janela = False
+                                    except Exception:
+                                        pass
+                                break
+            except Exception:
+                pass
+
+            if fora_janela:
+                # Fora da janela: enviar template
+                template_name = texto_custom if texto_custom else _REENGAJAMENTO_TEMPLATE
+                try:
+                    url_msg = f"{chatwoot_url}/api/v1/accounts/{account_id}/conversations/{conversation_id}/messages"
+                    headers_msg = {"api_access_token": token, "Content-Type": "application/json"}
+                    payload_tpl = {
+                        "message_type": "outgoing",
+                        "private": False,
+                        "template_params": {
+                            "name": template_name,
+                            "language": "pt_BR",
+                            "processed_params": {},
+                        },
+                    }
+                    async with httpx.AsyncClient(timeout=15) as http:
+                        resp = await http.post(url_msg, headers=headers_msg, json=payload_tpl)
+                        if resp.is_success:
+                            logger.info(f"[@@] Template '{template_name}' enviado — conv={conversation_id}")
+                        else:
+                            logger.warning(f"[@@] Erro ao enviar template: {resp.status_code} {resp.text[:200]}")
+                            # Fallback: tentar texto direto
+                            await enviar_parte_chatwoot(chatwoot_url, token, account_id, conversation_id, texto_custom or _REENGAJAMENTO_MSG_PADRAO)
+                except Exception as e:
+                    logger.warning(f"[@@] Erro template: {e}")
+            else:
+                # Dentro da janela: enviar texto
+                mensagem = texto_custom or _REENGAJAMENTO_MSG_PADRAO
+                await enviar_parte_chatwoot(chatwoot_url, token, account_id, conversation_id, mensagem)
+                logger.info(f"[@@] Mensagem de texto enviada (dentro da janela) — conv={conversation_id}")
+        else:
+            # API não oficial: IA gera o texto ou usa customizado/padrão
+            if texto_custom:
+                await enviar_parte_chatwoot(chatwoot_url, token, account_id, conversation_id, texto_custom)
+                logger.info(f"[@@] Mensagem customizada enviada — conv={conversation_id}")
+            else:
+                # Gerar texto com IA baseado no histórico
+                try:
+                    from ia import buscar_historico_chatwoot, formatar_conversa_texto, carregar_prompt
+                    from openai import OpenAI
+
+                    historico = await buscar_historico_chatwoot(chatwoot_url, token, account_id, conversation_id)
+                    historico_texto = formatar_conversa_texto(historico)
+
+                    prompt_base = carregar_prompt(account_id, "base.md") if carregar_prompt else ""
+                    prompt = (
+                        f"{prompt_base}\n\n---\n\n"
+                        f"O cliente ficou inativo e voce precisa reengajar. Escreva UMA mensagem curta, "
+                        f"natural e acolhedora para retomar o contato. NAO repita perguntas ja feitas. "
+                        f"NAO se apresente novamente. Apenas retome de forma leve.\n\n"
+                        f"Historico:\n{historico_texto}\n\n"
+                        f"Sua mensagem de reengajamento:"
+                    )
+
+                    client = OpenAI(api_key=config["openai_api_key"])
+                    resp = client.chat.completions.create(
+                        model="gpt-5.2",
+                        messages=[{"role": "user", "content": prompt}],
+                        max_tokens=200,
+                        reasoning_effort="low",
+                    )
+                    mensagem = resp.choices[0].message.content.strip()
+                    await enviar_parte_chatwoot(chatwoot_url, token, account_id, conversation_id, mensagem)
+                    logger.info(f"[@@] Mensagem IA enviada — conv={conversation_id}: {mensagem[:80]}")
+                except Exception as e:
+                    logger.warning(f"[@@] Erro ao gerar com IA, usando padrão: {e}")
+                    await enviar_parte_chatwoot(chatwoot_url, token, account_id, conversation_id, _REENGAJAMENTO_MSG_PADRAO)
+
+        # Nota privada confirmando o envio
+        try:
+            from ia import enviar_nota_privada
+            await enviar_nota_privada(chatwoot_url, token, account_id, conversation_id,
+                                      "✅ Mensagem de reengajamento enviada via comando @@")
+        except Exception:
+            pass
+
+    except Exception as e:
+        logger.error(f"[@@] Erro ao processar reengajamento conv={conversation_id}: {e}")
+
 
 def _detectar_zapsign_url_webhook(texto: str, account_id: int, conversation_id: int, inbox_id: int | None):
     """Detecta URLs ZapSign em mensagens outgoing (agente ou IA) e cria follow-up."""
@@ -1131,6 +1275,13 @@ async def chatwoot_webhook(request: Request):
                 _detectar_zapsign_url_webhook(conteudo_msg, account_id, conversation_id, inbox_id)
             except Exception as e:
                 logger.warning(f"[zapsign-followup] Erro ao detectar URL: {e}")
+
+        # === @@ em nota privada: enviar mensagem de reengajamento ao cliente ===
+        is_private = msg.get("private", False)
+        if is_private and conteudo_msg.strip().startswith("@@"):
+            logger.info(f"[@@] Comando @@ detectado — conv={conversation_id} account={account_id}")
+            asyncio.create_task(_processar_reengajamento(config, account_id, conversation_id, inbox_id, conteudo_msg))
+            continue
 
         # Mensagens outgoing (agente humano ou IA): não processar como IA
         if msg_type not in (0, "incoming"):
