@@ -1031,7 +1031,7 @@ _REENGAJAMENTO_MSG_PADRAO = (
     "Me conta pra gente continuar seu atendimento do jeito certo pra você!"
 )
 
-_REENGAJAMENTO_TEMPLATE = "followup_global"  # template padrão para WhatsApp Oficial
+_REENGAJAMENTO_TEMPLATE = "remarketing"  # template padrão para WhatsApp Oficial (fora da janela 24h)
 
 
 async def _processar_reengajamento(config: dict, account_id: int, conversation_id: int, inbox_id: int | None, conteudo: str):
