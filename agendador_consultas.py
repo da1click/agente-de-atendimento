@@ -105,22 +105,34 @@ async def processar_lembretes():
             chatwoot_url = config["chatwoot_url"].rstrip("/")
             token = config["chatwoot_token"]
 
+            # Buscar quais lembretes já foram enviados para este agendamento (do banco)
+            lembretes_ja_enviados = set()
+            try:
+                from db import get_db
+                _db = get_db()
+                _ag_row = _db.table("ia_agendamentos").select("lembretes_enviados_min").eq("id", ag_id).maybe_single().execute()
+                if _ag_row and _ag_row.data and _ag_row.data.get("lembretes_enviados_min"):
+                    raw = _ag_row.data["lembretes_enviados_min"]
+                    if isinstance(raw, str):
+                        import json as _json
+                        raw = _json.loads(raw)
+                    lembretes_ja_enviados = set(raw)
+            except Exception:
+                pass  # coluna pode não existir ainda, usa cache em memória
+
             # Verificar cada lembrete configurado
-            algum_enviado = False
-            todos_enviados = True
             for lembrete in lembretes_config:
                 minutos_antes = lembrete.get("minutos", 10)
                 cache_key = (ag_id, minutos_antes)
 
-                # Já enviou este lembrete?
-                if cache_key in _lembretes_enviados:
+                # Já enviou este lembrete? (cache em memória OU banco)
+                if cache_key in _lembretes_enviados or minutos_antes in lembretes_ja_enviados:
                     continue
 
                 send_time = ag_dt - timedelta(minutes=minutos_antes)
 
                 # Janela de envio: do momento ideal até 30min depois
                 if not (send_time <= now <= send_time + timedelta(minutes=30)):
-                    todos_enviados = False
                     continue
 
                 mensagem_template = lembrete.get("mensagem", _LEMBRETES_PADRAO[0]["mensagem"])
@@ -135,15 +147,25 @@ async def processar_lembretes():
                 try:
                     await enviar_parte_chatwoot(chatwoot_url, token, account_id, conversation_id, mensagem)
                     _lembretes_enviados.add(cache_key)
-                    algum_enviado = True
+                    lembretes_ja_enviados.add(minutos_antes)
                     enviados += 1
                     logger.info(f"[lembrete-consulta] Enviado ({minutos_antes}min antes) para {ag.get('contact_name','')} — ag {ag_id}")
+
+                    # Salvar no banco imediatamente (persistente entre deploys)
+                    try:
+                        _db2 = get_db()
+                        _db2.table("ia_agendamentos").update({
+                            "lembretes_enviados_min": list(lembretes_ja_enviados)
+                        }).eq("id", ag_id).execute()
+                    except Exception:
+                        pass  # coluna pode não existir
+
                 except Exception as e:
                     logger.error(f"[lembrete-consulta] Erro ao enviar: {e}")
-                    todos_enviados = False
 
-            # Marcar lembrete_enviado no banco apenas quando TODOS foram enviados
-            if todos_enviados and ag.get("lembrete_enviado") is not True:
+            # Marcar lembrete_enviado=true quando todos os lembretes configurados foram enviados
+            todos_minutos = {l.get("minutos", 10) for l in lembretes_config}
+            if todos_minutos.issubset(lembretes_ja_enviados) and ag.get("lembrete_enviado") is not True:
                 try:
                     marcar_lembrete_enviado(ag_id)
                 except Exception:
