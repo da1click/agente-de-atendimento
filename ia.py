@@ -1203,9 +1203,24 @@ async def enviar_nota_privada(chatwoot_url: str, chatwoot_token: str, account_id
         resp.raise_for_status()
 
 
+# Cache de últimas respostas enviadas por conversa (anti-duplicação)
+_ultimas_respostas: dict[int, str] = {}
+_ULTIMAS_RESPOSTAS_MAX = 500
+
 async def enviar_resposta_chatwoot(chatwoot_url: str, chatwoot_token: str, account_id: int, conversation_id: int, texto: str, inbox_id: int | None = None, inatividade_ativa: bool = True):
     # Limpar \n literal que a IA às vezes gera como texto
     texto = texto.replace("\\n", "\n")
+
+    # Anti-duplicação: se a última resposta enviada nesta conversa é idêntica, não reenviar
+    texto_limpo = texto.strip()
+    if conversation_id in _ultimas_respostas and _ultimas_respostas[conversation_id] == texto_limpo:
+        logger.warning(f"[anti-dup] Resposta idêntica à anterior na conv={conversation_id} — ignorando envio duplicado")
+        return
+    _ultimas_respostas[conversation_id] = texto_limpo
+    if len(_ultimas_respostas) > _ULTIMAS_RESPOSTAS_MAX:
+        oldest = next(iter(_ultimas_respostas))
+        del _ultimas_respostas[oldest]
+
     partes = dividir_mensagem(texto)
     logger.info(f"Enviando {len(partes)} parte(s) na conversa {conversation_id}")
     for i, parte in enumerate(partes):
