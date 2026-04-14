@@ -1986,6 +1986,23 @@ async def api_criar_bloqueio(request: Request):
     return inserir_bloqueio_agenda(campos)
 
 
+@app.put("/api/bloqueios-agenda/{bloqueio_id}")
+async def api_editar_bloqueio(bloqueio_id: str, request: Request):
+    from db import get_db
+    dados = await request.json()
+    db = get_db()
+    payload = {}
+    for campo in ["advogado_id", "advogado_nome", "data_inicio", "data_fim", "motivo"]:
+        if campo in dados:
+            payload[campo] = dados[campo]
+    if not payload:
+        raise HTTPException(status_code=400, detail="Nenhum campo para atualizar")
+    resp = db.table("ia_bloqueios_agenda").update(payload).eq("id", bloqueio_id).execute()
+    if not resp.data:
+        raise HTTPException(status_code=404, detail="Bloqueio não encontrado")
+    return resp.data[0]
+
+
 @app.delete("/api/bloqueios-agenda/{bloqueio_id}")
 def api_deletar_bloqueio(bloqueio_id: str):
     from db import deletar_bloqueio_agenda

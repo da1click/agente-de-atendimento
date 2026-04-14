@@ -3876,27 +3876,38 @@ function _renderListaAdvogados() {
   `;
 }
 
+let _bloqEditId = null;
+
 function _renderBloqueiosAgenda() {
   const advOptions = _advogados.map(a => `<option value="${a.id}">${a.nome}</option>`).join('');
   const agora = new Date();
-  const bloqRows = _bloqueiosAgenda.map(b => {
-    const fim = new Date(b.data_fim);
-    const expirado = fim < agora;
-    const inicio = new Date(b.data_inicio);
-    const fmtDt = d => d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
-    return `<tr style="${expirado ? 'opacity:0.5;' : ''}">
+  const ativos = _bloqueiosAgenda.filter(b => new Date(b.data_fim) >= agora);
+  const expirados = _bloqueiosAgenda.filter(b => new Date(b.data_fim) < agora);
+  const fmtDt = d => new Date(d).toLocaleDateString('pt-BR') + ' ' + new Date(d).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+
+  const renderRows = (lista, opaco) => lista.map(b => `
+    <tr style="${opaco ? 'opacity:0.45;' : ''}">
       <td>${b.advogado_nome || 'Todos'}</td>
-      <td>${fmtDt(inicio)}</td>
-      <td>${fmtDt(fim)}</td>
+      <td>${fmtDt(b.data_inicio)}</td>
+      <td>${fmtDt(b.data_fim)}</td>
       <td>${b.motivo || '-'}</td>
-      <td><button class="btn btn-danger btn-sm" onclick="_deletarBloqueio('${b.id}')">Remover</button></td>
-    </tr>`;
-  }).join('');
+      <td style="display:flex;gap:4px;">
+        ${opaco ? '' : `<button class="btn btn-secondary btn-sm" style="font-size:11px;padding:4px 8px;" onclick="_editarBloqueio('${b.id}')">Editar</button>`}
+        <button class="btn btn-secondary btn-sm" style="font-size:11px;padding:4px 8px;color:var(--red);border-color:#fecaca;" onclick="_deletarBloqueio('${b.id}')">Excluir</button>
+      </td>
+    </tr>
+  `).join('');
+
+  const rows = renderRows(ativos, false) + renderRows(expirados, true);
 
   return `
     <div class="card" style="margin-top:24px;">
-      <div class="card-header">Bloqueios de Agenda</div>
+      <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+        <div>Bloqueios de Agenda</div>
+        <span style="font-size:12px;color:var(--text-muted);">${ativos.length} ativo(s), ${expirados.length} expirado(s)</span>
+      </div>
       <div class="card-body">
+        <input type="hidden" id="bloq-edit-id" value="" />
         <div class="fields-grid" style="margin-bottom:16px;">
           <div class="field-group">
             <label>Advogado</label>
@@ -3906,7 +3917,7 @@ function _renderBloqueiosAgenda() {
             </select>
           </div>
           <div class="field-group">
-            <label>Início</label>
+            <label>Inicio</label>
             <input type="datetime-local" id="bloq-inicio" />
           </div>
           <div class="field-group">
@@ -3915,39 +3926,74 @@ function _renderBloqueiosAgenda() {
           </div>
           <div class="field-group">
             <label>Motivo (opcional)</label>
-            <input type="text" id="bloq-motivo" placeholder="Ex: Reunião geral" />
+            <input type="text" id="bloq-motivo" placeholder="Ex: Reuniao geral" />
           </div>
         </div>
-        <button class="btn btn-primary btn-sm" onclick="_criarBloqueio()">Bloquear Agenda</button>
-        <span class="save-msg" id="bloq-save-msg"></span>
-        ${bloqRows ? `
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button class="btn btn-primary btn-sm" id="bloq-btn-salvar" onclick="_salvarBloqueio()">Bloquear Agenda</button>
+          <button class="btn btn-secondary btn-sm" id="bloq-btn-cancelar" style="display:none;" onclick="_cancelarEdicaoBloqueio()">Cancelar</button>
+          <span class="save-msg" id="bloq-save-msg"></span>
+        </div>
+        ${rows ? `
           <table class="data-table" style="margin-top:16px;">
-            <thead><tr><th>Advogado</th><th>Início</th><th>Fim</th><th>Motivo</th><th>Ações</th></tr></thead>
-            <tbody>${bloqRows}</tbody>
+            <thead><tr><th>Advogado</th><th>Inicio</th><th>Fim</th><th>Motivo</th><th>Acoes</th></tr></thead>
+            <tbody>${rows}</tbody>
           </table>
-        ` : '<div style="margin-top:12px;color:#888;">Nenhum bloqueio ativo.</div>'}
+        ` : '<div style="margin-top:12px;color:#888;">Nenhum bloqueio criado.</div>'}
       </div>
     </div>`;
 }
 
-async function _criarBloqueio() {
+function _editarBloqueio(id) {
+  const b = _bloqueiosAgenda.find(x => x.id === id);
+  if (!b) return;
+  _bloqEditId = id;
+  document.getElementById('bloq-edit-id').value = id;
+  // Preencher form
+  const advSel = document.getElementById('bloq-advogado');
+  if (b.advogado_id) { advSel.value = b.advogado_id; } else { advSel.value = ''; }
+  document.getElementById('bloq-inicio').value = b.data_inicio ? b.data_inicio.slice(0,16) : '';
+  document.getElementById('bloq-fim').value = b.data_fim ? b.data_fim.slice(0,16) : '';
+  document.getElementById('bloq-motivo').value = b.motivo || '';
+  document.getElementById('bloq-btn-salvar').textContent = 'Salvar Alteracao';
+  document.getElementById('bloq-btn-cancelar').style.display = '';
+}
+
+function _cancelarEdicaoBloqueio() {
+  _bloqEditId = null;
+  document.getElementById('bloq-edit-id').value = '';
+  document.getElementById('bloq-advogado').value = '';
+  document.getElementById('bloq-inicio').value = '';
+  document.getElementById('bloq-fim').value = '';
+  document.getElementById('bloq-motivo').value = '';
+  document.getElementById('bloq-btn-salvar').textContent = 'Bloquear Agenda';
+  document.getElementById('bloq-btn-cancelar').style.display = 'none';
+}
+
+async function _salvarBloqueio() {
+  const editId = document.getElementById('bloq-edit-id').value;
   const advSelect = document.getElementById('bloq-advogado');
   const advId = advSelect.value || null;
   const advNome = advId ? advSelect.options[advSelect.selectedIndex].text : 'Todos';
   const inicio = document.getElementById('bloq-inicio').value;
   const fim = document.getElementById('bloq-fim').value;
   const motivo = document.getElementById('bloq-motivo').value.trim();
-  if (!inicio || !fim) { alert('Preencha início e fim'); return; }
-  if (new Date(fim) <= new Date(inicio)) { alert('O fim deve ser após o início'); return; }
+  if (!inicio || !fim) { alert('Preencha inicio e fim'); return; }
+  if (new Date(fim) <= new Date(inicio)) { alert('O fim deve ser apos o inicio'); return; }
+
+  const body = {account_id: clienteAtivo, advogado_id: advId, advogado_nome: advNome, data_inicio: inicio, data_fim: fim, motivo};
+
   try {
-    const resp = await fetch('/api/bloqueios-agenda', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({account_id: clienteAtivo, advogado_id: advId, advogado_nome: advNome, data_inicio: inicio, data_fim: fim, motivo}),
-    });
+    let resp;
+    if (editId) {
+      resp = await fetch(`/api/bloqueios-agenda/${editId}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    } else {
+      resp = await fetch('/api/bloqueios-agenda', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    }
     if (!resp.ok) throw new Error(await resp.text());
     const msg = document.getElementById('bloq-save-msg');
-    if (msg) { msg.textContent = 'Bloqueio criado!'; setTimeout(() => msg.textContent = '', 2000); }
+    if (msg) { msg.textContent = editId ? 'Atualizado!' : 'Bloqueio criado!'; setTimeout(() => msg.textContent = '', 2000); }
+    _bloqEditId = null;
     await renderPageAdvogados();
   } catch(e) { alert('Erro: ' + e.message); }
 }
