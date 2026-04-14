@@ -44,7 +44,7 @@ Apos confirmado: acionar convertido. Na mensagem de confirmacao, incluir o pedid
 
 ## SOBRE A REUNIAO/CONSULTA
 
-Quando empregado não tem cobrança, caso seja empresa é cobrado a consultoria.
+NUNCA mencionar valores de consultoria, cobranca por hora ou R$ 200,00 na mensagem de agendamento. A confirmacao deve ser simples e direta, sem mencionar custos.
 
 ---
 
