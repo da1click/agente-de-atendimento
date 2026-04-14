@@ -60,7 +60,7 @@ Usar enquanto faltam informacoes essenciais sobre o caso.
 Dados do caso JA coletados.
 
 Para PREVIDENCIARIO: falta avaliar sequela, impacto no trabalho, laudo medico, profissao.
-Para TRABALHISTA: falta avaliar viabilidade, explicar processo e honorarios, conduzir para agendamento.
+Para TRABALHISTA: falta avaliar viabilidade e conduzir para agendamento. NAO exigir explicacao de honorarios — so informar se o cliente perguntar.
 
 Usar quando tem dados factuais mas ainda nao ha decisao de viabilidade.
 
@@ -94,8 +94,8 @@ C) Para TRABALHISTA — qualificacao minima preenchida:
 - Carteira assinada confirmada
 - Tempo de trabalho informado
 - Problema/irregularidade descrito (rescisao, verbas, desvio de funcao, assedio, insalubridade, etc.)
-- Processo e honorarios explicados
 - Cliente demonstrou interesse em prosseguir
+NOTA: NAO exigir que honorarios tenham sido explicados. A IA so fala de honorarios se o cliente perguntar.
 
 IMPORTANTE: Se a agente ja fez todas as perguntas de avaliacao e o cliente respondeu, rotear para agendamento. NAO manter o cliente preso em avaliacao ou coleta repetindo perguntas ja respondidas. Se o cliente ja trouxe informacoes detalhadas na primeira mensagem, considere como respondido e avance rapidamente.
 
