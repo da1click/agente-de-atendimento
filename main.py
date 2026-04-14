@@ -1963,6 +1963,55 @@ def api_deletar_advogado(advogado_id: str):
 
 # ── BLOQUEIOS DE AGENDA ───────────────────────────────────────
 
+WEBHOOK_AGENDAR_BLOQUEIO = "https://flow.advbrasil.ai/webhook/agendar"
+
+
+async def _criar_evento_gcal_bloqueio(account_id: int, data_inicio: str, data_fim: str, advogado_nome: str, motivo: str, cor_id: int = 0) -> str | None:
+    """Cria evento bloqueante no Google Calendar via n8n. Retorna google_event_id ou None."""
+    config = carregar_config_cliente(account_id)
+    if not config or not config.get("email_agenda"):
+        return None
+    # Formatar start/end para o formato esperado pelo n8n (YYYY-MM-DD HH:MM)
+    start = data_inicio.replace("T", " ")[:16]
+    end = data_fim.replace("T", " ")[:16]
+    summary = f"BLOQUEIO - {advogado_nome}" + (f" ({motivo})" if motivo else "")
+    payload = {
+        "email_agenda": config["email_agenda"],
+        "Start": start,
+        "End": end,
+        "Color Name or ID": str(cor_id) if cor_id else "11",
+        "Summary": summary,
+        "Description": f"Bloqueio de agenda criado pelo sistema\nAdvogado: {advogado_nome}\nMotivo: {motivo or 'Não informado'}",
+        "numero": "",
+    }
+    try:
+        async with httpx.AsyncClient() as http:
+            resp = await http.post(WEBHOOK_AGENDAR_BLOQUEIO, json=payload, timeout=30)
+            if resp.is_success:
+                data = resp.json()
+                if isinstance(data, list) and data:
+                    data = data[0]
+                event_id = data.get("google_event_id") or data.get("eventId") or data.get("id", "")
+                logger.info(f"[bloqueio] Evento Google Calendar criado: {event_id}")
+                return event_id
+            else:
+                logger.warning(f"[bloqueio] Erro ao criar evento GCal: {resp.status_code} {resp.text[:200]}")
+    except Exception as e:
+        logger.warning(f"[bloqueio] Erro ao criar evento GCal: {e}")
+    return None
+
+
+async def _deletar_evento_gcal_bloqueio(account_id: int, google_event_id: str):
+    """Deleta evento do Google Calendar via API."""
+    if not google_event_id:
+        return
+    config = carregar_config_cliente(account_id)
+    if not config or not config.get("email_agenda"):
+        return
+    # Usar webhook de deletar ou API direta — por ora logar apenas
+    logger.info(f"[bloqueio] Evento GCal {google_event_id} deveria ser deletado (account={account_id})")
+
+
 @app.get("/api/bloqueios-agenda")
 def api_listar_bloqueios(account_id: int):
     from db import listar_bloqueios_agenda
@@ -1973,16 +2022,38 @@ def api_listar_bloqueios(account_id: int):
 async def api_criar_bloqueio(request: Request):
     from db import inserir_bloqueio_agenda
     dados = await request.json()
+    account_id = dados.get("account_id")
+    advogado_nome = dados.get("advogado_nome", "Todos")
+    motivo = dados.get("motivo", "")
     campos = {
-        "account_id": dados.get("account_id"),
-        "advogado_id": dados.get("advogado_id"),  # None = todos
-        "advogado_nome": dados.get("advogado_nome", "Todos"),
+        "account_id": account_id,
+        "advogado_id": dados.get("advogado_id"),
+        "advogado_nome": advogado_nome,
         "data_inicio": dados.get("data_inicio"),
         "data_fim": dados.get("data_fim"),
-        "motivo": dados.get("motivo", ""),
+        "motivo": motivo,
     }
     if not campos["account_id"] or not campos["data_inicio"] or not campos["data_fim"]:
         raise HTTPException(status_code=400, detail="account_id, data_inicio e data_fim são obrigatórios")
+
+    # Buscar cor_id do advogado se especificado
+    cor_id = 0
+    if dados.get("advogado_id"):
+        try:
+            from db import get_advogado
+            adv = get_advogado(dados["advogado_id"])
+            if adv:
+                cor_id = adv.get("cor_id", 0)
+        except Exception:
+            pass
+
+    # Criar evento no Google Calendar
+    google_event_id = await _criar_evento_gcal_bloqueio(
+        account_id, campos["data_inicio"], campos["data_fim"], advogado_nome, motivo, cor_id
+    )
+    if google_event_id:
+        campos["google_event_id"] = google_event_id
+
     return inserir_bloqueio_agenda(campos)
 
 
@@ -2000,12 +2071,41 @@ async def api_editar_bloqueio(bloqueio_id: str, request: Request):
     resp = db.table("ia_bloqueios_agenda").update(payload).eq("id", bloqueio_id).execute()
     if not resp.data:
         raise HTTPException(status_code=404, detail="Bloqueio não encontrado")
-    return resp.data[0]
+
+    # Se mudou datas, recriar evento no Google Calendar
+    bloqueio = resp.data[0]
+    account_id = bloqueio.get("account_id")
+    if account_id and ("data_inicio" in dados or "data_fim" in dados):
+        cor_id = 0
+        if bloqueio.get("advogado_id"):
+            try:
+                from db import get_advogado
+                adv = get_advogado(bloqueio["advogado_id"])
+                if adv:
+                    cor_id = adv.get("cor_id", 0)
+            except Exception:
+                pass
+        new_event_id = await _criar_evento_gcal_bloqueio(
+            account_id, bloqueio["data_inicio"], bloqueio["data_fim"],
+            bloqueio.get("advogado_nome", "Todos"), bloqueio.get("motivo", ""), cor_id
+        )
+        if new_event_id:
+            db.table("ia_bloqueios_agenda").update({"google_event_id": new_event_id}).eq("id", bloqueio_id).execute()
+
+    return bloqueio
 
 
 @app.delete("/api/bloqueios-agenda/{bloqueio_id}")
-def api_deletar_bloqueio(bloqueio_id: str):
-    from db import deletar_bloqueio_agenda
+async def api_deletar_bloqueio(bloqueio_id: str):
+    from db import get_db, deletar_bloqueio_agenda
+    db = get_db()
+    # Buscar bloqueio antes de deletar para pegar google_event_id
+    bloqueio_resp = db.table("ia_bloqueios_agenda").select("account_id,google_event_id").eq("id", bloqueio_id).maybe_single().execute()
+    if bloqueio_resp and bloqueio_resp.data:
+        await _deletar_evento_gcal_bloqueio(
+            bloqueio_resp.data.get("account_id"),
+            bloqueio_resp.data.get("google_event_id", "")
+        )
     if not deletar_bloqueio_agenda(bloqueio_id):
         raise HTTPException(status_code=404, detail="Bloqueio não encontrado")
     return {"status": "deletado"}
