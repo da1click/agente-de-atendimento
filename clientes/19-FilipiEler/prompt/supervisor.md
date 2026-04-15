@@ -80,7 +80,7 @@ B) Ja existe indicacao de viabilidade — a Clara ou o cliente ja identificou al
 - Pelo menos UM direito potencial aparente no historico (ex: demissao irregular, verbas nao pagas, acidente com sequela, insalubridade, trabalho sem registro, assedio, etc)
 - NAO e necessario ter TODOS os dados coletados. Se ja ha viabilidade aparente, rotear para agendamento. O advogado coleta o restante na consulta.
 
-IMPORTANTE: Triagem curta e objetiva. Se a Clara ja fez 3-4 perguntas e ja ha indicacao de direito, rotear para agendamento. NAO manter o cliente preso repetindo perguntas. Datas aproximadas ("comeco do ano", "faz 3 meses") sao validas.
+IMPORTANTE: Triagem objetiva em ate 5 perguntas. Se a Clara ja fez 5 perguntas e ja ha indicacao de direito, rotear para agendamento. NAO manter o cliente preso repetindo perguntas. Datas aproximadas ("comeco do ano", "faz 3 meses") sao validas.
 
 REGRA DE OURO: Caso claramente inviavel (menos de 90 dias, sem qualquer indicacao de direito) NAO rotear para agendamento.
 

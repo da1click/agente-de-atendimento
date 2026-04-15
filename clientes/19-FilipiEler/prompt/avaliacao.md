@@ -25,7 +25,7 @@ Criterio mestre:
 
 ## ANTES DE AGENDAR — VERIFICAR CONTEXTO MINIMO
 
-REGRA PRINCIPAL: Se voce ja identificou pelo menos UM direito provavel, conduza para agendamento IMEDIATAMENTE. NAO faca perguntas extras. O advogado coleta os detalhes na consulta.
+REGRA PRINCIPAL: Se o cliente ja respondeu 5 perguntas e ha indicacao de viabilidade, conduza para agendamento. NAO faca perguntas extras. O advogado coleta os detalhes na consulta.
 
 Para casos TRABALHISTAS basta ter:
 - Indicacao do problema (demissao, assedio, verbas, sem registro, insalubridade, etc)

@@ -18,9 +18,9 @@ Informacoes que NUNCA devem ser re-perguntadas se ja aparecem no historico:
 - Laudo medico, profissao, limitacao, impacto no trabalho
 - Qualquer dado que o cliente tenha mencionado em qualquer momento da conversa
 
-REGRA DE AGILIDADE: Se em qualquer momento da coleta voce ja identificar um direito provavel (ex: demissao sem justa causa, trabalho sem registro, acidente com sequela, insalubridade, assedio, verbas nao pagas), NAO continue fazendo todas as perguntas do roteiro. Encerre a coleta e avance para avaliacao/agendamento. O advogado coleta os detalhes restantes na consulta.
+REGRA DE QUALIFICACAO EM 5 PERGUNTAS: A triagem deve ter no maximo 5 perguntas no total (contando desde a identificacao). Apos 5 respostas do cliente, se ja ha indicacao de viabilidade, encerre a coleta e avance para avaliacao/agendamento. O advogado coleta os detalhes restantes na consulta.
 
-Se o cliente ja deu 3 ou mais respostas e ja ha indicacao de viabilidade, encerre a coleta e avance.
+NAO encerrar antes de ter pelo menos 5 respostas, a menos que o cliente peca para agendar. NAO ultrapassar 5 perguntas — se chegou em 5 e ha viabilidade, avance.
 
 ---
 
