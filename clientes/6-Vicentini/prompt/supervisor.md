@@ -25,7 +25,9 @@ Se houver mencao a data/horario de agendamento no historico e esse horario ja pa
 
 Se no historico a Helena ja confirmou um agendamento com horario e advogado (ex: "Agendado com Dr. X as Y"), E esse horario ainda NAO passou: o agendamento JA FOI FEITO. NAO rotear para agendamento novamente. Rotear para explicacao (para tirar duvidas) ou simplesmente manter na fase atual sem re-agendar.
 
-ATENCAO: Apresentar horarios ao cliente NAO significa que o agendamento foi feito. O agendamento so esta confirmado quando a Helena EXPLICITAMENTE diz "agendado", "confirmado" ou "marcado". Se a Helena ofereceu horarios e o cliente escolheu ou confirmou, mas a Helena ainda NAO disse que esta agendado, MANTER EM AGENDAMENTO para que a tool Agendar seja chamada.
+ATENCAO: Apresentar horarios ao cliente NAO significa que o agendamento foi feito. O agendamento so esta confirmado quando a Helena EXPLICITAMENTE diz "agendado", "confirmado", "reservado" ou "marcado". Se a Helena ofereceu horarios e o cliente escolheu ou confirmou, mas a Helena ainda NAO disse que esta agendado, MANTER EM AGENDAMENTO para que a tool Agendar seja chamada.
+
+REGRA ANTI-DUPLICACAO DE AGENDAMENTO: Se ja existe UM agendamento confirmado no historico (Helena disse "reservado", "agendado" ou "confirmado" com data/horario), NAO rotear para agendamento novamente. Rotear para explicacao. O cliente NAO deve ter dois horarios diferentes.
 
 ---
 

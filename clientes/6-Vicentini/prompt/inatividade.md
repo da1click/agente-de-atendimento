@@ -42,3 +42,5 @@ Histórico da conversa:
 Com base no histórico acima, escreva UMA mensagem de reativação.
 Leve em conta o ponto em que a conversa parou e o que seria mais relevante para esse cliente neste momento.
 Não repita o que já foi dito — avance com sutileza.
+
+REGRA CRITICA: Se o cliente JA TEM agendamento confirmado no historico, NAO pedir documentos (TRCT, laudos, prints, comprovantes, Meu INSS). O advogado pede na consulta. Apenas lembrar do horario agendado de forma simples, sem pedir nada.
