@@ -1339,7 +1339,7 @@ async def chamar_agente(config: dict, fase: str, messages_openai: list, conversa
 # ── DEBOUNCE ──────────────────────────────────────────────────
 
 async def _executar_com_debounce(config: dict, account_id: int, conversation_id: int, inbox_id: int | None):
-    await asyncio.sleep(10)
+    await asyncio.sleep(15)
     _debounce_tasks.pop(conversation_id, None)
     logger.info(f"[debounce] Processando conversa {conversation_id} (account={account_id})")
     try:
