@@ -21,7 +21,7 @@ TOOLS_POR_FASE = {
     "identificacao": ["atualiza_contato"],
     "vinculo": ["atualiza_contato", "cliente_inviavel", "TransferHuman"],
     "coleta_caso": ["atualiza_contato", "cliente_inviavel", "TransferHuman"],
-    "avaliacao": ["atualiza_contato", "cliente_inviavel", "TransferHuman"],
+    "avaliacao": ["atualiza_contato", "cliente_inviavel", "TransferHuman", "lead_disponivel"],
     "casos_especiais": ["atualiza_contato", "TransferHuman", "cliente_inviavel", "desqualificado", "nao_lead", "nao_alfabetizado"],
     "explicacao": ["atualiza_contato", "TransferHuman"],
     "agendamento": ["atualiza_contato", "ConsultarAgenda", "Agendar", "convertido"],
