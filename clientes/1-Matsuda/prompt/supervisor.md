@@ -15,6 +15,12 @@ Historico da conversa:
 
 ---
 
+## REGRA CRITICA — INDICACAO
+
+Se o cliente mencionar que quer INDICAR alguem, tem uma INDICACAO, quer passar o contato de outra pessoa, ou alguem pediu pra entrar em contato: rotear para casos_especiais IMEDIATAMENTE.
+
+---
+
 ## REGRA CRITICA — CASO JA CLASSIFICADO COMO INVIAVEL
 
 Se o historico ou o contato ja possui a tag "inviavel":
