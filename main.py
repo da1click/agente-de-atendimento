@@ -1131,50 +1131,12 @@ async def _processar_reengajamento(config: dict, account_id: int, conversation_i
                 metodo = "texto (dentro da janela 24h)"
                 logger.info(f"[@@] Mensagem de texto enviada (dentro da janela) — conv={conversation_id}")
         else:
-            # API não oficial: IA gera o texto ou usa customizado/padrão
-            metodo = ""
-            mensagem_enviada = ""
-            if texto_custom:
-                await enviar_parte_chatwoot(chatwoot_url, token, account_id, conversation_id, texto_custom)
-                mensagem_enviada = texto_custom
-                metodo = "texto customizado"
-                logger.info(f"[@@] Mensagem customizada enviada — conv={conversation_id}")
-            else:
-                # Gerar texto com IA baseado no histórico
-                try:
-                    from ia import buscar_historico_chatwoot, formatar_conversa_texto, carregar_prompt
-                    from openai import OpenAI
-
-                    historico = await buscar_historico_chatwoot(chatwoot_url, token, account_id, conversation_id)
-                    historico_texto = formatar_conversa_texto(historico)
-
-                    prompt_base = carregar_prompt(account_id, "base.md") if carregar_prompt else ""
-                    prompt = (
-                        f"{prompt_base}\n\n---\n\n"
-                        f"O cliente ficou inativo e voce precisa reengajar. Escreva UMA mensagem curta, "
-                        f"natural e acolhedora para retomar o contato. NAO repita perguntas ja feitas. "
-                        f"NAO se apresente novamente. Apenas retome de forma leve.\n\n"
-                        f"Historico:\n{historico_texto}\n\n"
-                        f"Sua mensagem de reengajamento:"
-                    )
-
-                    client = OpenAI(api_key=config["openai_api_key"])
-                    resp = client.chat.completions.create(
-                        model="gpt-5.2",
-                        messages=[{"role": "user", "content": prompt}],
-                        max_tokens=200,
-                        reasoning_effort="low",
-                    )
-                    mensagem = resp.choices[0].message.content.strip()
-                    await enviar_parte_chatwoot(chatwoot_url, token, account_id, conversation_id, mensagem)
-                    mensagem_enviada = mensagem
-                    metodo = "texto gerado pela IA"
-                    logger.info(f"[@@] Mensagem IA enviada — conv={conversation_id}: {mensagem[:80]}")
-                except Exception as e:
-                    logger.warning(f"[@@] Erro ao gerar com IA, usando padrão: {e}")
-                    await enviar_parte_chatwoot(chatwoot_url, token, account_id, conversation_id, _REENGAJAMENTO_MSG_PADRAO)
-                    mensagem_enviada = _REENGAJAMENTO_MSG_PADRAO
-                    metodo = "texto padrão (IA falhou)"
+            # API não oficial: enviar texto customizado ou padrão (sem IA — direto e confiável)
+            mensagem = texto_custom or _REENGAJAMENTO_MSG_PADRAO
+            await enviar_parte_chatwoot(chatwoot_url, token, account_id, conversation_id, mensagem)
+            mensagem_enviada = mensagem
+            metodo = "texto customizado" if texto_custom else "texto padrao"
+            logger.info(f"[@@] Mensagem enviada (API nao oficial) — conv={conversation_id}")
 
         # Nota privada com detalhes do envio
         try:
@@ -1305,8 +1267,16 @@ async def chatwoot_webhook(request: Request):
         # === @@ em nota privada: enviar mensagem de reengajamento ao cliente ===
         is_private = msg.get("private", False)
         if is_private and conteudo_msg.strip().startswith("@@"):
-            logger.info(f"[@@] Comando @@ detectado — conv={conversation_id} account={account_id}")
-            asyncio.create_task(_processar_reengajamento(config, account_id, conversation_id, inbox_id, conteudo_msg))
+            # Anti-duplicação: só processar 1x por conversa (cache 60s)
+            _at_at_key = f"@@_{account_id}_{conversation_id}"
+            if _at_at_key not in _MSG_IDS_PROCESSADOS:
+                _MSG_IDS_PROCESSADOS[_at_at_key] = True
+                if len(_MSG_IDS_PROCESSADOS) > _MSG_IDS_MAX:
+                    _MSG_IDS_PROCESSADOS.popitem(last=False)
+                logger.info(f"[@@] Comando @@ detectado — conv={conversation_id} account={account_id}")
+                asyncio.create_task(_processar_reengajamento(config, account_id, conversation_id, inbox_id, conteudo_msg))
+            else:
+                logger.info(f"[@@] Comando @@ duplicado ignorado — conv={conversation_id}")
             continue
 
         # Mensagens outgoing (agente humano ou IA): não processar como IA
