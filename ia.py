@@ -456,6 +456,15 @@ async def executar_tool(nome: str, args: dict, config: dict, conversation_id: in
                         await _enviar_notificacao(config, account_id, int(notif_conv_id), msg_notif)
                     except Exception as e:
                         logger.warning(f"[notificação] Erro ao notificar agendamento: {e}")
+
+            # Conta 17: desatribuir após agendar e notificar
+            if account_id == 17:
+                try:
+                    await chatwoot_transferir_humano(chatwoot_url, chatwoot_token, account_id, conversation_id, motivo="tool:Agendar:desatribuir_pos_agendamento")
+                    logger.info(f"🔓 Conta 17: conversa desatribuída após agendamento — conv={conversation_id}")
+                except Exception as e:
+                    logger.warning(f"Conta 17: erro ao desatribuir pós-agendamento: {e}")
+
         logger.info(f"Tool: Agendar → {resultado}")
         return json.dumps(resultado)
 
