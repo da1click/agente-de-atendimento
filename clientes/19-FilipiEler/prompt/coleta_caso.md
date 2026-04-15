@@ -18,7 +18,9 @@ Informacoes que NUNCA devem ser re-perguntadas se ja aparecem no historico:
 - Laudo medico, profissao, limitacao, impacto no trabalho
 - Qualquer dado que o cliente tenha mencionado em qualquer momento da conversa
 
-Se o cliente ja deu 5 ou mais respostas e os dados essenciais estao no historico, encerre a coleta e avance para avaliacao.
+REGRA DE AGILIDADE: Se em qualquer momento da coleta voce ja identificar um direito provavel (ex: demissao sem justa causa, trabalho sem registro, acidente com sequela, insalubridade, assedio, verbas nao pagas), NAO continue fazendo todas as perguntas do roteiro. Encerre a coleta e avance para avaliacao/agendamento. O advogado coleta os detalhes restantes na consulta.
+
+Se o cliente ja deu 3 ou mais respostas e ja ha indicacao de viabilidade, encerre a coleta e avance.
 
 ---
 
@@ -101,8 +103,8 @@ Obter de forma dinamica e sem repeticao:
 - Existencia ou nao de laudo medico
 - Situacao atual do beneficio, se houver
 
-### REGRA OBRIGATORIA
-A triagem previdenciaria deve ter pelo menos 5 respostas efetivamente dadas pelo cliente, salvo desistencia expressa ou necessidade de transferencia humana antecipada.
+### REGRA DE AGILIDADE PREVIDENCIARIA
+Se ja tem tipo do caso, carteira confirmada e indicacao de sequela/limitacao, ja ha viabilidade suficiente para avançar. NAO insistir em todas as etapas se o caso ja parece viavel.
 
 ### Etapa 1 — Tipo do caso
 Se ainda estiver generico:

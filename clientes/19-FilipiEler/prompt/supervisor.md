@@ -75,16 +75,14 @@ A) O cliente pediu explicitamente agendar ("quero marcar", "como contrato", "qua
 
 C) A Clara ja ofereceu horarios ao cliente e o cliente esta respondendo (escolhendo advogado, confirmando horario, dizendo "sim"). MANTER EM AGENDAMENTO ate que a Clara confirme explicitamente que o agendamento foi feito.
 
-B) A qualificacao minima foi preenchida:
+B) Ja existe indicacao de viabilidade — a Clara ou o cliente ja identificou algum direito provavel:
 - Area identificada (trabalhista ou previdenciaria)
-- Dados essenciais coletados
-- Caso parece viavel para analise
-- Para previdenciario: Qualidade de segurado confirmada (CTPS ativa, periodo de graca, ou vinculo informal com subordinacao). Contribuinte individual/autonomo/MEI NAO conta.
-- Para previdenciario: Laudo medico com CID comprovando a sequela confirmado (exceto acidente recente < 6 meses)
+- Pelo menos UM direito potencial aparente no historico (ex: demissao irregular, verbas nao pagas, acidente com sequela, insalubridade, trabalho sem registro, assedio, etc)
+- NAO e necessario ter TODOS os dados coletados. Se ja ha viabilidade aparente, rotear para agendamento. O advogado coleta o restante na consulta.
 
-IMPORTANTE: Se a agente ja fez todas as perguntas e o cliente respondeu, rotear para agendamento. NAO manter o cliente preso repetindo perguntas ja respondidas. Datas aproximadas ("comeco do ano", "faz 3 meses") sao validas.
+IMPORTANTE: Triagem curta e objetiva. Se a Clara ja fez 3-4 perguntas e ja ha indicacao de direito, rotear para agendamento. NAO manter o cliente preso repetindo perguntas. Datas aproximadas ("comeco do ano", "faz 3 meses") sao validas.
 
-REGRA DE OURO: Caso inviavel (sem sequela, sem laudo, fora do prazo, sem qualidade de segurado) NAO rotear para agendamento. NUNCA.
+REGRA DE OURO: Caso claramente inviavel (menos de 90 dias, sem qualquer indicacao de direito) NAO rotear para agendamento.
 
 ### 8. transferir_humano
 - Caso com menos de 90 dias de trabalho (trabalhista).

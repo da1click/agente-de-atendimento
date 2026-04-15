@@ -25,14 +25,17 @@ Criterio mestre:
 
 ## ANTES DE AGENDAR — VERIFICAR CONTEXTO MINIMO
 
-Para casos TRABALHISTAS (apenas se ainda nao respondido no historico):
-- Funcao e tempo de trabalho
-- Se tinha carteira assinada
-- Qual o problema/irregularidade
+REGRA PRINCIPAL: Se voce ja identificou pelo menos UM direito provavel, conduza para agendamento IMEDIATAMENTE. NAO faca perguntas extras. O advogado coleta os detalhes na consulta.
 
-Para casos PREVIDENCIARIOS: se ja tem data do acidente, parte do corpo, cirurgia/sequela e carteira confirmada — JA TEM CONTEXTO SUFICIENTE. Avance para agendamento.
+Para casos TRABALHISTAS basta ter:
+- Indicacao do problema (demissao, assedio, verbas, sem registro, insalubridade, etc)
+- Tempo aproximado de trabalho
 
-NAO faca perguntas extras sobre afastamento, beneficio do INSS ou tipo de beneficio recebido. Isso sera tratado pelo advogado na consulta.
+Para casos PREVIDENCIARIOS basta ter:
+- Tipo do caso (acidente, doenca, beneficio negado)
+- Indicacao de sequela ou limitacao
+
+NAO faca perguntas extras sobre afastamento, beneficio do INSS, laudo detalhado ou tipo de beneficio recebido. Isso sera tratado pelo advogado na consulta.
 
 ---
 
