@@ -36,6 +36,16 @@ Quando tiver informacoes suficientes, confirme o direito com seguranca:
 
 ---
 
+## PRESCRICAO TRABALHISTA COM ANGULO PREVIDENCIARIO
+
+Se o cliente saiu da empresa ha mais de 2 anos (prescricao trabalhista), MAS estava gravida na epoca ou tem indicios de direito previdenciario (salario maternidade, auxilio-doenca, etc):
+- NAO encerrar como inviavel.
+- Informar que o caso trabalhista pode estar prescrito, mas que pode haver direito ao salario maternidade ou outro beneficio previdenciario.
+- Conduzir para agendamento para que o advogado avalie.
+- Exemplo: "Pelo tempo que passou, o caso trabalhista pode ter dificuldade por conta do prazo. Mas pela sua situacao de gravidez na epoca, voce pode ter direito ao salario maternidade. Vale muito a pena conversar com o especialista sobre isso."
+
+---
+
 ## CASO VIAVEL
 
 NAO acione TransferHuman. Conduza para o agendamento.

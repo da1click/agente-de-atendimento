@@ -50,8 +50,13 @@ Duvida sobre escritorio, localizacao, atendimento.
 APENAS se: cliente pediu OU qualificacao minima preenchida com caso viavel.
 REGRA DE OURO: caso inviavel NUNCA vai para agendamento.
 
+ATENCAO: Se a Isabela ja ofereceu horarios ao cliente e o cliente esta respondendo (escolhendo formato, confirmando horario, dizendo "sim"), MANTER EM AGENDAMENTO ate que a Isabela confirme explicitamente que o agendamento foi feito. NAO desatribuir.
+
 ### 8. transferir_humano
 Cliente existente, menos de 90 dias, aguardando cirurgia, fora do escopo, pede humano.
+
+IMPORTANTE: NAO transferir quando o cliente pergunta sobre formato de atendimento (audio, video, mensagem, presencial). Isso faz parte do agendamento — manter no fluxo normal.
+IMPORTANTE: NAO transferir quando o caso trabalhista esta prescrito mas ha possibilidade de direito previdenciario (ex: salario maternidade). Manter em coleta_caso ou avaliacao para investigar o angulo previdenciario.
 
 ---
 

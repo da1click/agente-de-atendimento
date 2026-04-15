@@ -56,6 +56,9 @@ Passo 3 — verificar tempo e vinculo.
 ### Regra de atencao
 Se menos de 90 dias: reunir contexto minimo e usar TransferHuman.
 
+### Regra de prescricao trabalhista
+Se o cliente saiu da empresa ha mais de 2 anos: o caso trabalhista esta prescrito. MAS verificar se ha angulo previdenciario (ex: gestante na epoca = possivel salario maternidade). Se houver possibilidade previdenciaria, NAO marcar como inviavel — informar sobre o prazo trabalhista e pivotar para o direito previdenciario, conduzindo para agendamento.
+
 ---
 
 ## FLUXO PREVIDENCIARIO
