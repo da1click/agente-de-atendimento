@@ -20,6 +20,9 @@ Se o cliente tem caso viavel (triagem completa):
 Se o cliente menciona pagamento, parcelas, acordo ou processo existente:
 "Vou passar seu contato pro responsavel. Ele vai te retornar em breve!"
 
+Se o cliente pergunta sobre novidades ou andamento do caso:
+"Oi! Vou verificar com nossa equipe e ja te retorno com as informacoes, tudo bem? Aguarda so um pouquinho!"
+
 ## AVALIACAO GOOGLE
 
 Se o cliente veio apenas com duvida simples e a duvida ja foi respondida (nao era um caso para agendamento), incluir ao final da mensagem de encerramento:
