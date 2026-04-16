@@ -541,6 +541,19 @@ async def verificar_reativacoes():
                         if not conv_id:
                             continue
 
+                        # Buscar config completa para ia_agent_id
+                        config_full = carregar_config_cliente(account_id)
+                        ia_agent_id = config_full.get("ia_agent_id") if config_full else None
+
+                        # Reatribuir a IA à conversa (necessário para o follow-up funcionar)
+                        if ia_agent_id:
+                            try:
+                                assign_url = f"{chatwoot_url}/api/v1/accounts/{account_id}/conversations/{conv_id}/assignments"
+                                await http.post(assign_url, headers={"api_access_token": token, "Content-Type": "application/json"}, json={"assignee_id": ia_agent_id})
+                                logger.info(f"[inatividade] ♻️ IA reatribuída à conv={conv_id}")
+                            except Exception as e:
+                                logger.warning(f"[inatividade] Erro ao reatribuir IA conv={conv_id}: {e}")
+
                         # Reiniciar ciclo de inatividade
                         info = _estagio_info(1, account_id)
                         if info:
