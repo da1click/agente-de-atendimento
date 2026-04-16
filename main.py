@@ -2177,12 +2177,23 @@ async def api_criar_bloqueio(request: Request):
     account_id = dados.get("account_id")
     advogado_nome = dados.get("advogado_nome", "Todos")
     motivo = dados.get("motivo", "")
+    # Garantir timezone de Brasília nos horários (evita conversão indesejada pelo Supabase)
+    from datetime import timezone as tz, timedelta
+    BR_OFFSET = tz(timedelta(hours=-3))
+    data_inicio_raw = dados.get("data_inicio", "")
+    data_fim_raw = dados.get("data_fim", "")
+    # Se veio sem timezone, adicionar -03:00 (Brasília)
+    if data_inicio_raw and "+" not in data_inicio_raw and "-03" not in data_inicio_raw and "Z" not in data_inicio_raw:
+        data_inicio_raw = data_inicio_raw + "-03:00"
+    if data_fim_raw and "+" not in data_fim_raw and "-03" not in data_fim_raw and "Z" not in data_fim_raw:
+        data_fim_raw = data_fim_raw + "-03:00"
+
     campos = {
         "account_id": account_id,
         "advogado_id": dados.get("advogado_id"),
         "advogado_nome": advogado_nome,
-        "data_inicio": dados.get("data_inicio"),
-        "data_fim": dados.get("data_fim"),
+        "data_inicio": data_inicio_raw,
+        "data_fim": data_fim_raw,
         "motivo": motivo,
     }
     if not campos["account_id"] or not campos["data_inicio"] or not campos["data_fim"]:
@@ -2214,6 +2225,12 @@ async def api_editar_bloqueio(bloqueio_id: str, request: Request):
     from db import get_db
     dados = await request.json()
     db = get_db()
+    # Garantir timezone de Brasília nos horários
+    for campo_dt in ["data_inicio", "data_fim"]:
+        v = dados.get(campo_dt, "")
+        if v and "+" not in v and "-03" not in v and "Z" not in v:
+            dados[campo_dt] = v + "-03:00"
+
     payload = {}
     for campo in ["advogado_id", "advogado_nome", "data_inicio", "data_fim", "motivo"]:
         if campo in dados:
