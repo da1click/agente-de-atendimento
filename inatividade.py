@@ -11,8 +11,28 @@ logger = logging.getLogger(__name__)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Limite fixo: inatividade SEMPRE dispara no máximo 3 vezes
-LIMITE_INATIVIDADE = 3
+# Limite padrão: inatividade dispara no máximo 3 vezes (configurável por conta via config_inatividade.limite)
+LIMITE_INATIVIDADE_PADRAO = 3
+
+
+# Override de limite por conta (quando não está no banco ainda)
+_LIMITE_POR_CONTA = {
+    17: 5,
+}
+
+
+def _limite_inatividade(account_id: int = None) -> int:
+    """Retorna o limite de follow-ups para a conta (padrão: 3)."""
+    if account_id:
+        # Override direto no código
+        if account_id in _LIMITE_POR_CONTA:
+            return _LIMITE_POR_CONTA[account_id]
+        # Config do banco
+        cfg = carregar_config_inatividade(account_id)
+        limite = cfg.get("limite")
+        if limite and isinstance(limite, int) and limite > 0:
+            return limite
+    return LIMITE_INATIVIDADE_PADRAO
 
 
 # ── CONFIG ────────────────────────────────────────────────────
@@ -311,8 +331,9 @@ async def disparar_estagio(config_cliente: dict, row: dict):
     logger.info(f"[inatividade] Disparando estágio {stagio} — conv={conversation_id} account={account_id}")
 
     # SEGURANÇA: verificar limite ANTES de qualquer envio
-    if stagio > LIMITE_INATIVIDADE:
-        logger.warning(f"[inatividade] Estágio {stagio} > limite {LIMITE_INATIVIDADE} — desativando conv={conversation_id}")
+    limite = _limite_inatividade(account_id)
+    if stagio > limite:
+        logger.warning(f"[inatividade] Estágio {stagio} > limite {limite} — desativando conv={conversation_id}")
         desativar_inatividade(account_id, conversation_id)
         return
 
@@ -434,10 +455,10 @@ async def disparar_estagio(config_cliente: dict, row: dict):
     except Exception as e:
         logger.warning(f"[inatividade] Erro ao atualizar label conv={conversation_id}: {e}")
 
-    # 6. Avançar estágio ou desativar (limite fixo de 3 follow-ups)
+    # 6. Avançar estágio ou desativar
     proximo_stagio = stagio + 1
-    proximo_info = _estagio_info(proximo_stagio)
-    atingiu_limite = stagio >= LIMITE_INATIVIDADE
+    proximo_info = _estagio_info(proximo_stagio, account_id)
+    atingiu_limite = stagio >= limite
 
     if proximo_info and not atingiu_limite:
         proximo = _proximo_disparo(proximo_info["horas"])
@@ -447,10 +468,10 @@ async def disparar_estagio(config_cliente: dict, row: dict):
         except Exception as e:
             logger.warning(f"[inatividade] Erro ao avançar estágio conv={conversation_id}: {e}")
     else:
-        # Atingiu limite fixo de 3 follow-ups ou acabaram os estágios — marcar como perdido
+        # Atingiu limite de follow-ups ou acabaram os estágios — marcar como perdido
         try:
             desativar_inatividade(account_id, conversation_id)
-            logger.info(f"[inatividade] Monitoramento encerrado após estágio {stagio} (limite={LIMITE_INATIVIDADE}) — conv={conversation_id}")
+            logger.info(f"[inatividade] Monitoramento encerrado após estágio {stagio} (limite={limite}) — conv={conversation_id}")
         except Exception as e:
             logger.warning(f"[inatividade] Erro ao desativar conv={conversation_id}: {e}")
 
