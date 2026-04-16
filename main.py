@@ -1229,11 +1229,6 @@ async def chatwoot_webhook(request: Request):
         logger.warning(f"Cliente não encontrado para account_id={account_id}")
         return {"status": "cliente_nao_encontrado"}
 
-    # Override temporário: conta 19 com IA e inatividade desativadas
-    if account_id == 19:
-        config["ia_ativa"] = False
-        config["inatividade_ativa"] = False
-
     ia_agent_id = config.get("ia_agent_id")
 
     for msg in messages:
