@@ -1326,6 +1326,42 @@ async def chatwoot_webhook(request: Request):
         inboxes_permitidos = config.get("inboxes", [])
         inbox_permitido = not inboxes_permitidos or inbox_id in inboxes_permitidos
 
+        # Transcrição de áudio: rodar ANTES do filtro de modo teste (transcreve sempre)
+        audio = next((a for a in attachments if a.get("file_type") == "audio"), None)
+        if audio and config.get("transcricao_ativa", True):
+            msg_id_audio = msg.get("id")
+            if msg_id_audio not in _transcricoes_processadas:
+                _transcricoes_processadas.add(msg_id_audio)
+                if len(_transcricoes_processadas) > 10000:
+                    _transcricoes_processadas.clear()
+                logger.info(f"[{account_id}] Áudio de {nome} ({telefone}) — transcrevendo...")
+                try:
+                    transcricao = await transcrever_audio(
+                        url_audio=audio["data_url"],
+                        openai_api_key=config["openai_api_key"],
+                    )
+                    logger.info(f"[{account_id}] Transcrição: {transcricao}")
+                    nota = f"🎙️ Transcrição de áudio de {nome}:\n\n{transcricao}"
+                    await enviar_nota_privada(
+                        chatwoot_url=config["chatwoot_url"],
+                        chatwoot_token=config["chatwoot_token"],
+                        account_id=account_id,
+                        conversation_id=conversation_id,
+                        texto=nota,
+                    )
+                    try:
+                        salvar_transcricao(
+                            account_id=account_id, inbox_id=inbox_id,
+                            conversation_id=conversation_id,
+                            chatwoot_message_id=msg_id_audio,
+                            transcription=transcricao,
+                            audio_url=audio.get("data_url", ""),
+                        )
+                    except Exception as e:
+                        logger.warning(f"Erro ao salvar transcrição no Supabase: {e}")
+                except Exception as e:
+                    logger.error(f"Erro ao transcrever áudio: {e}")
+
         # Modo teste: se ativo, IA só responde conversas com label "ia-teste"
         modo_teste = config.get("modo_teste", False)
         conv_labels = payload.get("conversation", {}).get("labels", [])
@@ -1431,49 +1467,7 @@ async def chatwoot_webhook(request: Request):
         else:
             logger.info(f"🤖 IA ativa: {ia_ativa} (assignee={assignee_id}, ia_agent={ia_agent_id})")
 
-        # Verificar se é áudio (só transcreve se transcricao_ativa)
-        audio = next((a for a in attachments if a.get("file_type") == "audio"), None)
-
-        if audio and config.get("transcricao_ativa", True):
-            msg_id = msg.get("id")
-            # Deduplicação: evitar transcrever o mesmo áudio múltiplas vezes (loop)
-            if msg_id in _transcricoes_processadas:
-                logger.info(f"[{account_id}] Áudio msg_id={msg_id} já transcrito — ignorando")
-            else:
-                _transcricoes_processadas.add(msg_id)
-                # Limitar tamanho do set para não consumir memória indefinidamente
-                if len(_transcricoes_processadas) > 10000:
-                    _transcricoes_processadas.clear()
-                logger.info(f"[{account_id}] Áudio de {nome} ({telefone}) — transcrevendo...")
-                try:
-                    transcricao = await transcrever_audio(
-                        url_audio=audio["data_url"],
-                        openai_api_key=config["openai_api_key"],
-                    )
-                    logger.info(f"[{account_id}] Transcrição: {transcricao}")
-
-                    nota = f"🎙️ Transcrição de áudio de {nome}:\n\n{transcricao}"
-                    await enviar_nota_privada(
-                        chatwoot_url=config["chatwoot_url"],
-                        chatwoot_token=config["chatwoot_token"],
-                        account_id=account_id,
-                        conversation_id=conversation_id,
-                        texto=nota,
-                    )
-                    # Salvar transcrição no Supabase
-                    try:
-                        salvar_transcricao(
-                            account_id=account_id,
-                            inbox_id=inbox_id,
-                            conversation_id=conversation_id,
-                            chatwoot_message_id=msg_id,
-                            transcription=transcricao,
-                            audio_url=audio.get("data_url", ""),
-                        )
-                    except Exception as e:
-                        logger.warning(f"Erro ao salvar transcrição no Supabase: {e}")
-                except Exception as e:
-                    logger.error(f"Erro ao transcrever áudio: {e}")
+        # Transcrição já foi feita acima (antes do filtro de modo teste)
 
         if ia_ativa:
             logger.info(f"[{account_id}] IA ativa — agendando processamento de {nome}: {texto or '[áudio]'}")
