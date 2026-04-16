@@ -54,7 +54,15 @@ O VINCULO ainda NAO foi verificado (nao confirmou carteira assinada nem periodo 
 
 Usar quando o cliente ainda nao respondeu sobre carteira assinada ou MEI.
 
-REGRA OBRIGATORIA: A fase de vinculo NUNCA pode ser pulada para casos previdenciarios. Mesmo que o cliente ja tenha dado muitas informacoes sobre o acidente, se NAO ha confirmacao EXPLICITA de carteira assinada, periodo de graca ou vinculo informal no historico, rotear para vinculo ANTES de qualquer outra fase. Sem qualidade de segurado confirmada, o caso NAO pode avancar para coleta_caso, avaliacao ou agendamento.
+REGRA OBRIGATORIA: A fase de vinculo NUNCA pode ser pulada para casos previdenciarios, EXCETO quando o vinculo ja esta IMPLICITO no historico. Se o cliente mencionou que saiu de uma empresa, foi demitido, pediu demissao ou trabalhou registrado: o vinculo JA ESTA CONFIRMADO — pular para coleta_caso.
+
+Exemplos de vinculo IMPLICITO (pular vinculo, ir para coleta_caso):
+- "sai da empresa em fevereiro"
+- "fui mandado embora da firma"
+- "trabalhei 5 anos registrado"
+- "fui dispensado"
+
+Se NAO ha nenhuma evidencia de carteira no historico: rotear para vinculo.
 
 ### 3. coleta_caso
 Vinculo CONFIRMADO (carteira ou periodo de graca ou vinculo informal com subordinacao).

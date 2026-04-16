@@ -17,6 +17,15 @@ Verificar se o cliente tinha cobertura do INSS na data do acidente (vinculo empr
 
 ## PERGUNTA 1: CARTEIRA ASSINADA
 
+ANTES DE PERGUNTAR: Verifique o historico. Se o cliente JA mencionou em qualquer momento que:
+- Saiu da empresa (ex: "sai da empresa em fevereiro", "fui mandado embora")
+- Trabalhou registrado, com carteira, fichado, de carteira assinada
+- Foi demitido, pediu demissao, foi dispensado de uma empresa
+- Mencionou empresa, registro, CTPS, carteira, funcao registrada
+
+Se QUALQUER um desses indicios estiver no historico: o cliente TINHA carteira assinada. Vinculo CONFIRMADO. NAO pergunte sobre carteira novamente. NAO pergunte sobre MEI ou autonomo. Fase concluida.
+
+Se NAO ha nenhum indicio no historico, perguntar:
 "Na data do acidente, voce tinha carteira assinada?"
 
 Se SIM: Vinculo confirmado. Fase concluida. O supervisor encaminhara para coleta_caso.
