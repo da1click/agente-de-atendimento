@@ -585,6 +585,10 @@
       <span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
       <span class="nav-label">Templates Meta</span>
     </div>
+    <div class="nav-item" id="nav-lembretes" onclick="navTo('lembretes')">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+      Lembretes
+    </div>
     <div class="nav-item" id="nav-inatividade" onclick="navTo('inatividade')">
       <span class="nav-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
       <span class="nav-label">Inatividade</span>
@@ -1393,10 +1397,10 @@ function navTo(secao) {
   closeSidebarMobile();
   // Verificar permissão — redireciona se não tem acesso
   const PERMS_NAV = {
-    super_admin: ['contas','templates','inatividade','remarketing','campanhas','relatorios','audiencias','advogados','config','usuarios','terminal','prompt','sugestoes','zapsign','tutoriais'],
-    admin:       ['contas','templates','inatividade','remarketing','campanhas','relatorios','audiencias','advogados','config','prompt','sugestoes','zapsign','tutoriais'],
+    super_admin: ['contas','templates','lembretes','inatividade','remarketing','campanhas','relatorios','audiencias','advogados','config','usuarios','terminal','prompt','sugestoes','zapsign','tutoriais'],
+    admin:       ['contas','templates','lembretes','inatividade','remarketing','campanhas','relatorios','audiencias','advogados','config','prompt','sugestoes','zapsign','tutoriais'],
     moderador:   ['remarketing','campanhas','relatorios','audiencias','prompt','tutoriais'],
-    agente:      ['templates','inatividade','audiencias','prompt','tutoriais'],
+    agente:      ['templates','lembretes','inatividade','audiencias','prompt','tutoriais'],
   };
   const allowedNav = PERMS_NAV[currentUser?.role] || ['contas','prompt'];
   if (!allowedNav.includes(secao)) {
@@ -1407,13 +1411,13 @@ function navTo(secao) {
   localStorage.setItem('da1click_secao_ativa', secao);
   if (clienteAtivo) localStorage.setItem('da1click_conta_ativa', clienteAtivo);
   // Update nav highlights (only for non-conta sections)
-  ['templates','inatividade','remarketing','campanhas','relatorios','audiencias','advogados','config','usuarios','terminal','prompt','sugestoes','zapsign','tutoriais'].forEach(s => {
+  ['templates','lembretes','inatividade','remarketing','campanhas','relatorios','audiencias','advogados','config','usuarios','terminal','prompt','sugestoes','zapsign','tutoriais'].forEach(s => {
     document.getElementById(`nav-${s}`)?.classList.toggle('active', s === secao);
   });
   renderSidebarAccounts();
 
   const titles = {
-    contas: 'Contas', templates: 'Templates Meta',
+    contas: 'Contas', templates: 'Templates Meta', lembretes: 'Lembretes de Consulta',
     inatividade: 'Inatividade', remarketing: 'Remarketing', campanhas: 'Campanhas',
     relatorios: 'Relatórios', audiencias: 'Aviso de Audiência', advogados: 'Advogados',
     config: 'Configurações', usuarios: 'Gerenciar Usuários', terminal: 'Terminal IA',
@@ -1421,7 +1425,7 @@ function navTo(secao) {
   };
   document.getElementById('topbar-title').textContent = titles[secao] || secao;
 
-  const pages = { contas: renderPageContas, templates: renderPageTemplates,
+  const pages = { contas: renderPageContas, templates: renderPageTemplates, lembretes: renderPageLembretes,
     inatividade: renderPageInatividade, remarketing: renderPageRemarketing, campanhas: renderPageCampanhas,
     relatorios: renderPageRelatorios, audiencias: renderPageAvisoAudiencia, advogados: renderPageAdvogados,
     config: renderPageConfig, usuarios: renderPageUsuarios, terminal: renderPageTerminal,
@@ -2761,6 +2765,144 @@ async function carregarTemplatesInatividade() {
     if (status) { status.textContent = e.message; status.style.color = 'var(--red)'; }
   }
   _atualizarTodosTemplateSelectors();
+}
+
+// ══════════════════════════════════════════════
+// PAGE: LEMBRETES DE CONSULTA
+// ══════════════════════════════════════════════
+let _lembretesCfg = null;
+
+async function renderPageLembretes() {
+  const el = document.getElementById('page-content');
+  if (!clienteAtivo) {
+    document.getElementById('topbar-sub').textContent = 'Selecione uma conta';
+    el.innerHTML = `<div class="empty-state"><p>Selecione uma conta no menu acima</p></div>`;
+    return;
+  }
+  document.getElementById('topbar-sub').textContent = `Lembretes de Consulta — Conta #${clienteAtivo}`;
+  el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:20px 0;">Carregando...</div>';
+
+  const res = await fetch(`/api/config/lembretes-consulta?account_id=${clienteAtivo}`);
+  _lembretesCfg = await res.json();
+
+  const lembretes = _lembretesCfg.lembretes || [];
+  const ativo = _lembretesCfg.ativo !== false;
+
+  const stageColors = ['#f0fdf4','#fffbeb','#fff1f2','#f5f3ff','#eff6ff'];
+  const stageBorder = ['#bbf7d0','#fde68a','#fecdd3','#ddd6fe','#bfdbfe'];
+
+  const lembretesHtml = lembretes.map((l, i) => `
+    <div class="lembrete-row" style="display:flex;flex-direction:column;gap:8px;padding:14px;border-radius:10px;
+                margin-bottom:10px;background:${stageColors[i % 5]};border:1.5px solid ${stageBorder[i % 5]};">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="width:26px;height:26px;border-radius:7px;background:var(--purple);color:#fff;
+                    font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          ${i + 1}
+        </div>
+        <div style="display:flex;flex-direction:column;gap:2px;flex:0 0 120px;">
+          <span style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;">Tempo antes</span>
+          <div style="display:flex;align-items:center;gap:4px;">
+            <input type="number" id="lembrete-min-${i}" value="${l.minutos}" min="1"
+                   style="width:70px;padding:5px 8px;font-size:13px;" />
+            <span style="font-size:11px;color:var(--text-muted);">min</span>
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--text-muted);flex:0 0 auto;">
+          ${l.minutos >= 1440 ? Math.floor(l.minutos/1440) + ' dia(s)' : l.minutos >= 60 ? Math.floor(l.minutos/60) + 'h' + (l.minutos%60 ? l.minutos%60 + 'min' : '') : l.minutos + ' min'}
+        </div>
+        <button onclick="removerLembrete(${i})" style="margin-left:auto;background:none;border:none;cursor:pointer;color:#ef4444;font-size:16px;" title="Remover">✕</button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:2px;">
+        <span style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;">Mensagem</span>
+        <textarea id="lembrete-msg-${i}" rows="2" style="padding:8px;font-size:12px;resize:vertical;border-radius:6px;border:1px solid var(--border);">${l.mensagem}</textarea>
+      </div>
+    </div>
+  `).join('');
+
+  el.innerHTML = `
+    <div style="max-width:760px;">
+      <div class="card">
+        <div class="card-header">
+          <div class="card-icon" style="font-size:18px;">🔔</div>
+          <div>
+            <div class="card-title">Lembretes de Consulta</div>
+            <div class="card-sub">Avisos automáticos antes do horário agendado</div>
+          </div>
+          <div style="margin-left:auto;">
+            <label class="toggle">
+              <input type="checkbox" id="lembretes-ativo" ${ativo ? 'checked' : ''} />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <div id="lembretes-lista">
+          ${lembretesHtml || '<div style="color:var(--text-muted);font-size:13px;padding:10px;">Nenhum lembrete configurado.</div>'}
+        </div>
+
+        <button class="btn btn-secondary" onclick="adicionarLembrete()" style="margin-top:8px;">
+          + Adicionar lembrete
+        </button>
+
+        <div style="margin-top:16px;padding:12px;background:#f8f9fb;border-radius:8px;font-size:12px;color:var(--text-muted);line-height:1.7;">
+          <strong style="color:var(--text-secondary);">Variáveis disponíveis:</strong><br>
+          <code style="background:#e8e8ee;padding:1px 5px;border-radius:3px;">{nome}</code> — Primeiro nome do cliente<br>
+          <code style="background:#e8e8ee;padding:1px 5px;border-radius:3px;">{advogada}</code> — Nome do advogado(a)<br>
+          <code style="background:#e8e8ee;padding:1px 5px;border-radius:3px;">{horario}</code> — Horário da consulta<br>
+          <code style="background:#e8e8ee;padding:1px 5px;border-radius:3px;">{data}</code> — Data da consulta
+        </div>
+
+        <div style="margin-top:12px;padding:12px;background:#eff6ff;border-radius:8px;font-size:12px;color:#1e40af;line-height:1.7;border:1px solid #bfdbfe;">
+          <strong>Referência rápida de minutos:</strong><br>
+          10 min = 10 · 30 min = 30 · 1 hora = 60 · 2 horas = 120 · 6 horas = 360 · 12 horas = 720 · 24 horas = 1440 · 48 horas = 2880
+        </div>
+
+        <div class="card-actions">
+          <button class="btn btn-primary" onclick="salvarLembretes()">Salvar</button>
+          <span class="save-msg" id="lembretes-save-msg">Salvo ✓</span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function adicionarLembrete() {
+  if (!_lembretesCfg) _lembretesCfg = { ativo: true, lembretes: [] };
+  _lembretesCfg.lembretes.push({
+    minutos: 60,
+    mensagem: "{nome}, só passando para lembrar do seu atendimento com {advogada} às {horario}. Até já!"
+  });
+  renderPageLembretes();
+}
+
+function removerLembrete(idx) {
+  if (!_lembretesCfg || !_lembretesCfg.lembretes) return;
+  _lembretesCfg.lembretes.splice(idx, 1);
+  renderPageLembretes();
+}
+
+async function salvarLembretes() {
+  if (!_lembretesCfg) return;
+  const ativo = document.getElementById('lembretes-ativo')?.checked ?? true;
+  const lembretes = (_lembretesCfg.lembretes || []).map((l, i) => ({
+    minutos: parseInt(document.getElementById(`lembrete-min-${i}`)?.value) || l.minutos,
+    mensagem: document.getElementById(`lembrete-msg-${i}`)?.value.trim() || l.mensagem,
+  }));
+
+  // Ordenar por minutos (maior primeiro = envia primeiro)
+  lembretes.sort((a, b) => b.minutos - a.minutos);
+
+  const payload = { ativo, lembretes, account_id: clienteAtivo };
+  await fetch('/api/config/lembretes-consulta', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  _lembretesCfg = { ativo, lembretes };
+  const msg = document.getElementById('lembretes-save-msg');
+  msg.classList.add('show');
+  setTimeout(() => msg.classList.remove('show'), 2500);
 }
 
 async function renderPageInatividade() {

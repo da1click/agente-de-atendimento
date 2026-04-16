@@ -1733,6 +1733,40 @@ async def put_inatividade_config(request: Request):
     return {"status": "ok", "scope": "global"}
 
 
+# ── LEMBRETES DE CONSULTA ────────────────────────────────────
+
+@app.get("/api/config/lembretes-consulta")
+def get_lembretes_consulta_config(account_id: int):
+    config = carregar_config_cliente(account_id)
+    if config:
+        cfg = config.get("config_lembrete_consulta")
+        if cfg:
+            if isinstance(cfg, str):
+                cfg = json.loads(cfg)
+            return cfg
+    # Padrão
+    return {
+        "ativo": True,
+        "lembretes": [
+            {"minutos": 10, "mensagem": "{nome}, só passando para lembrar que seu atendimento com {advogada} é daqui a pouco, às {horario}. Até já!"}
+        ]
+    }
+
+
+@app.put("/api/config/lembretes-consulta")
+async def put_lembretes_consulta_config(request: Request):
+    dados = await request.json()
+    account_id = dados.pop("account_id", None)
+    if not account_id:
+        raise HTTPException(status_code=400, detail="account_id obrigatório")
+    config = carregar_config_cliente(account_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Conta não encontrada")
+    config["config_lembrete_consulta"] = dados
+    salvar_config_cliente(account_id, config)
+    return {"status": "ok"}
+
+
 # ── REMARKETING ──────────────────────────────────────────────
 
 @app.get("/api/remarketing/campanhas")
