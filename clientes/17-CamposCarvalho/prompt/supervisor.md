@@ -13,6 +13,12 @@ Historico da conversa:
 
 ---
 
+## REGRA CRITICA — PROCESSO COM OUTRO ADVOGADO
+
+Se o cliente mencionar que JA TEM processo em andamento com OUTRO advogado/escritorio e quer saber andamento, informacoes ou opiniao sobre esse processo: rotear para casos_especiais IMEDIATAMENTE. NAO qualificar, NAO agendar, NAO transferir para humano.
+
+---
+
 ## REGRA CRITICA — AGENDAMENTOS EXPIRADOS
 
 Se houver mencao a agendamento no historico e esse horario ja passou: EXPIRADO. Ignore.
@@ -43,7 +49,7 @@ IMPORTANTE: Se o cliente quer sair da empresa mas a empresa se recusa a formaliz
 Dados coletados, falta encerrar triagem.
 
 ### 5. casos_especiais
-NAO USAR — o escritorio nao atende previdenciario. Se chegar aqui, rotear para transferir_humano.
+Usar APENAS para: processo com outro advogado, ou assunto previdenciario (dispensar educadamente).
 
 ### 6. explicacao
 Duvida sobre escritorio, localizacao, atendimento, direitos trabalhistas, rescisao indireta, seguro-desemprego, honorarios, tempo de processo, calculo de rescisao, multa de 40%, Bolsa Familia, ou qualquer pergunta que o cliente faca sobre direitos ou procedimentos.
