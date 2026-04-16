@@ -99,14 +99,15 @@ B) O checklist de qualificacao foi respondido (interpretar com bom senso, NAO ex
 - Acidente relatado (descricao + parte do corpo — se o cliente ja contou o que aconteceu e qual parte do corpo foi atingida, considere como respondido mesmo que resumido)
 - Cirurgia/internacao verificada (cliente respondeu sim ou nao)
 - Sequela confirmada E ela reduz a capacidade laboral (cliente relatou limitacao)
-- Laudo medico com CID comprovando a sequela confirmado (exceto acidente recente < 6 meses OU acidente com implante cirurgico como placa/pino/parafuso)
+- Laudo medico: se tem, otimo. Se NAO tem, NAO impede agendamento (escritorio providencia via parceria medica)
 - Profissao na epoca coletada (pode ter sido mencionada em qualquer momento da conversa, ex: "trabalhava no aeroporto", "era pedreiro", "motorista de caminhao" — aceite como respondida mesmo que nao tenha sido perguntada diretamente)
 
 IMPORTANTE: Se a Camila ja fez todas as perguntas de avaliacao e o cliente respondeu, rotear para agendamento. NAO manter o cliente preso em avaliacao ou coleta repetindo perguntas ja respondidas.
 
 ATENCAO: Para rotear para agendamento, a profissao DEVE estar presente no historico (direta ou indiretamente). Se nao estiver, rotear para avaliacao para coletar esse dado antes.
 
-REGRA DE OURO: Caso inviavel (sem sequela, sem laudo, fora do prazo, sem qualidade de segurado) NAO rotear para agendamento. NUNCA.
+REGRA DE OURO: Caso inviavel (sem sequela, fora do prazo, sem qualidade de segurado) NAO rotear para agendamento. NUNCA.
+NOTA: Sem laudo NAO e inviavel — o escritorio tem parceria com medicos que providenciam. Se tem sequela e qualidade de segurado, agendar normalmente mesmo sem laudo.
 
 ---
 
@@ -167,7 +168,7 @@ ATENCAO: A REGRA ANTI-REGRESSAO nunca supera o BLOQUEIO ABSOLUTO. Se o caso tem 
 - identificacao → casos_especiais: quando assunto e BPC/LOAS/aposentadoria/doenca.
 - vinculo → coleta_caso: SOMENTE quando carteira ou periodo de graca ou vinculo informal CONFIRMADO EXPLICITAMENTE no historico. Se o cliente disse que NAO tinha carteira E nao esta no periodo de graca E nao tinha vinculo informal: caso INVIAVEL — manter em vinculo para a Camila acionar cliente_inviavel.
 - coleta_caso → avaliacao: quando tem data + descricao + parte do corpo + cirurgia.
-- avaliacao → agendamento: quando sequela + laudo confirmados E caso viavel E qualidade de segurado CONFIRMADA.
+- avaliacao → agendamento: quando sequela confirmada E caso viavel E qualidade de segurado CONFIRMADA (laudo NAO e obrigatorio).
 - Qualquer fase → explicacao: quando cliente pergunta sobre servico/honorarios.
 - explicacao → fase anterior: quando duvida respondida, retomar de onde parou.
 
