@@ -462,12 +462,20 @@ async def disparar_estagio(config_cliente: dict, row: dict):
 
 async def _loop_inatividade():
     logger.info("[inatividade] Monitor iniciado (intervalo: 60s)")
+    _ciclo = 0
     while True:
         await asyncio.sleep(60)
+        _ciclo += 1
         try:
             await processar_inatividades()
         except Exception as e:
             logger.error(f"[inatividade] Erro no loop: {e}")
+        # A cada 5 minutos, verificar reativações via label
+        if _ciclo % 5 == 0:
+            try:
+                await verificar_reativacoes()
+            except Exception as e:
+                logger.error(f"[inatividade] Erro ao verificar reativações: {e}")
 
 
 def _dentro_horario_comercial() -> bool:
@@ -475,6 +483,65 @@ def _dentro_horario_comercial() -> bool:
     tz_br = timezone(timedelta(hours=-3))
     hora = datetime.now(tz_br).hour
     return 8 <= hora < 19
+
+
+async def verificar_reativacoes():
+    """Verifica conversas com label 'reativar-followup' e reinicia o ciclo de inatividade."""
+    from main import carregar_config_cliente
+    from db import get_db
+
+    if not _dentro_horario_comercial():
+        return
+
+    try:
+        db = get_db()
+        # Buscar configs ativas
+        configs = db.table("ia_clientes_config").select("account_id,chatwoot_url,chatwoot_token,inatividade_ativa").eq("ativo", True).execute()
+        for cfg in (configs.data or []):
+            if not cfg.get("inatividade_ativa", True):
+                continue
+            account_id = cfg["account_id"]
+            chatwoot_url = cfg.get("chatwoot_url", "").rstrip("/")
+            token = cfg.get("chatwoot_token", "")
+            if not chatwoot_url or not token:
+                continue
+
+            try:
+                async with httpx.AsyncClient(timeout=15) as http:
+                    # Buscar conversas com label "reativar-followup"
+                    url = f"{chatwoot_url}/api/v1/accounts/{account_id}/conversations"
+                    resp = await http.get(url, headers={"api_access_token": token}, params={"labels[]": "reativar-followup", "status": "open"})
+                    if not resp.is_success:
+                        continue
+                    convs = resp.json().get("data", {}).get("payload", [])
+                    for conv in convs:
+                        conv_id = conv.get("id")
+                        inbox_id = conv.get("inbox_id")
+                        if not conv_id:
+                            continue
+
+                        # Reiniciar ciclo de inatividade
+                        info = _estagio_info(1, account_id)
+                        if info:
+                            proximo = _proximo_disparo(info["horas"])
+                            upsert_inatividade(account_id, conv_id, inbox_id, stagio=1, proximo_disparo=proximo)
+                            logger.info(f"[inatividade] ♻️ Follow-up reativado via label — conv={conv_id} account={account_id}")
+
+                        # Remover a label "reativar-followup" para não reprocessar
+                        try:
+                            labels_url = f"{chatwoot_url}/api/v1/accounts/{account_id}/conversations/{conv_id}/labels"
+                            resp_labels = await http.get(labels_url, headers={"api_access_token": token})
+                            if resp_labels.is_success:
+                                labels_atuais = resp_labels.json().get("payload", [])
+                                novas_labels = [l for l in labels_atuais if l != "reativar-followup"]
+                                await http.post(labels_url, headers={"api_access_token": token, "Content-Type": "application/json"}, json={"labels": novas_labels})
+                        except Exception:
+                            pass
+
+            except Exception as e:
+                logger.warning(f"[inatividade] Erro ao verificar reativações account={account_id}: {e}")
+    except Exception as e:
+        logger.warning(f"[inatividade] Erro geral ao verificar reativações: {e}")
 
 
 async def processar_inatividades():
