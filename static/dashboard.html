@@ -5636,8 +5636,17 @@ async function renderPagePrompt() {
           </button>
         </div>
         <div class="prompt-notice info" style="margin-top:12px;">
-          Edite o prompt abaixo e clique em <strong>Salvar Sugestão</strong> para enviar para revisão. Clique em <strong>Atualizar Prompt</strong> para puxar a versão atual da IA.
+          ${isAdminOrSuper
+            ? 'Edite o prompt e clique em <strong>Salvar</strong> para aplicar imediatamente (sem deploy). Ou <strong>Salvar Sugestão</strong> para enviar para revisão.'
+            : 'Edite o prompt abaixo e clique em <strong>Salvar Sugestão</strong> para enviar para revisão.'
+          }
+          <span id="prompt-fonte" style="margin-left:8px;font-size:10px;"></span>
         </div>
+        ${isAdminOrSuper ? `
+        <div style="margin-top:8px;display:flex;gap:8px;align-items:center;">
+          <button class="btn btn-secondary" style="font-size:11px;" onclick="_migrarPromptsBanco()">Migrar todos para banco</button>
+          <span id="migrar-status" style="font-size:11px;color:var(--text-muted);"></span>
+        </div>` : ''}
       </div>
       <div class="card" id="prompt-content-card">
         <div style="text-align:center;padding:40px;color:var(--text-muted);">
@@ -5663,6 +5672,14 @@ async function _carregarPrompt() {
     _promptData = await res.json();
     _promptFaseAtiva = 0;
     _renderPromptContent();
+    // Mostrar fonte
+    const fonteEl = document.getElementById('prompt-fonte');
+    if (fonteEl && _promptData.fonte) {
+      const isBanco = _promptData.fonte === 'banco';
+      fonteEl.innerHTML = isBanco
+        ? '<span style="background:#dcfce7;color:#166534;padding:2px 6px;border-radius:4px;">📦 Banco (sem deploy)</span>'
+        : '<span style="background:#fef3c7;color:#92400e;padding:2px 6px;border-radius:4px;">📁 Arquivo (requer deploy)</span>';
+    }
   } catch (e) {
     card.innerHTML = `<div style="text-align:center;padding:40px;color:var(--red);">Erro ao carregar prompt: ${e.message}</div>`;
   }
@@ -5701,7 +5718,8 @@ function _renderPromptContent() {
       <span style="font-size:11px;color:var(--text-muted);">Arquivo: ${fase.arquivo}</span>
       <div style="display:flex;gap:8px;align-items:center;">
         <span id="sugestao-status" style="font-size:11px;"></span>
-        <button class="btn btn-primary" style="font-size:13px;padding:6px 20px;" onclick="_salvarSugestao()">Salvar Sugestão</button>
+        ${isAdminOrSuper ? `<button class="btn btn-primary" style="font-size:13px;padding:6px 20px;" onclick="_salvarPromptDireto()">Salvar</button>` : ''}
+        <button class="btn btn-secondary" style="font-size:13px;padding:6px 20px;" onclick="_salvarSugestao()">Salvar Sugestão</button>
       </div>
     </div>
   `;
@@ -5723,6 +5741,50 @@ async function _carregarSugestoesUsuario() {
       lista.forEach(s => { _sugestoesUsuario[s.fase] = s; });
     }
   } catch(e) {}
+}
+
+async function _migrarPromptsBanco() {
+  if (!clienteAtivo) return;
+  const statusEl = document.getElementById('migrar-status');
+  statusEl.textContent = 'Migrando...';
+  try {
+    const res = await fetch(`/api/clientes/${clienteAtivo}/prompt/migrar-para-banco`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+    });
+    if (!res.ok) throw new Error((await res.json().catch(()=>({}))).detail || 'Erro');
+    const data = await res.json();
+    statusEl.textContent = `Migrados: ${data.migrados.length} arquivos ✓`;
+    statusEl.style.color = 'var(--green)';
+    await _carregarPrompt();
+  } catch(e) {
+    statusEl.textContent = `Erro: ${e.message}`;
+    statusEl.style.color = 'var(--red)';
+  }
+}
+
+async function _salvarPromptDireto() {
+  if (!clienteAtivo || !_promptData?.prompts?.length) return;
+  const fase = _promptData.prompts[_promptFaseAtiva];
+  const conteudo = document.getElementById('prompt-editor-area').value;
+  const statusEl = document.getElementById('sugestao-status');
+  try {
+    statusEl.textContent = 'Salvando...';
+    statusEl.style.color = 'var(--text-muted)';
+    const res = await fetch(`/api/clientes/${clienteAtivo}/prompt`, {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ arquivo: fase.arquivo, conteudo })
+    });
+    if (!res.ok) throw new Error((await res.json().catch(()=>({}))).detail || 'Erro');
+    statusEl.textContent = 'Salvo no banco ✓ (sem deploy)';
+    statusEl.style.color = 'var(--green)';
+    // Atualizar dados locais
+    _promptData.prompts[_promptFaseAtiva].conteudo = conteudo;
+    setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 3000);
+  } catch(e) {
+    statusEl.textContent = `Erro: ${e.message}`;
+    statusEl.style.color = 'var(--red)';
+  }
 }
 
 async function _salvarSugestao() {

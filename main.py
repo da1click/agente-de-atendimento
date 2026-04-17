@@ -3316,44 +3316,91 @@ def _limpar_prompt_tecnico(texto: str) -> str:
 
 @app.get("/api/clientes/{account_id}/prompt")
 async def get_prompt_cliente(account_id: int, user: dict = Depends(get_current_user)):
-    """Retorna o prompt limpo (sem partes técnicas) para visualização no dashboard."""
+    """Retorna o prompt para visualização no dashboard. Prioriza banco, fallback arquivo."""
+    from db import carregar_prompts_db
+
+    ordem = ["base.md", "identificacao.md", "vinculo.md", "coleta_caso.md",
+             "avaliacao.md", "casos_especiais.md", "explicacao.md",
+             "agendamento.md", "inatividade.md", "supervisor.md", "transferir_humano.md"]
+
+    # 1. Tentar carregar do banco
+    prompts_db = carregar_prompts_db(account_id)
+    fonte = "banco"
+
+    # 2. Se banco vazio, carregar dos arquivos
+    if not prompts_db:
+        fonte = "arquivo"
+        pasta = pasta_cliente(account_id)
+        if not pasta:
+            raise HTTPException(status_code=404, detail="Conta não encontrada")
+        prompt_dir = os.path.join(pasta, "prompt")
+        if not os.path.isdir(prompt_dir):
+            raise HTTPException(status_code=404, detail="Nenhum prompt encontrado para esta conta")
+        for arq in os.listdir(prompt_dir):
+            if arq.endswith(".md"):
+                caminho = os.path.join(prompt_dir, arq)
+                with open(caminho, "r", encoding="utf-8") as f:
+                    prompts_db[arq] = f.read()
+
+    # Ordenar
+    arquivos = []
+    for arq in ordem:
+        if arq in prompts_db:
+            arquivos.append(arq)
+    for arq in sorted(prompts_db.keys()):
+        if arq not in arquivos:
+            arquivos.append(arq)
+
+    prompts = []
+    for arq in arquivos:
+        conteudo = prompts_db[arq]
+        conteudo_limpo = _limpar_prompt_tecnico(conteudo)
+        nome_fase = arq.replace(".md", "").replace("_", " ").title()
+        prompts.append({
+            "arquivo": arq,
+            "fase": nome_fase,
+            "conteudo": conteudo_limpo
+        })
+
+    return {"account_id": account_id, "prompts": prompts, "fonte": fonte}
+
+
+@app.put("/api/clientes/{account_id}/prompt")
+async def salvar_prompt_cliente(account_id: int, request: Request, user: dict = Depends(get_current_user)):
+    """Salva prompt no Supabase (sem deploy). Aceita {arquivo, conteudo}."""
+    from db import salvar_prompt_db
+    dados = await request.json()
+    arquivo = dados.get("arquivo")
+    conteudo = dados.get("conteudo")
+    if not arquivo or conteudo is None:
+        raise HTTPException(status_code=400, detail="arquivo e conteudo obrigatórios")
+    salvar_prompt_db(account_id, arquivo, conteudo)
+    logger.info(f"[prompt] Salvo no banco: account={account_id} arquivo={arquivo} ({len(conteudo)} chars)")
+    return {"status": "ok", "arquivo": arquivo}
+
+
+@app.post("/api/clientes/{account_id}/prompt/migrar-para-banco")
+async def migrar_prompts_para_banco(account_id: int, user: dict = Depends(get_current_user)):
+    """Migra todos os prompts de arquivo para o Supabase (uma vez por conta)."""
+    from db import salvar_prompt_db
     pasta = pasta_cliente(account_id)
     if not pasta:
         raise HTTPException(status_code=404, detail="Conta não encontrada")
     prompt_dir = os.path.join(pasta, "prompt")
     if not os.path.isdir(prompt_dir):
-        raise HTTPException(status_code=404, detail="Nenhum prompt encontrado para esta conta")
+        raise HTTPException(status_code=404, detail="Nenhum prompt encontrado")
 
-    # Ordem de leitura dos arquivos
-    ordem = ["base.md", "identificacao.md", "vinculo.md", "coleta_caso.md",
-             "avaliacao.md", "casos_especiais.md", "explicacao.md",
-             "agendamento.md", "inatividade.md", "supervisor.md"]
-
-    arquivos = []
-    # Primeiro os da ordem, depois os extras
-    existentes = set(os.listdir(prompt_dir))
-    for arq in ordem:
-        if arq in existentes:
-            arquivos.append(arq)
-    for arq in sorted(existentes):
-        if arq.endswith(".md") and arq not in arquivos:
-            arquivos.append(arq)
-
-    prompts = []
-    for arq in arquivos:
-        caminho = os.path.join(prompt_dir, arq)
-        if os.path.isfile(caminho):
+    migrados = []
+    for arq in os.listdir(prompt_dir):
+        if arq.endswith(".md"):
+            caminho = os.path.join(prompt_dir, arq)
             with open(caminho, "r", encoding="utf-8") as f:
                 conteudo = f.read()
-            conteudo_limpo = _limpar_prompt_tecnico(conteudo)
-            nome_fase = arq.replace(".md", "").replace("_", " ").title()
-            prompts.append({
-                "arquivo": arq,
-                "fase": nome_fase,
-                "conteudo": conteudo_limpo
-            })
+            salvar_prompt_db(account_id, arq, conteudo)
+            migrados.append(arq)
 
-    return {"account_id": account_id, "prompts": prompts}
+    logger.info(f"[prompt] Migrados {len(migrados)} prompts para banco: account={account_id}")
+    return {"status": "ok", "migrados": migrados}
 
 
 # ── SUGESTÕES DE PROMPT ──────────────────────────────────────
