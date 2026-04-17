@@ -1775,11 +1775,16 @@ async function carregarStatusOnboarding(accountId) {
       linkInput.value = window.location.origin + data.url;
       linkStatus.textContent = 'Formulário já enviado — link bloqueado';
       linkStatus.style.color = 'var(--green)';
-      // Mostrar preview dos dados
+      // Mostrar preview dos dados + botão regenerar prompts
       if (data.form_data && Object.keys(data.form_data).length > 0) {
         const preview = document.getElementById('onboarding-data-preview');
         preview.style.display = 'block';
-        preview.innerHTML = `<button class="btn btn-ghost" style="font-size:11px;" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">Ver dados enviados</button>
+        preview.innerHTML = `
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <button class="btn btn-ghost" style="font-size:11px;" onclick="this.parentElement.nextElementSibling.style.display=this.parentElement.nextElementSibling.style.display==='none'?'block':'none'">Ver dados enviados</button>
+            <button class="btn btn-primary" style="font-size:11px;padding:4px 12px;" onclick="regenerarPrompts(${accountId})">Regenerar Prompts</button>
+            <span id="regenerar-status" style="font-size:11px;color:var(--text-muted);"></span>
+          </div>
           <pre style="display:none;font-size:11px;background:var(--bg);padding:12px;border-radius:8px;overflow:auto;max-height:300px;margin-top:6px;border:1px solid var(--border);">${JSON.stringify(data.form_data, null, 2)}</pre>`;
       }
     }
@@ -1812,6 +1817,30 @@ async function gerarLinkOnboarding(accountId) {
     statusEl.innerHTML = '<span style="color:var(--yellow);font-weight:600;">Pendente</span>';
   } catch (e) {
     alert('Erro de conexão');
+  }
+}
+
+async function regenerarPrompts(accountId) {
+  const statusEl = document.getElementById('regenerar-status');
+  statusEl.textContent = 'Gerando prompts...';
+  statusEl.style.color = 'var(--text-muted)';
+  try {
+    const resp = await fetch(`/api/onboarding/regenerar-prompts/${accountId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    if (!resp.ok) {
+      const err = await resp.json();
+      statusEl.textContent = 'Erro: ' + (err.detail || 'Falha ao gerar');
+      statusEl.style.color = 'var(--red)';
+      return;
+    }
+    statusEl.textContent = 'Prompts gerados com sucesso ✓';
+    statusEl.style.color = 'var(--green)';
+    setTimeout(() => { statusEl.textContent = ''; }, 4000);
+  } catch (e) {
+    statusEl.textContent = 'Erro de conexão';
+    statusEl.style.color = 'var(--red)';
   }
 }
 
