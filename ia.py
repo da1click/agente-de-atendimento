@@ -252,12 +252,18 @@ async def _notificar_transferencia_humano(
     if not notif_conv_id:
         return
 
-    # Evitar duplicação: mesma conta + conversa + tipo = não notificar novamente
-    chave = f"{account_id}:{conversation_id}:{tipo}"
-    if chave in _transferencias_notificadas:
+    # Evitar duplicação: mesma conta + conversa + tipo OU mesmo telefone em curto prazo
+    chave_conv = f"{account_id}:{conversation_id}:{tipo}"
+    chave_phone = f"{account_id}:{contact_phone}:{tipo}" if contact_phone else None
+    if chave_conv in _transferencias_notificadas:
         logger.info(f"[notificação] Transferência já notificada — conv={conversation_id} tipo='{tipo}' — ignorando duplicata")
         return
-    _transferencias_notificadas[chave] = True
+    if chave_phone and chave_phone in _transferencias_notificadas:
+        logger.info(f"[notificação] Transferência já notificada para telefone {contact_phone} tipo='{tipo}' — ignorando duplicata (outra conversa)")
+        return
+    _transferencias_notificadas[chave_conv] = True
+    if chave_phone:
+        _transferencias_notificadas[chave_phone] = True
     # Limitar tamanho do cache
     if len(_transferencias_notificadas) > 5000:
         # Remover metade mais antiga
