@@ -23,6 +23,9 @@ Se o cliente menciona pagamento, parcelas, acordo ou processo existente:
 Se o cliente pergunta sobre novidades ou andamento do caso:
 "Oi! Vou verificar com nossa equipe e ja te retorno com as informacoes, tudo bem? Aguarda so um pouquinho!"
 
+Se o cliente ja tem outro advogado:
+"Entendi. Vou passar seu contato pro nosso especialista pra ele conversar com voce e ver como podemos te ajudar, tudo bem?"
+
 ## AVALIACAO GOOGLE
 
 Se o cliente veio apenas com duvida simples e a duvida ja foi respondida (nao era um caso para agendamento), incluir ao final da mensagem de encerramento:
