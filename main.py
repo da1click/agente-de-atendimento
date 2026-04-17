@@ -3429,6 +3429,28 @@ async def api_submeter_onboarding(token: str):
     return {"status": "submitted"}
 
 
+@app.post("/api/onboarding/regenerar-prompts/{account_id}")
+async def api_regenerar_prompts(account_id: int, user: dict = Depends(get_current_user)):
+    """Regenera os prompts da conta a partir dos dados do onboarding já submetido."""
+    row = get_onboarding_by_account(account_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Onboarding não encontrado para esta conta")
+    form_data = row.get("form_data", {})
+    if not form_data:
+        raise HTTPException(status_code=400, detail="Onboarding sem dados de formulário")
+    # Regenerar apenas os prompts (passo 5 do _processar_onboarding)
+    try:
+        from onboarding_prompts import gerar_prompts_cliente
+        cfg = carregar_config_cliente(account_id) or {}
+        nome_conta = cfg.get("nome_escritorio") or cfg.get("nome", f"Conta{account_id}")
+        gerar_prompts_cliente(account_id, nome_conta, form_data, CLIENTES_DIR)
+        logger.info(f"Prompts regenerados para conta {account_id}")
+        return {"status": "ok", "message": f"Prompts regenerados para conta {account_id}"}
+    except Exception as e:
+        logger.error(f"Erro ao regenerar prompts conta {account_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Erro ao gerar prompts: {str(e)}")
+
+
 def _processar_onboarding(account_id: int, form_data: dict):
     """Auto-configura a conta com os dados do onboarding."""
     # 1. Atualizar config do cliente
