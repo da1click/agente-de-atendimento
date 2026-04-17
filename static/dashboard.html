@@ -3004,6 +3004,23 @@ async function renderPageInatividade() {
             <div class="card-title">Estágios de Inatividade</div>
             <div class="card-sub">Timers, labels e templates por estágio</div>
           </div>
+          <div style="margin-left:auto;display:flex;align-items:center;gap:12px;">
+            <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;">
+              <span style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Follow-ups</span>
+              <select id="inativ-limite" style="padding:4px 8px;font-size:12px;border-radius:6px;border:1px solid var(--border);">
+                <option value="3" ${(_inativCfg.limite || 3) == 3 ? 'selected' : ''}>3 estágios</option>
+                <option value="4" ${(_inativCfg.limite || 3) == 4 ? 'selected' : ''}>4 estágios</option>
+                <option value="5" ${(_inativCfg.limite || 3) == 5 ? 'selected' : ''}>5 estágios</option>
+              </select>
+            </div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+              <span style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Ativo</span>
+              <label class="toggle">
+                <input type="checkbox" id="inativ-ativo" ${_inativCfg.ativo !== false ? 'checked' : ''} />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+          </div>
         </div>
 
         <!-- Conta de referência para templates -->
@@ -3094,13 +3111,25 @@ async function salvarInatividade() {
     return { ...e, horas, label, template_whatsapp: tpl };
   });
 
+  const limite = parseInt(document.getElementById('inativ-limite')?.value) || 3;
+  const ativo = document.getElementById('inativ-ativo')?.checked ?? true;
+
+  const payload = { ..._inativCfg, estagios, limite, ativo, account_id: clienteAtivo };
+
   await fetch('/api/config/inatividade', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ..._inativCfg, estagios, account_id: clienteAtivo }),
+    body: JSON.stringify(payload),
   });
 
-  _inativCfg = { ..._inativCfg, estagios };
+  // Salvar ativo também no config principal (inatividade_ativa)
+  await fetch(`/api/clientes/${clienteAtivo}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ inatividade_ativa: ativo }),
+  });
+
+  _inativCfg = { ..._inativCfg, estagios, limite, ativo };
   const msg = document.getElementById('inativ-save-msg');
   msg.classList.add('show');
   setTimeout(() => msg.classList.remove('show'), 2500);

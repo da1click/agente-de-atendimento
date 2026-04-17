@@ -1805,10 +1805,13 @@ def get_inatividade_config(account_id: int = None):
                     cfg_conta = json.loads(cfg_conta)
                 if cfg_conta.get("estagios"):
                     return cfg_conta
-    # Fallback: config global
+    # Fallback: config global (com defaults de limite e ativo)
     path = os.path.join(BASE_DIR, "config", "inatividade.json")
     with open(path, encoding="utf-8") as f:
-        return json.load(f)
+        cfg = json.load(f)
+    cfg.setdefault("limite", 3)
+    cfg.setdefault("ativo", True)
+    return cfg
 
 
 @app.put("/api/config/inatividade")
