@@ -80,8 +80,8 @@ _MSG_IDS_MAX = 500
 
 
 async def _recuperar_conversas_pos_deploy():
-    """Após deploy, aguarda 60s e verifica conversas abertas atribuídas à IA sem resposta."""
-    await asyncio.sleep(60)
+    """Após deploy, aguarda 90s e verifica conversas abertas atribuídas à IA sem resposta."""
+    await asyncio.sleep(90)
     logger.info("[pos-deploy] Verificando conversas sem resposta...")
 
     try:
@@ -107,15 +107,19 @@ async def _recuperar_conversas_pos_deploy():
 
             try:
                 async with httpx.AsyncClient(timeout=15) as http:
-                    # Buscar conversas abertas atribuídas à IA
-                    url = f"{base_url}/api/v1/accounts/{account_id}/conversations"
-                    resp = await http.get(url, headers={"api_access_token": token}, params={
-                        "status": "open", "assignee_type": "assigned", "page": 1,
-                    })
-                    if not resp.is_success:
-                        continue
-
-                    convs = resp.json().get("data", {}).get("payload", [])
+                    # Buscar conversas abertas atribuídas à IA (até 3 páginas)
+                    convs = []
+                    for page in range(1, 4):
+                        url = f"{base_url}/api/v1/accounts/{account_id}/conversations"
+                        resp = await http.get(url, headers={"api_access_token": token}, params={
+                            "status": "open", "assignee_type": "assigned", "page": page,
+                        })
+                        if not resp.is_success:
+                            break
+                        page_convs = resp.json().get("data", {}).get("payload", [])
+                        convs.extend(page_convs)
+                        if len(page_convs) < 25:  # última página
+                            break
 
                     for conv in convs:
                         try:
@@ -152,8 +156,8 @@ async def _recuperar_conversas_pos_deploy():
                                 agora = datetime.now(timezone.utc)
                                 diff_min = (agora - msg_time).total_seconds() / 60
 
-                                # Só reprocessar mensagens dos últimos 15 minutos (janela do deploy)
-                                if diff_min <= 15:
+                                # Só reprocessar mensagens dos últimos 30 minutos (janela do deploy)
+                                if diff_min <= 30:
                                     config_full = carregar_config_cliente(account_id)
                                     if config_full:
                                         from ia import agendar_processamento
