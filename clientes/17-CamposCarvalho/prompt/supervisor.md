@@ -64,6 +64,8 @@ Duvida sobre escritorio, localizacao, atendimento, direitos trabalhistas, rescis
 APENAS se: cliente pediu OU qualificacao minima preenchida com caso viavel.
 REGRA DE OURO: caso inviavel NUNCA vai para agendamento.
 
+REGRA CRITICA: Se a Diana JA ofereceu horarios ao cliente OU o cliente esta escolhendo/negociando horario (ex: "pode ser as 16h", "manha", "tarde", "noite", "outro horario"), MANTER EM AGENDAMENTO. NAO voltar para avaliacao nem outra fase. A negociacao de horario FAZ PARTE do agendamento.
+
 ### 8. transferir_humano
 Cliente existente, caso previdenciario/INSS, fora do escopo trabalhista, pede humano.
 
