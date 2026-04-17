@@ -1612,19 +1612,13 @@ async function carregarFormConta(id) {
         </div>
         <div class="field-group">
           <label>Notificação — Convertido ${_tag(groupItems.length, 'grupos')}</label>
-          ${groupItems.length
-            ? _buildSelect('f-notif-convertido', groupItems, v('id_notificacao_convertido'), 'Selecione o grupo')
-            : `<input type="number" id="f-notif-convertido" value="${v('id_notificacao_convertido') || ''}" placeholder="ID da conversa" />`
-          }
-          <span class="field-hint">ID da conversa do grupo para notificações de agendamento</span>
+          ${_buildSelect('f-notif-convertido', groupItems, v('id_notificacao_convertido'), 'Selecione o grupo')}
+          <span class="field-hint">Grupo WhatsApp notificado ao converter lead</span>
         </div>
         <div class="field-group">
           <label>Notificação — Cliente ${_tag(groupItems.length, 'grupos')}</label>
-          ${groupItems.length
-            ? _buildSelect('f-notif-cliente', groupItems, v('id_notificacao_cliente'), 'Selecione o grupo')
-            : `<input type="number" id="f-notif-cliente" value="${v('id_notificacao_cliente') || ''}" placeholder="ID da conversa" />`
-          }
-          <span class="field-hint">ID da conversa do grupo para notificações de transferência</span>
+          ${_buildSelect('f-notif-cliente', groupItems, v('id_notificacao_cliente'), 'Selecione o grupo')}
+          <span class="field-hint">Grupo WhatsApp notificado em ações do cliente</span>
         </div>
       </div>
 
