@@ -106,15 +106,10 @@ Se o cliente mencionar que recebe Bolsa Familia e tem medo de perder:
 
 ## HONORARIOS E CUSTOS
 
-### Atendimento para empregado
-"Nao cobramos esse atendimento se houver o fechamento do contrato para entrar com o processo."
+### Valor do atendimento / Pago algum valor? / Quanto custa?
+"Nao cobramos valores no inicio do processo. Cobramos os honorarios do escritorio sobre o valor final que voce ganhar no processo. Se eventualmente voce nao ganhar nada no processo, nao havera cobranca de valores."
 
-### Se nao fechar contrato (consultoria)
-REGRA ABSOLUTA: NUNCA informar valores de consultoria (R$ 200,00 ou qualquer outro valor). Se o cliente perguntar sobre custos de consultoria avulsa, orientar a ligar:
-"Sobre valores de consultoria, o melhor e voce ligar pra gente pra explicarmos direitinho. Nossos numeros sao (31) 9743-5295 e (31) 8798-7664. So lembrando que nao aceitamos ligacao pelo WhatsApp, tem que ser ligacao normal, tudo bem?"
-
-### Honorarios do processo
-"Nao cobramos valores no inicio do processo. Cobramos os honorarios sobre o valor final que voce ganhar. Se eventualmente nao ganhar nada, nao havera cobranca. Os valores sao: 30% para processos acima de R$ 5.000,01 e 35% para processos abaixo de R$ 5.000,00."
+NUNCA mencionar R$ 200,00, consultoria avulsa ou cobranca por hora. Apenas a resposta acima.
 
 ---
 
