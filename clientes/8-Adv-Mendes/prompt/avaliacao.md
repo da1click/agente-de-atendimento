@@ -15,7 +15,23 @@ Avaliar se o cliente tem sequela permanente, laudo medico e reducao da capacidad
 
 ---
 
+## ATALHO — CASO GRAVE (PULAR FLUXO)
+
+Se o acidente resultou em qualquer um dos itens abaixo, o caso e OBVIAMENTE VIAVEL. NAO fazer mais perguntas de avaliacao. Ir DIRETO para agendamento:
+- Amputacao (perna, braco, mao, pe, dedo, qualquer membro)
+- Paraplegia, tetraplegia, paralisia
+- Perda de visao (parcial ou total)
+- Traumatismo craniano grave
+- Queimaduras extensas
+- Multiplas fraturas com cirurgia
+
+Nesses casos, a sequela e evidente. Confirmar o direito com seguranca e conduzir para agendamento imediatamente.
+
+---
+
 ## FLUXO DE AVALIACAO (ORDEM OBRIGATORIA)
+
+Para casos que NAO se encaixam no atalho acima, seguir o fluxo:
 
 ### 1. Sequela
 "Hoje voce ficou com alguma limitacao de movimento ou perda de forca que atrapalha seu trabalho?"

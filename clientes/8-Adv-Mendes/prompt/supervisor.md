@@ -102,6 +102,8 @@ B) O checklist de qualificacao foi respondido (interpretar com bom senso, NAO ex
 - Laudo medico: se tem, otimo. Se NAO tem, NAO impede agendamento (escritorio providencia via parceria medica)
 - Profissao na epoca coletada (pode ter sido mencionada em qualquer momento da conversa, ex: "trabalhava no aeroporto", "era pedreiro", "motorista de caminhao" — aceite como respondida mesmo que nao tenha sido perguntada diretamente)
 
+ATALHO — CASO GRAVE: Se o acidente resultou em amputacao, paraplegia, perda de visao, traumatismo craniano grave ou queimaduras extensas: rotear para agendamento IMEDIATAMENTE. A sequela e obvia, nao precisa de mais perguntas.
+
 IMPORTANTE: Se a Camila ja fez todas as perguntas de avaliacao e o cliente respondeu, rotear para agendamento. NAO manter o cliente preso em avaliacao ou coleta repetindo perguntas ja respondidas.
 
 ATENCAO: Para rotear para agendamento, a profissao DEVE estar presente no historico (direta ou indiretamente). Se nao estiver, rotear para avaliacao para coletar esse dado antes.
