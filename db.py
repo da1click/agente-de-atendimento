@@ -727,35 +727,6 @@ def listar_bloqueios_agenda_ativos(account_id: int) -> list:
     return resp.data or []
 
 
-# ── PROMPTS (Supabase) ─────────────────────────────────────
-
-def carregar_prompts_db(account_id: int) -> dict:
-    """Retorna dict {arquivo: conteudo} dos prompts salvos no banco."""
-    db = get_db()
-    try:
-        resp = db.table("ia_prompts").select("arquivo,conteudo").eq("account_id", account_id).execute()
-        return {r["arquivo"]: r["conteudo"] for r in (resp.data or [])}
-    except Exception:
-        return {}
-
-
-def salvar_prompt_db(account_id: int, arquivo: str, conteudo: str):
-    """Salva ou atualiza um prompt no banco (upsert por account_id + arquivo)."""
-    db = get_db()
-    db.table("ia_prompts").upsert({
-        "account_id": account_id,
-        "arquivo": arquivo,
-        "conteudo": conteudo,
-        "updated_at": "now()",
-    }, on_conflict="account_id,arquivo").execute()
-
-
-def deletar_prompt_db(account_id: int, arquivo: str):
-    """Remove um prompt do banco."""
-    db = get_db()
-    db.table("ia_prompts").delete().eq("account_id", account_id).eq("arquivo", arquivo).execute()
-
-
 # Mapa de sinônimos → especialidade padronizada
 _ESPECIALIDADE_SINONIMOS = {
     # Previdenciário

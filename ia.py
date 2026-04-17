@@ -1020,23 +1020,6 @@ def pasta_cliente(account_id: int) -> str | None:
 
 
 def carregar_prompt(account_id: int, nome_arquivo: str) -> str:
-    # 1. Tentar carregar do banco (Supabase) — sem deploy
-    try:
-        from db import carregar_prompts_db
-        prompts_db = carregar_prompts_db(account_id)
-        if prompts_db and nome_arquivo in prompts_db:
-            base = prompts_db.get("base.md", "")
-            conteudo = prompts_db[nome_arquivo]
-            conteudo = "\n".join(
-                linha for linha in conteudo.splitlines()
-                if not linha.strip().startswith("> Regras de estilo") and
-                   not linha.strip().startswith("> ver base.md")
-            )
-            return f"{base}\n\n---\n\n{conteudo}"
-    except Exception:
-        pass
-
-    # 2. Fallback: carregar do arquivo local
     pasta = pasta_cliente(account_id)
     base_path = os.path.join(pasta, "prompt", "base.md")
     prompt_path = os.path.join(pasta, "prompt", nome_arquivo)
