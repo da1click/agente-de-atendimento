@@ -79,6 +79,102 @@ _MSG_IDS_PROCESSADOS: OrderedDict[int, bool] = OrderedDict()
 _MSG_IDS_MAX = 500
 
 
+async def _recuperar_conversas_pos_deploy():
+    """Após deploy, aguarda 60s e verifica conversas abertas atribuídas à IA sem resposta."""
+    await asyncio.sleep(60)
+    logger.info("[pos-deploy] Verificando conversas sem resposta...")
+
+    try:
+        from db import get_db
+        db = get_db()
+        configs = db.table("ia_clientes_config").select(
+            "account_id,chatwoot_url,chatwoot_token,ia_agent_id,ia_ativa,inboxes"
+        ).eq("ativo", True).execute()
+
+        total_reprocessadas = 0
+
+        for cfg in (configs.data or []):
+            if not cfg.get("ia_ativa", True) or not cfg.get("ia_agent_id"):
+                continue
+
+            account_id = cfg["account_id"]
+            base_url = (cfg.get("chatwoot_url") or "").rstrip("/")
+            token = cfg.get("chatwoot_token", "")
+            ia_agent_id = cfg["ia_agent_id"]
+
+            if not base_url or not token:
+                continue
+
+            try:
+                async with httpx.AsyncClient(timeout=15) as http:
+                    # Buscar conversas abertas atribuídas à IA
+                    url = f"{base_url}/api/v1/accounts/{account_id}/conversations"
+                    resp = await http.get(url, headers={"api_access_token": token}, params={
+                        "status": "open", "assignee_type": "assigned", "page": 1,
+                    })
+                    if not resp.is_success:
+                        continue
+
+                    convs = resp.json().get("data", {}).get("payload", [])
+
+                    for conv in convs:
+                        try:
+                            # Verificar se está atribuída à IA
+                            assignee = conv.get("meta", {}).get("assignee") or {}
+                            if assignee.get("id") != ia_agent_id:
+                                continue
+
+                            conv_id = conv.get("id")
+                            inbox_id = conv.get("inbox_id")
+
+                            # Buscar últimas mensagens
+                            msgs_url = f"{base_url}/api/v1/accounts/{account_id}/conversations/{conv_id}/messages"
+                            msgs_resp = await http.get(msgs_url, headers={"api_access_token": token})
+                            if not msgs_resp.is_success:
+                                continue
+
+                            msgs = msgs_resp.json().get("payload", [])
+                            if not msgs:
+                                continue
+
+                            # Ordenar por created_at
+                            msgs = sorted(msgs, key=lambda m: m.get("created_at", 0))
+                            ultima = msgs[-1]
+
+                            # Se a última mensagem é do CLIENTE (incoming) e foi nos últimos 15 min
+                            if ultima.get("message_type") == 0:
+                                from datetime import datetime, timezone
+                                created = ultima.get("created_at", 0)
+                                if isinstance(created, (int, float)):
+                                    msg_time = datetime.fromtimestamp(created, tz=timezone.utc)
+                                else:
+                                    continue
+                                agora = datetime.now(timezone.utc)
+                                diff_min = (agora - msg_time).total_seconds() / 60
+
+                                # Só reprocessar mensagens dos últimos 15 minutos (janela do deploy)
+                                if diff_min <= 15:
+                                    config_full = carregar_config_cliente(account_id)
+                                    if config_full:
+                                        from ia import agendar_processamento
+                                        agendar_processamento(config_full, account_id, conv_id, inbox_id)
+                                        total_reprocessadas += 1
+                                        logger.info(f"[pos-deploy] Reprocessando conv={conv_id} account={account_id} (última msg cliente há {diff_min:.0f}min)")
+
+                        except Exception as e:
+                            logger.warning(f"[pos-deploy] Erro ao verificar conv={conv.get('id')}: {e}")
+                            continue
+
+            except Exception as e:
+                logger.warning(f"[pos-deploy] Erro ao verificar conta {account_id}: {e}")
+                continue
+
+        logger.info(f"[pos-deploy] Concluído — {total_reprocessadas} conversa(s) reprocessada(s)")
+
+    except Exception as e:
+        logger.error(f"[pos-deploy] Erro geral: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     iniciar_monitoramento()
@@ -90,6 +186,8 @@ async def lifespan(app: FastAPI):
     iniciar_zapsign_followup()
     from agendador_consultas import iniciar_agendador_consultas
     iniciar_agendador_consultas()
+    # Recuperar conversas perdidas durante deploy
+    asyncio.create_task(_recuperar_conversas_pos_deploy())
     # Cria super_admin inicial se não existir
     try:
         if not super_admin_existe():
