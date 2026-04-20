@@ -673,9 +673,9 @@ KANBAN_TOOL_MAP = {
 }
 
 
-async def _carregar_funis(url: str, token: str, account_id: int) -> dict:
+async def _carregar_funis(url: str, token: str, account_id: int, force_reload: bool = False) -> dict:
     """Carrega funis e etapas da conta, com cache."""
-    if account_id in _funnel_cache:
+    if not force_reload and account_id in _funnel_cache:
         return _funnel_cache[account_id]
 
     headers = {"api_access_token": token}
@@ -683,6 +683,7 @@ async def _carregar_funis(url: str, token: str, account_id: int) -> dict:
         async with httpx.AsyncClient() as http:
             resp = await http.get(f"{url}/api/v1/accounts/{account_id}/funnels", headers=headers, timeout=10)
             if not resp.is_success:
+                logger.warning(f"[kanban] API de funis retornou {resp.status_code} para account_id={account_id}")
                 return {}
             funnels = resp.json().get("payload", [])
 
@@ -694,11 +695,15 @@ async def _carregar_funis(url: str, token: str, account_id: int) -> dict:
                 steps[s["identifier"]] = s["id"]
             mapa[f["identifier"]] = {"funnel_id": f["id"], "steps": steps}
 
-        _funnel_cache[account_id] = mapa
-        logger.info(f"[kanban] Cache carregado para account_id={account_id}: {list(mapa.keys())}")
+        # Só cacheia se encontrou os funis esperados — evita gravar resultado vazio
+        if mapa:
+            _funnel_cache[account_id] = mapa
+            logger.info(f"[kanban] Cache carregado para account_id={account_id}: {list(mapa.keys())}")
+        else:
+            logger.warning(f"[kanban] Nenhum funil encontrado para account_id={account_id} — cache NÃO persistido (tentará de novo)")
         return mapa
     except Exception as e:
-        logger.warning(f"[kanban] Erro ao carregar funis: {e}")
+        logger.warning(f"[kanban] Erro ao carregar funis (account_id={account_id}): {e}")
         return {}
 
 
@@ -713,14 +718,32 @@ async def kanban_mover_card(url: str, token: str, account_id: int, conversation_
     funis = await _carregar_funis(url, token, account_id)
 
     funil = funis.get(funnel_identifier)
+    # Se funil não existe, tenta recarregar (pode ter sido criado após cache)
+    if not funil and funis:
+        logger.info(f"[kanban] Funil '{funnel_identifier}' ausente — tentando recarregar cache (account_id={account_id})")
+        funis = await _carregar_funis(url, token, account_id, force_reload=True)
+        funil = funis.get(funnel_identifier)
     if not funil:
-        logger.debug(f"[kanban] Funil '{funnel_identifier}' nao encontrado para account_id={account_id}")
+        logger.warning(
+            f"[kanban] Funil '{funnel_identifier}' NAO encontrado para account_id={account_id}. "
+            f"Funis disponíveis: {list(funis.keys()) or 'nenhum'}. "
+            f"Use POST /api/clientes/{account_id}/recriar-funis para recriar."
+        )
         return
 
     funnel_id = funil["funnel_id"]
     step_id = funil["steps"].get(step_identifier)
+    # Se etapa não existe, tenta recarregar
     if not step_id:
-        logger.debug(f"[kanban] Step '{step_identifier}' nao encontrado no funil '{funnel_identifier}'")
+        logger.info(f"[kanban] Step '{step_identifier}' ausente — recarregando cache (account_id={account_id})")
+        funis = await _carregar_funis(url, token, account_id, force_reload=True)
+        funil = funis.get(funnel_identifier, {})
+        step_id = funil.get("steps", {}).get(step_identifier)
+    if not step_id:
+        logger.warning(
+            f"[kanban] Step '{step_identifier}' NAO encontrado no funil '{funnel_identifier}' (account_id={account_id}). "
+            f"Etapas disponíveis: {list((funil or {}).get('steps', {}).keys())}"
+        )
         return
 
     headers = {"api_access_token": token, "Content-Type": "application/json"}

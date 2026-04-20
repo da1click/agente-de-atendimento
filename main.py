@@ -2609,7 +2609,113 @@ async def recriar_funis_conta(account_id: int):
     if not chatwoot_url or not chatwoot_token:
         raise HTTPException(status_code=400, detail="chatwoot_url e chatwoot_token não configurados")
     await criar_funis_padrao(chatwoot_url, chatwoot_token, account_id)
+    # Invalidar cache para que a próxima tool leia os funis recém-criados
+    try:
+        from ia import _funnel_cache
+        _funnel_cache.pop(account_id, None)
+    except Exception:
+        pass
     return {"status": "ok", "detail": f"Funis recriados para conta {account_id}"}
+
+
+@app.get("/api/admin/kanban/diagnostico")
+async def diagnostico_kanban_todas_contas():
+    """Verifica o estado dos funis/etapas do kanban em todas as contas ativas.
+
+    Retorna lista com status de cada conta: funis presentes, etapas faltando,
+    e se o kanban está 100% funcional para o fluxo da IA.
+    """
+    FUNIS_ESPERADOS = {
+        "pipeline_comercial": [
+            "lead_novo", "aguardando_atendimento", "aguardando_assinatura",
+            "contrato_fechado", "followup", "leads_desqualificados",
+            "nao_respondeu", "nao_assinou",
+        ],
+        "triagem_encaminhamento": [
+            "transferido", "inviavel", "desqualificado",
+            "nao_alfabetizado", "perdido", "resolvido",
+        ],
+    }
+
+    try:
+        from db import get_db
+        db = get_db()
+        configs = db.table("ia_clientes_config").select(
+            "account_id,nome,chatwoot_url,chatwoot_token,ativo"
+        ).eq("ativo", True).execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao buscar contas: {e}")
+
+    resultado = []
+    async with httpx.AsyncClient(timeout=10) as http:
+        for cfg in (configs.data or []):
+            account_id = cfg.get("account_id")
+            nome_conta = cfg.get("nome", "")
+            base = (cfg.get("chatwoot_url") or "").rstrip("/")
+            token = cfg.get("chatwoot_token", "")
+            if not base or not token:
+                resultado.append({
+                    "account_id": account_id,
+                    "nome": nome_conta,
+                    "status": "sem_credencial",
+                    "detalhe": "chatwoot_url ou chatwoot_token não configurados",
+                })
+                continue
+            try:
+                resp = await http.get(
+                    f"{base}/api/v1/accounts/{account_id}/funnels",
+                    headers={"api_access_token": token},
+                )
+                if not resp.is_success:
+                    resultado.append({
+                        "account_id": account_id,
+                        "nome": nome_conta,
+                        "status": "api_erro",
+                        "http_status": resp.status_code,
+                    })
+                    continue
+                funnels = resp.json().get("payload", [])
+                por_identifier = {f.get("identifier"): f for f in funnels}
+
+                faltando_funis = []
+                faltando_steps = {}
+                for funil_id, steps_esperados in FUNIS_ESPERADOS.items():
+                    if funil_id not in por_identifier:
+                        faltando_funis.append(funil_id)
+                        continue
+                    steps_atuais = {s.get("identifier") for s in por_identifier[funil_id].get("funnel_steps", [])}
+                    faltando = [s for s in steps_esperados if s not in steps_atuais]
+                    if faltando:
+                        faltando_steps[funil_id] = faltando
+
+                if not faltando_funis and not faltando_steps:
+                    status = "ok"
+                else:
+                    status = "incompleto"
+
+                resultado.append({
+                    "account_id": account_id,
+                    "nome": nome_conta,
+                    "status": status,
+                    "funis_existentes": list(por_identifier.keys()),
+                    "funis_faltando": faltando_funis,
+                    "etapas_faltando": faltando_steps,
+                })
+            except Exception as e:
+                resultado.append({
+                    "account_id": account_id,
+                    "nome": nome_conta,
+                    "status": "erro",
+                    "detalhe": str(e),
+                })
+
+    resumo = {
+        "total": len(resultado),
+        "ok": sum(1 for r in resultado if r.get("status") == "ok"),
+        "incompleto": sum(1 for r in resultado if r.get("status") == "incompleto"),
+        "erro": sum(1 for r in resultado if r.get("status") in ("erro", "api_erro", "sem_credencial")),
+    }
+    return {"resumo": resumo, "contas": resultado}
 
 
 # ── WEBHOOK AUDIÊNCIA ─────────────────────────────────────────
