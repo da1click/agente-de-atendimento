@@ -1395,10 +1395,34 @@ async def chatwoot_webhook(request: Request):
             if len(_MSG_IDS_PROCESSADOS) > _MSG_IDS_MAX:
                 _MSG_IDS_PROCESSADOS.popitem(last=False)
 
-        # Ignorar mensagens de grupo do WhatsApp (@g.us)
-        identifier = contact.get("identifier") or ""
-        if "@g.us" in identifier:
-            logger.info(f"🚫 Ignorando mensagem de grupo WhatsApp: {identifier}")
+        # Ignorar mensagens de grupo do WhatsApp — checagem robusta em múltiplos pontos
+        identifier = (contact.get("identifier") or "").lower()
+        conv_raw = msg.get("conversation") if msg is not payload else payload.get("conversation")
+        conv_raw = conv_raw or {}
+        conv_meta = conv_raw.get("meta") or {}
+        meta_sender = conv_meta.get("sender") if isinstance(conv_meta, dict) else {}
+        meta_sender = meta_sender or {}
+        meta_identifier = (meta_sender.get("identifier") or "").lower()
+        meta_name_upper = (meta_sender.get("name") or "").upper()
+        conv_extra = conv_raw.get("additional_attributes") or {}
+        conv_type = (conv_extra.get("type") or "").lower() if isinstance(conv_extra, dict) else ""
+        contact_extra = contact.get("additional_attributes") or {}
+        contact_type = (contact_extra.get("type") or "").lower() if isinstance(contact_extra, dict) else ""
+        nome_upper = (nome or "").upper()
+
+        is_group = (
+            "@g.us" in identifier
+            or "@g.us" in meta_identifier
+            or "(GRUPO)" in nome_upper
+            or "(GRUPO)" in meta_name_upper
+            or conv_type == "group"
+            or contact_type == "group"
+        )
+        if is_group:
+            logger.info(
+                f"🚫 Ignorando mensagem de grupo — id='{identifier}' meta_id='{meta_identifier}' "
+                f"nome='{nome}' conv_type='{conv_type}' contact_type='{contact_type}'"
+            )
             continue
         texto = msg.get("content") or ""
         attachments = msg.get("attachments", [])
