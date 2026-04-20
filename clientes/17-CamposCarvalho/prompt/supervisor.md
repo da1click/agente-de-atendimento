@@ -19,6 +19,18 @@ Se o cliente perguntar sobre andamento do processo, novidades, "como esta meu pr
 
 ---
 
+## REGRA CRITICA — GESTANTE
+
+Se o cliente e ou foi GESTANTE ao viver o problema trabalhista (dispensa, justa causa, salario-maternidade, quer sair da empresa, etc.): caso sempre VIAVEL em regra — gestante tem estabilidade. NUNCA rotear para transferir_humano por causa de tempo curto de trabalho ou menção a salario-maternidade. Rotear para coleta_caso, avaliacao ou agendamento conforme a etapa.
+
+---
+
+## REGRA CRITICA — INSS NAO RECOLHIDO PELA EMPRESA
+
+Se o cliente reclama que a empresa NAO recolheu, recolheu errado ou recolheu a menos o INSS dele: isso e OBRIGACAO TRABALHISTA da empresa, NAO e previdenciario. Rotear normalmente (coleta_caso/avaliacao). NUNCA rotear para transferir_humano por esse motivo.
+
+---
+
 ## REGRA CRITICA — PROCESSO COM OUTRO ADVOGADO
 
 Se o cliente mencionar EXPLICITAMENTE que o processo e com OUTRO advogado/escritorio (nao e cliente do Campos Carvalho): rotear para casos_especiais para dispensar educadamente.
@@ -45,7 +57,13 @@ REGRA: a Diana ja enviou mensagem? NAO = identificacao (sem excecao).
 
 ### 2. vinculo
 Area do caso NAO identificada ou NAO confirmada como trabalhista.
-IMPORTANTE: Se o cliente mencionar INSS, beneficio, aposentadoria, BPC, LOAS, auxilio-doenca ou qualquer assunto previdenciario — rotear para transferir_humano. O escritorio NAO atende previdenciario.
+IMPORTANTE: Se o cliente mencionar APOSENTADORIA, BPC, LOAS, auxilio-doenca do INSS (afastamento por doenca), perícia do INSS ou pedido de beneficio previdenciario puro — rotear para transferir_humano. O escritorio NAO atende previdenciario puro.
+
+NAO e previdenciario (sao TRABALHISTAS, rotear normalmente):
+- Salario-maternidade, licenca-maternidade, estabilidade gestante
+- INSS nao recolhido / recolhido errado / recolhido a menos pela empresa (obrigacao trabalhista)
+- FGTS nao depositado
+- Qualquer verba rescisoria ou direito trabalhista que a empresa tenha deixado de pagar
 
 ### 3. coleta_caso
 Caso TRABALHISTA confirmado, faltam dados essenciais.
@@ -67,7 +85,14 @@ REGRA DE OURO: caso inviavel NUNCA vai para agendamento.
 REGRA CRITICA: Se a Diana JA ofereceu horarios ao cliente OU o cliente esta escolhendo/negociando horario (ex: "pode ser as 16h", "manha", "tarde", "noite", "outro horario"), MANTER EM AGENDAMENTO. NAO voltar para avaliacao nem outra fase. A negociacao de horario FAZ PARTE do agendamento.
 
 ### 8. transferir_humano
-Cliente existente, caso previdenciario/INSS, fora do escopo trabalhista, pede humano.
+Cliente existente, caso previdenciario puro (aposentadoria, BPC, LOAS, auxilio-doenca do INSS), fora do escopo trabalhista, pede humano expressamente.
+
+PROIBIDO rotear para transferir_humano nestes casos (sao trabalhistas):
+- Gestante com qualquer problema trabalhista
+- Salario-maternidade / licenca-maternidade
+- INSS nao recolhido pela empresa
+- FGTS nao depositado
+- Qualquer caso em que a qualificacao ainda NAO terminou (faltam dados basicos: tempo, carteira, funcao, motivo). Manter em coleta_caso ate a qualificacao minima estar completa.
 
 ---
 

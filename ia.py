@@ -357,6 +357,36 @@ async def executar_tool(nome: str, args: dict, config: dict, conversation_id: in
         return json.dumps({"status": "ok"})
 
     if nome == "TransferHuman":
+        # Proteção anti-desatribuição prematura (conta 17): bloquear TransferHuman
+        # se a qualificação mínima ainda não foi coletada.
+        if account_id == 17:
+            historico = context.get("historico") or []
+            msgs_cliente = [m for m in historico if m.get("message_type") == 0]
+            historico_txt = " ".join([(m.get("content") or "") for m in historico]).lower()
+            motivo_txt = (args.get("motivo", "") or "").lower()
+            previdenciario_puro = any(p in historico_txt or p in motivo_txt for p in [
+                "aposentadoria", "aposentar", "bpc", "loas", "auxilio-doenca", "auxílio-doença",
+                "auxilio doenca", "auxilio-acidente", "auxílio-acidente", "pericia do inss", "perícia do inss"
+            ])
+            gestante_ou_acidente = any(p in historico_txt for p in [
+                "gravid", "gestante", "gestação", "gestacao", "maternidade",
+                "acidente de trabalho", "acidente no trabalho"
+            ])
+            inss_empresa = ("inss" in historico_txt) and any(p in historico_txt for p in [
+                "não recolh", "nao recolh", "não pagou", "nao pagou", "não contribu", "nao contribu",
+                "recolheu errado", "recolheu menos", "recolheu a menos", "patrão", "patrao", "empresa"
+            ])
+            # Se não é previdenciário puro e cliente teve poucas mensagens, bloquear
+            if not previdenciario_puro and (gestante_ou_acidente or inss_empresa or len(msgs_cliente) <= 5):
+                logger.warning(
+                    f"🛑 Conta 17: TransferHuman bloqueado — qualificação incompleta "
+                    f"(cliente_msgs={len(msgs_cliente)}, gestante/acidente={gestante_ou_acidente}, "
+                    f"inss_empresa={inss_empresa}, motivo='{args.get('motivo','')}')"
+                )
+                return json.dumps({
+                    "status": "bloqueado",
+                    "motivo": "Qualificacao minima ainda nao coletada (tempo, carteira, funcao, motivo). Continue perguntando — NAO acione TransferHuman. Se o cliente falou em INSS nao recolhido pela empresa, salario-maternidade ou e gestante, isso e TRABALHISTA — continue a qualificacao normalmente."
+                })
         await chatwoot_transferir_humano(chatwoot_url, chatwoot_token, account_id, conversation_id, motivo=f"tool:TransferHuman — {args.get('motivo','')}")
         try:
             upsert_lead(account_id, inbox_id, conversation_id, contact_name, contact_phone, status="transferido")
@@ -1486,6 +1516,7 @@ async def processar_mensagem(config: dict, account_id: int, conversation_id: int
         "contact_name": contact_name,
         "contact_phone": contact_phone,
         "historico_texto": historico_texto,
+        "historico": historico,
         "is_reagendamento": _is_reagendamento,
     }
 
