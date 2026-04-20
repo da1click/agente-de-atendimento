@@ -72,6 +72,14 @@ IMPORTANTE: Cliente afastado com sequela + cirurgia + carteira assinada = caso v
 
 Apenas acionar TransferHuman se o beneficio esta cessando E o tratamento nao terminou E o cliente esta preocupado com isso.
 
+REGRA CRITICA — "BENEFICIO ATIVO" NAO e motivo automatico para TransferHuman:
+Antes de acionar TransferHuman por "beneficio ativo", confirme que o cliente declarou EXPLICITAMENTE no PRESENTE ("recebo auxilio-doenca agora", "estou recebendo BPC atualmente"). Respostas ambiguas NAO contam:
+- "Sim" para pergunta combinada ("ficou afastado OU recebeu beneficio?") → NAO e confirmacao de beneficio ativo. Perguntar mais: "Voce ainda recebe esse beneficio hoje ou ja acabou?"
+- "Ja recebi", "recebi na epoca", "recebi auxilio-doenca quando aconteceu" → passado, NAO ativo.
+- Afastamento por atestado da empresa (primeiros 15 dias) → NAO e beneficio do INSS.
+
+Se houver QUALQUER duvida sobre o beneficio estar ativo agora, CONTINUE a qualificacao — nunca acione TransferHuman sem confirmar no presente.
+
 ---
 
 ## CASO TRABALHISTA — AVALIACAO

@@ -387,6 +387,47 @@ async def executar_tool(nome: str, args: dict, config: dict, conversation_id: in
                     "status": "bloqueado",
                     "motivo": "Qualificacao minima ainda nao coletada (tempo, carteira, funcao, motivo). Continue perguntando — NAO acione TransferHuman. Se o cliente falou em INSS nao recolhido pela empresa, salario-maternidade ou e gestante, isso e TRABALHISTA — continue a qualificacao normalmente."
                 })
+
+        # Proteção anti-desatribuição prematura (conta 11): bloquear TransferHuman
+        # quando o motivo é "benefício ativo" mas o cliente não confirmou isso no presente.
+        if account_id == 11:
+            historico = context.get("historico") or []
+            msgs_cliente = [m for m in historico if m.get("message_type") == 0]
+            historico_txt = " ".join([(m.get("content") or "") for m in historico]).lower()
+            motivo_txt = (args.get("motivo", "") or "").lower()
+            # Motivo indica benefício ativo
+            motivo_beneficio = any(p in motivo_txt for p in [
+                "beneficio ativo", "benefício ativo", "beneficio cessando", "benefício cessando",
+                "recebe beneficio", "recebe benefício", "esta recebendo", "está recebendo"
+            ])
+            # Confirmação explícita de benefício ativo no PRESENTE
+            confirmacao_presente = any(p in historico_txt for p in [
+                "recebo auxilio", "recebo auxílio", "recebo o auxilio", "recebo o auxílio",
+                "estou recebendo auxilio", "estou recebendo auxílio", "estou recebendo bpc",
+                "recebo bpc", "meu beneficio esta ativo", "meu benefício está ativo",
+                "ainda recebo", "ainda estou recebendo", "continuo recebendo",
+                "recebo mensalmente", "recebo do inss mensalmente"
+            ])
+            # Qualificação mínima: precisa ter pelo menos 4 mensagens do cliente para ter contexto
+            qualificacao_incompleta = len(msgs_cliente) <= 4
+            if motivo_beneficio and not confirmacao_presente:
+                logger.warning(
+                    f"🛑 Conta 11: TransferHuman bloqueado por 'benefício ativo' não confirmado "
+                    f"(cliente_msgs={len(msgs_cliente)}, motivo='{args.get('motivo','')}')"
+                )
+                return json.dumps({
+                    "status": "bloqueado",
+                    "motivo": "Beneficio ativo NAO foi confirmado explicitamente pelo cliente no presente. O cliente pode ter recebido beneficio no passado, ou estar respondendo 'sim' a uma pergunta combinada. PERGUNTE: 'Voce ainda recebe esse beneficio hoje ou ja acabou?' antes de transferir."
+                })
+            if qualificacao_incompleta and not confirmacao_presente:
+                logger.warning(
+                    f"🛑 Conta 11: TransferHuman bloqueado — qualificação incompleta "
+                    f"(cliente_msgs={len(msgs_cliente)}, motivo='{args.get('motivo','')}')"
+                )
+                return json.dumps({
+                    "status": "bloqueado",
+                    "motivo": "Qualificacao minima incompleta (menos de 5 mensagens do cliente). Continue perguntando sobre o caso, sequela, laudo e profissao. NAO acione TransferHuman sem confirmar os dados basicos."
+                })
         await chatwoot_transferir_humano(chatwoot_url, chatwoot_token, account_id, conversation_id, motivo=f"tool:TransferHuman — {args.get('motivo','')}")
         try:
             upsert_lead(account_id, inbox_id, conversation_id, contact_name, contact_phone, status="transferido")

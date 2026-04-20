@@ -103,13 +103,27 @@ REGRA DE OURO PREVIDENCIARIO: Caso inviavel (sem sequela, sem laudo, fora do pra
 REGRA DE OURO TRABALHISTA: Caso inviavel (menos de 90 dias de trabalho, fora do escopo trabalhista) NAO rotear para agendamento. NUNCA.
 
 ### 8. transferir_humano
-- Cliente ja possui beneficio ativo.
+- Cliente ja possui beneficio ativo (ver regra critica abaixo).
 - Periodo de graca com possivel extensao alem de 24 meses.
 - Beneficio cessando com tratamento em andamento.
 - Caso de terceiro/indicacao.
 - Duvida complexa ou fora do escopo juridico (ex: criminal, tributario, familia).
 - Documentacao insuficiente para analise E o caso NAO e trabalhista com irregularidade clara.
 - Duvida administrativa (pagar INSS, emitir guias).
+
+REGRA CRITICA — "BENEFICIO ATIVO" (ler com atencao):
+"Beneficio ativo" SO e motivo de transferencia se o cliente declarou EXPLICITAMENTE no PRESENTE que recebe um beneficio AGORA. Frases validas:
+- "recebo auxilio-doenca", "estou recebendo BPC", "meu beneficio esta ativo", "recebo do INSS mensalmente", "ainda estou afastado recebendo".
+
+NAO e "beneficio ativo" (continue a qualificacao normalmente):
+- "Sim" para pergunta ampla que inclua passado ("ja recebeu beneficio?", "ficou afastado ou recebeu beneficio?").
+- Cliente diz que "recebeu" (passado), "ja recebi", "recebi no passado", "recebi quando sofri o acidente".
+- Cliente cita afastamento pelo atestado da empresa (primeiros 15 dias) sem confirmar beneficio do INSS.
+- Cliente pode estar respondendo "sim" apenas ao "ficou afastado por atestado".
+
+Regra pratica: se houver QUALQUER ambiguidade sobre o beneficio estar ativo AGORA, NAO rotear para transferir_humano — manter em coleta_caso ou avaliacao para a IA confirmar (perguntar "voce ainda recebe o beneficio hoje?" ou "quando foi que o beneficio acabou?").
+
+NUNCA rotear para transferir_humano se a qualificacao minima ainda nao terminou (faltam dados basicos como sequela, laudo, profissao para previdenciario; ou tempo/carteira/funcao para trabalhista).
 
 REGRA CRITICA: "Quero falar com advogado", "gostaria de falar com um advogado", "quero consultar um advogado" no INICIO da conversa NAO e motivo para transferir. Isso e o cliente querendo ATENDIMENTO — seguir o fluxo normal de qualificacao. So transferir se o cliente pedir humano APOS ja ter sido qualificado ou se insistir que nao quer falar com a IA.
 
