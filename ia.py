@@ -1027,6 +1027,28 @@ async def agendar_real(args: dict, config: dict, context: dict) -> dict:
     cor_id = args.get("cor_id", 0)
     resumo = args.get("resumo", "")
 
+    # Validar que o advogado existe na lista cadastrada — evita alucinação de nome.
+    account_id = config.get("account_id")
+    if account_id and advogado:
+        advs_ativos = listar_advogados_por_especialidade(account_id, especialidade)
+        if not advs_ativos:
+            advs_ativos = listar_advogados_por_especialidade(account_id, "")
+        nomes_validos = [a.get("nome", "") for a in advs_ativos]
+        nomes_validos_lower = [n.lower().strip() for n in nomes_validos]
+        if advogado.lower().strip() not in nomes_validos_lower:
+            logger.warning(
+                f"🚫 [agenda] Advogado '{advogado}' NAO esta cadastrado para account_id={account_id}. "
+                f"Ativos: {nomes_validos}. Agendamento REJEITADO."
+            )
+            return {
+                "STATUS": "ERRO",
+                "mensagem_sistema": (
+                    f"Advogado '{advogado}' nao esta cadastrado. Escolha apenas entre os advogados "
+                    f"retornados pelo ConsultarAgenda. Ativos: {', '.join(nomes_validos) or 'nenhum'}."
+                ),
+                "advogado": advogado,
+            }
+
     # Se recebeu data+horario no formato antigo, converter para start/end
     if not start and args.get("data") and args.get("horario"):
         data_str = args["data"]

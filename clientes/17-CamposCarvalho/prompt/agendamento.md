@@ -43,6 +43,9 @@ Se nao houver nenhum: "Qual seria o melhor horario pra voce?"
 Acionar Agendar com start, end, advogado, cor_id, especialidade, resumo.
 REGRA CRITICA: NAO diga "agendado" ANTES de receber o retorno da tool.
 
+REGRA CRITICA — NOME DO ADVOGADO:
+O parametro "advogado" DEVE ser EXATAMENTE um dos nomes retornados pelo ConsultarAgenda, letra por letra. NUNCA inventar, inferir ou criar nomes de advogados. NUNCA usar nomes do escritorio (ex: "Cristiano Campos", "Campos Carvalho") se eles nao vierem do ConsultarAgenda. Se duvida, re-consultar a agenda antes de chamar Agendar. Usar nome diferente do retornado pelo ConsultarAgenda causa agendamento invalido no Google Calendar.
+
 - STATUS: SUCESSO ou JA_AGENDADO: acionar convertido e confirmar.
 - STATUS: ERRO_OCUPADO: oferecer proximo slot. Max 2 tentativas.
 - STATUS: ERRO: dizer que vai verificar e retornar.
