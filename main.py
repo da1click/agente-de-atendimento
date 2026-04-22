@@ -2703,6 +2703,32 @@ async def testar_criacao_kanban(account_id: int, conversation_id: int | None = N
         resultado["erro"] = str(e)
         resultado["traceback"] = traceback.format_exc()
 
+    # Tentativa direta (bypass kanban_mover_card) — para capturar o status code
+    # bruto do Chatwoot e diagnosticar falha silenciosa.
+    funil_ident0, step_ident0 = KANBAN_TOOL_MAP[tool]
+    f0 = funis.get(funil_ident0, {})
+    fid0 = f0.get("funnel_id")
+    sid0 = f0.get("steps", {}).get(step_ident0)
+    if fid0 and sid0:
+        try:
+            async with httpx.AsyncClient(timeout=10) as http:
+                rp = await http.post(
+                    f"{base}/api/v1/accounts/{account_id}/funnels/{fid0}/funnel_steps/{sid0}/funnel_items",
+                    headers={"api_access_token": token, "Content-Type": "application/json"},
+                    json={
+                        "title": f"Teste Direto {conversation_id}",
+                        "conversation_id": conversation_id,
+                        "status": "active",
+                        "priority": "medium",
+                    },
+                )
+                resultado["post_direto"] = {
+                    "status_code": rp.status_code,
+                    "body": rp.text[:500],
+                }
+        except Exception as e:
+            resultado["post_direto"] = {"erro": str(e)}
+
     # Verificar se o card existe agora
     funil_ident, step_ident = KANBAN_TOOL_MAP[tool]
     funil = funis.get(funil_ident, {})

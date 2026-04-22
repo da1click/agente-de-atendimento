@@ -804,16 +804,22 @@ async def kanban_mover_card(url: str, token: str, account_id: int, conversation_
 
             if item_existente and step_atual != step_id:
                 # Mover card para nova etapa
-                await http.put(
+                resp_move = await http.put(
                     f"{url}/api/v1/accounts/{account_id}/funnels/{funnel_id}/funnel_steps/{step_atual}/funnel_items/{item_existente['id']}/update_step",
                     headers=headers,
                     json={"funnel_item": {"funnel_step_id": step_id}},
                     timeout=10
                 )
-                logger.info(f"[kanban] Card movido: conv={conversation_id} → {step_identifier} (funil={funnel_identifier})")
+                if resp_move.is_success:
+                    logger.info(f"[kanban] Card movido: conv={conversation_id} → {step_identifier} (funil={funnel_identifier})")
+                else:
+                    logger.warning(
+                        f"[kanban] Falha ao MOVER card conv={conversation_id} para {step_identifier}: "
+                        f"HTTP {resp_move.status_code} body={resp_move.text[:300]}"
+                    )
             elif not item_existente:
                 # Criar novo card
-                await http.post(
+                resp_create = await http.post(
                     f"{url}/api/v1/accounts/{account_id}/funnels/{funnel_id}/funnel_steps/{step_id}/funnel_items",
                     headers=headers,
                     json={
@@ -824,7 +830,13 @@ async def kanban_mover_card(url: str, token: str, account_id: int, conversation_
                     },
                     timeout=10
                 )
-                logger.info(f"[kanban] Card criado: conv={conversation_id} → {step_identifier} (funil={funnel_identifier})")
+                if resp_create.is_success:
+                    logger.info(f"[kanban] Card criado: conv={conversation_id} → {step_identifier} (funil={funnel_identifier})")
+                else:
+                    logger.warning(
+                        f"[kanban] Falha ao CRIAR card conv={conversation_id} em {step_identifier}: "
+                        f"HTTP {resp_create.status_code} body={resp_create.text[:300]}"
+                    )
             else:
                 logger.debug(f"[kanban] Card ja esta na etapa correta: conv={conversation_id}")
 
