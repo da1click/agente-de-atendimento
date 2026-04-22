@@ -190,6 +190,8 @@ async def lifespan(app: FastAPI):
     iniciar_zapsign_followup()
     from agendador_consultas import iniciar_agendador_consultas
     iniciar_agendador_consultas()
+    from cobranca_documentos import iniciar_monitoramento as iniciar_cobranca_docs
+    iniciar_cobranca_docs()
     # Recuperar conversas perdidas durante deploy
     asyncio.create_task(_recuperar_conversas_pos_deploy())
     # Cria super_admin inicial se não existir
@@ -1426,6 +1428,34 @@ async def chatwoot_webhook(request: Request):
             continue
         texto = msg.get("content") or ""
         attachments = msg.get("attachments", [])
+
+        # Cobrança de documentos: se cliente enviou anexo de documento (PDF/imagem)
+        # em conta habilitada, desativar a cobrança e remover a label.
+        try:
+            from cobranca_documentos import CONTAS_HABILITADAS as _contas_cobr, LABEL_COBRANCA as _label_cobr
+            if account_id in _contas_cobr and attachments:
+                tipos_doc = {"file", "image"}
+                if any((a.get("file_type") in tipos_doc) for a in attachments):
+                    from db import desativar_cobranca_docs, get_cobranca_docs
+                    if get_cobranca_docs(account_id, conversation_id):
+                        desativar_cobranca_docs(account_id, conversation_id, motivo="anexo_recebido")
+                        logger.info(f"[cobranca-docs] Anexo recebido — desativada conv={conversation_id}")
+                        # Remover label no Chatwoot (best-effort)
+                        try:
+                            _cw = config["chatwoot_url"].rstrip("/")
+                            _tk = config["chatwoot_token"]
+                            async with httpx.AsyncClient(timeout=10) as _hc:
+                                _lu = f"{_cw}/api/v1/accounts/{account_id}/conversations/{conversation_id}/labels"
+                                _r = await _hc.get(_lu, headers={"api_access_token": _tk})
+                                if _r.is_success:
+                                    _ls = _r.json().get("payload", []) or []
+                                    _novas = [l for l in _ls if l != _label_cobr]
+                                    if len(_novas) != len(_ls):
+                                        await _hc.post(_lu, headers={"api_access_token": _tk, "Content-Type": "application/json"}, json={"labels": _novas})
+                        except Exception:
+                            pass
+        except Exception as _e:
+            logger.debug(f"[cobranca-docs] Hook attachment erro: {_e}")
 
         # assignee_id: pode vir de vários lugares dependendo do formato do webhook
         conv_data = msg.get("conversation", {}) if msg is not payload else payload.get("conversation", {})

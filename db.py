@@ -117,6 +117,78 @@ def inserir_agendamento(account_id: int, inbox_id: int, conversation_id: int, co
     }).execute()
 
 
+# ── COBRANÇA DE DOCUMENTOS (conta 17 — cobrar-documentos) ────
+
+def ativar_cobranca_docs(account_id: int, conversation_id: int, inbox_id: int | None,
+                        contact_name: str, contact_phone: str, proximo_envio: str,
+                        limite: int = 5) -> None:
+    """Ativa (ou reativa) a cobrança de documentos para uma conversa."""
+    db = get_db()
+    db.table("ia_cobranca_docs").upsert({
+        "account_id": account_id,
+        "conversation_id": conversation_id,
+        "inbox_id": inbox_id,
+        "contact_name": contact_name,
+        "contact_phone": contact_phone,
+        "ativo": True,
+        "limite": limite,
+        "proximo_envio": proximo_envio,
+        "updated_at": "now()",
+    }, on_conflict="account_id,conversation_id").execute()
+
+
+def get_cobranca_docs(account_id: int, conversation_id: int) -> dict | None:
+    db = get_db()
+    try:
+        resp = (
+            db.table("ia_cobranca_docs")
+            .select("*")
+            .eq("account_id", account_id)
+            .eq("conversation_id", conversation_id)
+            .maybe_single()
+            .execute()
+        )
+        return resp.data if resp and resp.data else None
+    except Exception:
+        return None
+
+
+def listar_cobrancas_docs_pendentes() -> list:
+    """Cobranças ativas cujo proximo_envio já passou."""
+    db = get_db()
+    try:
+        resp = (
+            db.table("ia_cobranca_docs")
+            .select("*")
+            .eq("ativo", True)
+            .lte("proximo_envio", "now()")
+            .execute()
+        )
+        return resp.data or []
+    except Exception:
+        return []
+
+
+def registrar_envio_cobranca_docs(id_cobranca: int, proximo_envio: str | None, tentativas: int) -> None:
+    db = get_db()
+    db.table("ia_cobranca_docs").update({
+        "tentativas": tentativas,
+        "ultimo_envio": "now()",
+        "proximo_envio": proximo_envio,
+        "updated_at": "now()",
+    }).eq("id", id_cobranca).execute()
+
+
+def desativar_cobranca_docs(account_id: int, conversation_id: int, motivo: str) -> None:
+    """Desativa cobrança (por recebimento de anexo, limite atingido ou ação humana)."""
+    db = get_db()
+    db.table("ia_cobranca_docs").update({
+        "ativo": False,
+        "motivo_desativacao": motivo,
+        "updated_at": "now()",
+    }).eq("account_id", account_id).eq("conversation_id", conversation_id).execute()
+
+
 def cancelar_agendamentos_anteriores(account_id: int, conversation_id: int) -> int:
     """Marca agendamentos ativos anteriores da conversa como 'cancelado'.
 
