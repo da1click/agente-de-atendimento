@@ -2908,11 +2908,54 @@ async def testar_criacao_kanban(account_id: int, conversation_id: int | None = N
         resultado["erro"] = str(e)
         resultado["traceback"] = traceback.format_exc()
 
-    resultado["nota"] = (
-        "API v1 do Chatwoot ignora title e conversation_id no POST/PATCH de funnel_items. "
-        "Criação automática desabilitada em kanban_mover_card. Apenas movimentação entre "
-        "etapas funciona (quando o card já existe)."
-    )
+    # Validar: POST + PATCH + GET para ver estado final real (response imediato
+    # pode retornar state stale; o GET é a fonte da verdade).
+    funil_ident0, step_ident0 = KANBAN_TOOL_MAP[tool]
+    f0 = funis.get(funil_ident0, {})
+    fid0 = f0.get("funnel_id")
+    sid0 = f0.get("steps", {}).get(step_ident0)
+    if fid0 and sid0:
+        endpoint_url = f"{base}/api/v1/accounts/{account_id}/funnels/{fid0}/funnel_steps/{sid0}/funnel_items"
+        h = {"api_access_token": token, "Content-Type": "application/json"}
+        title_teste = f"Teste Validacao {conversation_id}"
+        novo_id = None
+        try:
+            async with httpx.AsyncClient(timeout=10) as http:
+                # POST com wrapper
+                rp = await http.post(endpoint_url, headers=h, json={
+                    "funnel_item": {
+                        "title": title_teste,
+                        "conversation_id": conversation_id,
+                    }
+                })
+                resultado["post"] = {"status": rp.status_code, "body": rp.text[:200]}
+                if rp.is_success:
+                    novo_id = rp.json().get("payload", {}).get("id")
+
+                # GET do ID para ver se title/conversation_id foram salvos
+                if novo_id:
+                    rg = await http.get(f"{endpoint_url}/{novo_id}", headers={"api_access_token": token})
+                    if rg.is_success:
+                        j = rg.json()
+                        inner = j.get("payload", j) if isinstance(j, dict) else j
+                        resultado["get_apos_post"] = {
+                            "status": rg.status_code,
+                            "title": inner.get("title") if isinstance(inner, dict) else None,
+                            "conversation_id": inner.get("conversation_id") if isinstance(inner, dict) else None,
+                        }
+                    else:
+                        resultado["get_apos_post"] = {"status": rg.status_code, "body": rg.text[:200]}
+        except Exception as e:
+            resultado["erro_validacao"] = str(e)
+
+        # Limpar o card criado agora
+        if novo_id:
+            try:
+                async with httpx.AsyncClient(timeout=10) as http:
+                    rd = await http.delete(f"{endpoint_url}/{novo_id}", headers={"api_access_token": token})
+                    resultado["cleanup"] = {"id": novo_id, "status": rd.status_code}
+            except Exception:
+                pass
 
     # Verificar se o card existe agora
     funil_ident, step_ident = KANBAN_TOOL_MAP[tool]
