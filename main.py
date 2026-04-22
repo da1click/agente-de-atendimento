@@ -2648,6 +2648,94 @@ async def recriar_funis_conta(account_id: int):
     return {"status": "ok", "detail": f"Funis recriados para conta {account_id}"}
 
 
+@app.post("/api/admin/kanban/teste/{account_id}")
+async def testar_criacao_kanban(account_id: int, conversation_id: int | None = None, tool: str = "novo_lead"):
+    """Testa a criação/movimentação de um card no kanban com captura completa de erros.
+
+    Se conversation_id não for passado, pega a primeira conversa aberta da conta.
+    Parâmetro tool: nome da tool em KANBAN_TOOL_MAP (default: novo_lead).
+    """
+    from ia import kanban_mover_card, _carregar_funis, KANBAN_TOOL_MAP
+    import traceback
+
+    config = carregar_config_cliente(account_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    base = (config.get("chatwoot_url") or "").rstrip("/")
+    token = config.get("chatwoot_token", "")
+
+    # Se não passou conversation_id, pega uma conversa aberta qualquer
+    if conversation_id is None:
+        try:
+            async with httpx.AsyncClient(timeout=10) as http:
+                r = await http.get(
+                    f"{base}/api/v1/accounts/{account_id}/conversations",
+                    headers={"api_access_token": token},
+                    params={"status": "open", "page": 1},
+                )
+                if r.is_success:
+                    convs = r.json().get("data", {}).get("payload", []) or []
+                    if convs:
+                        conversation_id = convs[0].get("id")
+        except Exception as e:
+            return {"erro": f"Falha ao listar conversas: {e}"}
+    if not conversation_id:
+        return {"erro": "Nenhuma conversa aberta encontrada para testar"}
+
+    if tool not in KANBAN_TOOL_MAP:
+        return {"erro": f"Tool inválida: {tool}", "validas": list(KANBAN_TOOL_MAP.keys())}
+
+    # Forçar reload do cache de funis
+    funis = await _carregar_funis(base, token, account_id, force_reload=True)
+
+    resultado = {
+        "conversation_id": conversation_id,
+        "tool": tool,
+        "mapeamento": KANBAN_TOOL_MAP[tool],
+        "funis_carregados": list(funis.keys()),
+    }
+
+    try:
+        await kanban_mover_card(base, token, account_id, conversation_id, f"Teste Kanban {conversation_id}", tool)
+        resultado["status"] = "chamada_concluida_sem_excecao"
+    except Exception as e:
+        resultado["status"] = "excecao"
+        resultado["erro"] = str(e)
+        resultado["traceback"] = traceback.format_exc()
+
+    # Verificar se o card existe agora
+    funil_ident, step_ident = KANBAN_TOOL_MAP[tool]
+    funil = funis.get(funil_ident, {})
+    funnel_id = funil.get("funnel_id")
+    step_id = funil.get("steps", {}).get(step_ident)
+    if funnel_id and step_id:
+        try:
+            async with httpx.AsyncClient(timeout=10) as http:
+                r = await http.get(
+                    f"{base}/api/v1/accounts/{account_id}/funnels/{funnel_id}/funnel_steps/{step_id}/funnel_items",
+                    headers={"api_access_token": token},
+                )
+                if r.is_success:
+                    data = r.json()
+                    items = data.get("items", data) if isinstance(data, dict) else data
+                    if isinstance(items, list):
+                        match = [i for i in items if i.get("conversation_id") == conversation_id]
+                        resultado["card_apos_teste"] = {
+                            "encontrado_na_etapa_esperada": len(match) > 0,
+                            "total_na_etapa": len(items),
+                        }
+                        if match:
+                            resultado["card_apos_teste"]["card"] = {
+                                "id": match[0].get("id"),
+                                "title": match[0].get("title"),
+                                "created_at": match[0].get("created_at"),
+                            }
+        except Exception as e:
+            resultado["erro_verificacao"] = str(e)
+
+    return resultado
+
+
 @app.get("/api/admin/kanban/estado/{account_id}")
 async def estado_kanban_conta(account_id: int):
     """Mostra o estado atual do kanban de uma conta: funis, etapas, quantos
