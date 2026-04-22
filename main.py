@@ -2618,6 +2618,72 @@ async def recriar_funis_conta(account_id: int):
     return {"status": "ok", "detail": f"Funis recriados para conta {account_id}"}
 
 
+@app.get("/api/admin/inatividade/diagnostico/{account_id}")
+async def diagnostico_inatividade_conta(account_id: int):
+    """Diagnóstico de follow-up/inatividade de uma conta.
+
+    Retorna: config ativa, estágios configurados, inatividades ativas no banco,
+    quantas estão pendentes de disparo agora.
+    """
+    try:
+        from db import get_db
+        db = get_db()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro DB: {e}")
+
+    config = carregar_config_cliente(account_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+
+    # Carrega config de inatividade (por conta OU global)
+    from inatividade import carregar_config_inatividade, _limite_inatividade
+    cfg_inat = carregar_config_inatividade(account_id)
+    estagios = cfg_inat.get("estagios", []) if isinstance(cfg_inat, dict) else []
+    limite = _limite_inatividade(account_id)
+
+    # Buscar registros ativos em ia_inatividade
+    try:
+        resp = (
+            db.table("ia_inatividade")
+            .select("conversation_id,inbox_id,stagio,proximo_disparo,ativo,updated_at")
+            .eq("account_id", account_id)
+            .eq("ativo", True)
+            .order("proximo_disparo")
+            .execute()
+        )
+        ativos = resp.data or []
+    except Exception as e:
+        ativos = []
+        erro_tabela = str(e)
+    else:
+        erro_tabela = None
+
+    from datetime import datetime, timezone
+    agora = datetime.now(timezone.utc)
+    pendentes_agora = 0
+    for a in ativos:
+        try:
+            dt = datetime.fromisoformat(str(a.get("proximo_disparo")).replace("Z", "+00:00"))
+            if dt <= agora:
+                pendentes_agora += 1
+        except Exception:
+            pass
+
+    return {
+        "account_id": account_id,
+        "nome": config.get("nome"),
+        "ativo_conta": config.get("ativo", True),
+        "inatividade_ativa": config.get("inatividade_ativa", True),
+        "limite_followup": limite,
+        "estagios_configurados": len(estagios),
+        "estagios": estagios,
+        "registros_ativos": len(ativos),
+        "pendentes_disparo_agora": pendentes_agora,
+        "amostra_registros": ativos[:10],
+        "erro_tabela": erro_tabela,
+    }
+
+
 @app.get("/api/admin/kanban/diagnostico")
 async def diagnostico_kanban_todas_contas():
     """Verifica o estado dos funis/etapas do kanban em todas as contas ativas.
