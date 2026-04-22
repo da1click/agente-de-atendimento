@@ -2648,6 +2648,78 @@ async def recriar_funis_conta(account_id: int):
     return {"status": "ok", "detail": f"Funis recriados para conta {account_id}"}
 
 
+@app.get("/api/admin/kanban/orfaos-global")
+async def orfaos_kanban_todas_contas():
+    """Varre TODAS as contas ativas e reporta cards órfãos (sem conversation_id
+    e sem title) em cada uma. Usar para investigar vazamento entre contas."""
+    try:
+        from db import get_db
+        db = get_db()
+        configs = db.table("ia_clientes_config").select(
+            "account_id,nome,chatwoot_url,chatwoot_token"
+        ).eq("ativo", True).execute()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+    resumo = []
+    async with httpx.AsyncClient(timeout=20) as http:
+        for cfg in (configs.data or []):
+            account_id = cfg.get("account_id")
+            base = (cfg.get("chatwoot_url") or "").rstrip("/")
+            token = cfg.get("chatwoot_token", "")
+            if not base or not token:
+                continue
+            try:
+                r = await http.get(
+                    f"{base}/api/v1/accounts/{account_id}/funnels",
+                    headers={"api_access_token": token},
+                )
+                if not r.is_success:
+                    resumo.append({"account_id": account_id, "nome": cfg.get("nome"), "erro": r.status_code})
+                    continue
+                funnels = r.json().get("payload", []) or []
+                orfaos = 0
+                validos = 0
+                amostra_orfaos = []
+                for funil in funnels:
+                    for step in funil.get("funnel_steps", []) or []:
+                        try:
+                            ri = await http.get(
+                                f"{base}/api/v1/accounts/{account_id}/funnels/{funil['id']}/funnel_steps/{step['id']}/funnel_items",
+                                headers={"api_access_token": token},
+                            )
+                            if not ri.is_success:
+                                continue
+                            data = ri.json()
+                            items = data.get("items", data) if isinstance(data, dict) else data
+                            if not isinstance(items, list):
+                                continue
+                            for it in items:
+                                if not it.get("conversation_id") and not it.get("title"):
+                                    orfaos += 1
+                                    if len(amostra_orfaos) < 3:
+                                        amostra_orfaos.append({
+                                            "id": it.get("id"),
+                                            "funnel_step_id": it.get("funnel_step_id"),
+                                            "account_id_card": it.get("account_id"),
+                                        })
+                                else:
+                                    validos += 1
+                        except Exception:
+                            continue
+                resumo.append({
+                    "account_id": account_id,
+                    "nome": cfg.get("nome"),
+                    "orfaos": orfaos,
+                    "validos": validos,
+                    "amostra_orfaos": amostra_orfaos,
+                })
+            except Exception as e:
+                resumo.append({"account_id": account_id, "nome": cfg.get("nome"), "erro": str(e)})
+    total_orfaos = sum(r.get("orfaos", 0) for r in resumo)
+    return {"total_orfaos_global": total_orfaos, "contas": resumo}
+
+
 @app.post("/api/admin/kanban/limpar-orfaos/{account_id}")
 async def limpar_orfaos_kanban(account_id: int, dry_run: bool = True):
     """Remove funnel_items sem conversation_id (cards fantasma/órfãos).
