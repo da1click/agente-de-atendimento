@@ -72,7 +72,16 @@ def _dentro_horario_comercial() -> bool:
 
 
 def _proximo_envio_iso(horas: int = COBRANCA_INTERVALO_HORAS) -> str:
-    return (datetime.now(timezone.utc) + timedelta(hours=horas)).isoformat()
+    """Retorna ISO UTC do próximo envio, empurrando para 8h BRT se cair fora
+    da janela comercial (8h–19h)."""
+    alvo = datetime.now(BR_TZ) + timedelta(hours=horas)
+    # Se cair antes das 8h, empurra para 8h do mesmo dia
+    if alvo.hour < 8:
+        alvo = alvo.replace(hour=8, minute=0, second=0, microsecond=0)
+    # Se cair depois das 19h, empurra para 8h do dia seguinte
+    elif alvo.hour >= 19:
+        alvo = (alvo + timedelta(days=1)).replace(hour=8, minute=0, second=0, microsecond=0)
+    return alvo.astimezone(timezone.utc).isoformat()
 
 
 async def _listar_conversas_com_label(config: dict, label: str) -> list[dict]:
