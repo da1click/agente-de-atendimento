@@ -2934,7 +2934,7 @@ async function salvarLembretes() {
   setTimeout(() => msg.classList.remove('show'), 2500);
 }
 
-async function renderPageInatividade() {
+async function renderPageInatividade(opts = {}) {
   const el = document.getElementById('page-content');
   if (!clienteAtivo) {
     document.getElementById('topbar-sub').textContent = 'Selecione uma conta';
@@ -2942,10 +2942,12 @@ async function renderPageInatividade() {
     return;
   }
   document.getElementById('topbar-sub').textContent = `Inatividade — Conta #${clienteAtivo}`;
-  el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:20px 0;">Carregando...</div>';
 
-  const res = await fetch(`/api/config/inatividade${clienteAtivo ? '?account_id=' + clienteAtivo : ''}`);
-  _inativCfg = await res.json();
+  if (!opts.skipFetch) {
+    el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:20px 0;">Carregando...</div>';
+    const res = await fetch(`/api/config/inatividade${clienteAtivo ? '?account_id=' + clienteAtivo : ''}`);
+    _inativCfg = await res.json();
+  }
 
   const stageColors = ['','#f0fdf4','#fffbeb','#fff1f2','#f5f3ff','#eff6ff','#fff7ed'];
   const stageBorder = ['','#bbf7d0','#fde68a','#fecdd3','#ddd6fe','#bfdbfe','#fed7aa'];
@@ -3007,7 +3009,7 @@ async function renderPageInatividade() {
           <div style="margin-left:auto;display:flex;align-items:center;gap:12px;">
             <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px;">
               <span style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Follow-ups</span>
-              <select id="inativ-limite" style="padding:4px 8px;font-size:12px;border-radius:6px;border:1px solid var(--border);">
+              <select id="inativ-limite" onchange="ajustarEstagiosInativ(this.value)" style="padding:4px 8px;font-size:12px;border-radius:6px;border:1px solid var(--border);">
                 <option value="3" ${(_inativCfg.limite || 3) == 3 ? 'selected' : ''}>3 estágios</option>
                 <option value="4" ${(_inativCfg.limite || 3) == 4 ? 'selected' : ''}>4 estágios</option>
                 <option value="5" ${(_inativCfg.limite || 3) == 5 ? 'selected' : ''}>5 estágios</option>
@@ -3100,6 +3102,46 @@ function toggleInativTemplate(stagio) {
       old.replaceWith(tmp.firstElementChild);
     }
   }
+}
+
+function ajustarEstagiosInativ(novoLimiteStr) {
+  // Adiciona ou remove estágios do array para bater com o novo limite escolhido,
+  // salva as edições em andamento (horas/label/template) antes de re-renderizar.
+  const novoLimite = parseInt(novoLimiteStr) || 3;
+  // Captura o estado atual da UI antes de reconstruir
+  _inativCfg.estagios = _inativCfg.estagios.map(e => {
+    const h = parseInt(document.getElementById(`inativ-horas-${e.stagio}`)?.value);
+    const l = document.getElementById(`inativ-label-${e.stagio}`)?.value.trim();
+    const usaTpl = document.getElementById(`inativ-wpp-${e.stagio}`)?.checked;
+    const tpl = usaTpl ? (document.getElementById(`inativ-tpl-${e.stagio}`)?.value.trim() || null) : null;
+    return {
+      ...e,
+      horas: Number.isFinite(h) ? h : e.horas,
+      label: l || e.label,
+      template_whatsapp: tpl,
+    };
+  });
+  const ativoAtual = document.getElementById('inativ-ativo')?.checked;
+  _inativCfg.ativo = ativoAtual;
+  _inativCfg.limite = novoLimite;
+
+  const atual = _inativCfg.estagios.length;
+  if (novoLimite > atual) {
+    const ultimoHoras = _inativCfg.estagios[atual - 1]?.horas || 4;
+    for (let n = atual + 1; n <= novoLimite; n++) {
+      _inativCfg.estagios.push({
+        stagio: n,
+        horas: ultimoHoras * 2,
+        label: `inatividade-${n}`,
+        template_whatsapp: null,
+      });
+    }
+  } else if (novoLimite < atual) {
+    _inativCfg.estagios = _inativCfg.estagios.slice(0, novoLimite);
+  }
+
+  // Re-renderizar a página sem buscar do backend (usa _inativCfg atualizado)
+  renderPageInatividade({ skipFetch: true });
 }
 
 async function salvarInatividade() {
