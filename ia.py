@@ -786,27 +786,35 @@ async def kanban_mover_card(url: str, token: str, account_id: int, conversation_
     headers = {"api_access_token": token, "Content-Type": "application/json"}
 
     try:
-        # Buscar se já existe um item para esta conversa em QUALQUER etapa deste funil
         async with httpx.AsyncClient() as http:
-            # Buscar todas as etapas do funil para encontrar o card
+            # Buscar em todas as etapas do funil, PAGINANDO. Chatwoot retorna
+            # 25 por página: sem paginar, contas com >25 cards por etapa falham
+            # em achar o existente e o POST cria duplicata.
             item_existente = None
             step_atual = None
             for sid_name, sid_val in funil["steps"].items():
-                resp = await http.get(
-                    f"{url}/api/v1/accounts/{account_id}/funnels/{funnel_id}/funnel_steps/{sid_val}/funnel_items",
-                    headers=headers, timeout=10
-                )
-                if resp.is_success:
-                    data = resp.json()
-                    items = data.get("items", data) if isinstance(data, dict) else data
-                    if isinstance(items, list):
-                        for item in items:
-                            if item.get("conversation_id") == conversation_id:
-                                item_existente = item
-                                step_atual = sid_val
-                                break
                 if item_existente:
                     break
+                for page in range(1, 21):  # até 500 cards por etapa
+                    resp = await http.get(
+                        f"{url}/api/v1/accounts/{account_id}/funnels/{funnel_id}/funnel_steps/{sid_val}/funnel_items",
+                        headers=headers, params={"page": page}, timeout=10
+                    )
+                    if not resp.is_success:
+                        break
+                    data = resp.json()
+                    items = data.get("payload") or data.get("items") or []
+                    if not isinstance(items, list) or not items:
+                        break
+                    for item in items:
+                        if item.get("conversation_id") == conversation_id:
+                            item_existente = item
+                            step_atual = sid_val
+                            break
+                    if item_existente:
+                        break
+                    if len(items) < 25:
+                        break
 
             if item_existente and step_atual != step_id:
                 # Mover card para nova etapa
@@ -824,14 +832,26 @@ async def kanban_mover_card(url: str, token: str, account_id: int, conversation_
                         f"HTTP {resp_move.status_code} body={resp_move.text[:300]}"
                     )
             elif not item_existente:
-                # Criação via API v1 do Chatwoot está quebrada: aceita POST mas
-                # ignora title e conversation_id (verificado empiricamente em
-                # 2026-04-22). Cards novos precisam ser criados manualmente ou
-                # via versão futura da API. Apenas loga para manter auditoria.
-                logger.debug(
-                    f"[kanban] Card NAO criado (API v1 nao suporta setar conversation_id) "
-                    f"— conv={conversation_id} destino={step_identifier} funil={funnel_identifier}"
+                # Criar novo card. Formato conforme swagger oficial CRM Funnels
+                # (https://swagger.cwmkt.com.br/): campos no root, sem wrapper.
+                resp_create = await http.post(
+                    f"{url}/api/v1/accounts/{account_id}/funnels/{funnel_id}/funnel_steps/{step_id}/funnel_items",
+                    headers=headers,
+                    json={
+                        "title": contact_name or f"Conversa #{conversation_id}",
+                        "conversation_id": conversation_id,
+                        "status": "active",
+                        "priority": "medium",
+                    },
+                    timeout=10
                 )
+                if resp_create.is_success:
+                    logger.info(f"[kanban] Card criado: conv={conversation_id} → {step_identifier} (funil={funnel_identifier})")
+                else:
+                    logger.warning(
+                        f"[kanban] Falha ao CRIAR card conv={conversation_id} em {step_identifier}: "
+                        f"HTTP {resp_create.status_code} body={resp_create.text[:300]}"
+                    )
             else:
                 logger.debug(f"[kanban] Card ja esta na etapa correta: conv={conversation_id}")
 
