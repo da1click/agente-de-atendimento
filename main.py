@@ -2648,6 +2648,206 @@ async def recriar_funis_conta(account_id: int):
     return {"status": "ok", "detail": f"Funis recriados para conta {account_id}"}
 
 
+@app.post("/api/admin/kanban/reconciliar/{account_id}")
+async def reconciliar_kanban_por_label(account_id: int, dry_run: bool = True, min_score: float = 0.5):
+    """Para cada conversa aberta atribuída à IA, tenta mover/criar card no
+    kanban baseado no matching fuzzy entre as labels da conversa e as etapas
+    do funil.
+
+    - dry_run=true (default): apenas reporta o plano sem executar.
+    - dry_run=false: executa (cria/move cards).
+    - min_score: limiar de similaridade fuzzy (0-1). 0.5 é razoável; labels
+      com score abaixo disso são ignoradas (sem match).
+    """
+    from difflib import SequenceMatcher
+    import unicodedata, re
+
+    def _normalizar(s: str) -> str:
+        if not s:
+            return ""
+        s = unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode("ascii")
+        s = s.lower()
+        s = re.sub(r"^\d+[-_]", "", s)  # remove prefixo "00-"
+        s = re.sub(r"[-_]+", " ", s)
+        s = re.sub(r"\s+", " ", s).strip()
+        return s
+
+    def _similaridade(a: str, b: str) -> float:
+        na, nb = _normalizar(a), _normalizar(b)
+        if not na or not nb:
+            return 0.0
+        if na == nb or na in nb or nb in na:
+            return 1.0
+        return SequenceMatcher(None, na, nb).ratio()
+
+    config = carregar_config_cliente(account_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    base = (config.get("chatwoot_url") or "").rstrip("/")
+    token = config.get("chatwoot_token", "")
+    ia_agent_id = config.get("ia_agent_id")
+    if not ia_agent_id:
+        raise HTTPException(status_code=400, detail="ia_agent_id não configurado para esta conta")
+
+    # Carregar funis/etapas
+    from ia import _carregar_funis
+    funis = await _carregar_funis(base, token, account_id, force_reload=True)
+    # Lista plana de etapas: [(funil_id, funnel_identifier, step_id, step_identifier)]
+    etapas_flat = []
+    for f_ident, f in funis.items():
+        for s_ident, s_id in f.get("steps", {}).items():
+            etapas_flat.append((f["funnel_id"], f_ident, s_id, s_ident))
+
+    if not etapas_flat:
+        raise HTTPException(status_code=500, detail="Conta sem funis/etapas configurados")
+
+    # Buscar conversas abertas atribuídas à IA
+    convs_ia: list[dict] = []
+    async with httpx.AsyncClient(timeout=20) as http:
+        for page in range(1, 6):
+            r = await http.get(
+                f"{base}/api/v1/accounts/{account_id}/conversations",
+                headers={"api_access_token": token},
+                params={
+                    "status": "open",
+                    "assignee_type": "assigned",
+                    "page": page,
+                },
+            )
+            if not r.is_success:
+                break
+            page_data = r.json().get("data", {}).get("payload", []) or []
+            for c in page_data:
+                assignee = (c.get("meta") or {}).get("assignee") or {}
+                if assignee.get("id") == ia_agent_id:
+                    convs_ia.append(c)
+            if len(page_data) < 25:
+                break
+
+    plano = []
+    executados = []
+    async with httpx.AsyncClient(timeout=20) as http:
+        for conv in convs_ia:
+            conv_id = conv.get("id")
+            labels = conv.get("labels") or []
+            sender = (conv.get("meta") or {}).get("sender") or {}
+            nome = sender.get("name", "") or f"Conversa #{conv_id}"
+
+            if not labels:
+                plano.append({"conversation_id": conv_id, "labels": [], "acao": "skip_sem_label"})
+                continue
+
+            # Achar melhor (label, etapa) por similaridade
+            melhor = None
+            for lab in labels:
+                for funnel_id, f_ident, step_id, s_ident in etapas_flat:
+                    score = _similaridade(lab, s_ident)
+                    if melhor is None or score > melhor["score"]:
+                        melhor = {
+                            "label": lab,
+                            "funnel_id": funnel_id,
+                            "funnel_ident": f_ident,
+                            "step_id": step_id,
+                            "step_ident": s_ident,
+                            "score": round(score, 2),
+                        }
+
+            if not melhor or melhor["score"] < min_score:
+                plano.append({
+                    "conversation_id": conv_id,
+                    "labels": labels,
+                    "acao": "skip_sem_match",
+                    "melhor_candidato": melhor,
+                })
+                continue
+
+            item_plano = {
+                "conversation_id": conv_id,
+                "nome": nome,
+                "labels": labels,
+                "alvo": {
+                    "funnel": melhor["funnel_ident"],
+                    "step": melhor["step_ident"],
+                    "via_label": melhor["label"],
+                    "score": melhor["score"],
+                },
+            }
+
+            if dry_run:
+                item_plano["acao"] = "dry_run"
+                plano.append(item_plano)
+                continue
+
+            # Verificar se já existe card (paginando)
+            funnel_id = melhor["funnel_id"]
+            step_id_alvo = melhor["step_id"]
+            f_entry = funis.get(melhor["funnel_ident"], {})
+            item_existente = None
+            step_atual = None
+            for s_ident2, s_id2 in f_entry.get("steps", {}).items():
+                if item_existente:
+                    break
+                for page in range(1, 21):
+                    ri = await http.get(
+                        f"{base}/api/v1/accounts/{account_id}/funnels/{funnel_id}/funnel_steps/{s_id2}/funnel_items",
+                        headers={"api_access_token": token},
+                        params={"page": page},
+                    )
+                    if not ri.is_success:
+                        break
+                    items = ri.json().get("payload") or []
+                    for it in items:
+                        if it.get("conversation_id") == conv_id:
+                            item_existente = it
+                            step_atual = s_id2
+                            break
+                    if item_existente:
+                        break
+                    if len(items) < 25:
+                        break
+
+            try:
+                if item_existente and step_atual != step_id_alvo:
+                    rr = await http.put(
+                        f"{base}/api/v1/accounts/{account_id}/funnels/{funnel_id}/funnel_steps/{step_atual}/funnel_items/{item_existente['id']}/update_step",
+                        headers={"api_access_token": token, "Content-Type": "application/json"},
+                        json={"funnel_item": {"funnel_step_id": step_id_alvo}},
+                    )
+                    item_plano["acao"] = "movido" if rr.is_success else f"erro_mover_{rr.status_code}"
+                elif item_existente:
+                    item_plano["acao"] = "ja_na_etapa_correta"
+                else:
+                    rc = await http.post(
+                        f"{base}/api/v1/accounts/{account_id}/funnels/{funnel_id}/funnel_steps/{step_id_alvo}/funnel_items",
+                        headers={"api_access_token": token, "Content-Type": "application/json"},
+                        json={
+                            "title": nome,
+                            "conversation_id": conv_id,
+                            "status": "active",
+                            "priority": "medium",
+                        },
+                    )
+                    item_plano["acao"] = "criado" if rc.is_success else f"erro_criar_{rc.status_code}"
+                executados.append(item_plano)
+            except Exception as e:
+                item_plano["acao"] = f"excecao: {e}"
+                executados.append(item_plano)
+            plano.append(item_plano)
+
+    return {
+        "account_id": account_id,
+        "ia_agent_id": ia_agent_id,
+        "total_conversas_ia": len(convs_ia),
+        "min_score": min_score,
+        "dry_run": dry_run,
+        "resumo_acoes": {
+            a: sum(1 for p in plano if p.get("acao") == a)
+            for a in set(p.get("acao") for p in plano)
+        },
+        "plano": plano[:100],  # limita preview
+    }
+
+
 @app.get("/api/admin/kanban/debug-listar/{account_id}")
 async def debug_listar_funnel_items(account_id: int):
     """Testa múltiplos endpoints de listagem de funnel_items para descobrir
