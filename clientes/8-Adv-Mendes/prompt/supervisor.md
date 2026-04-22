@@ -81,6 +81,13 @@ O cliente mencionou: BPC, LOAS, aposentadoria, auxilio-doenca, deficiencia, auti
 
 Usar quando o caso NAO e auxilio-acidente padrao.
 
+REGRA CRITICA: Se o caso e BPC, LOAS, Aposentadoria por Invalidez ou Auxilio-Doenca, MANTER em casos_especiais ate que TODAS as perguntas obrigatorias daquele fluxo tenham sido respondidas:
+- BPC/LOAS: (a) doenca/deficiencia identificada, (b) laudo medico, (c) numero de moradores, (d) renda familiar total.
+- Auxilio-Doenca: (a) laudo com CID, (b) quantidade de dias de afastamento (minimo 90 dias).
+- Aposentadoria por Invalidez: (a) documento medico com CID, (b) confirmacao de incapacidade total e permanente.
+
+Mesmo que o cliente peca "quero marcar", "tem horario?", NAO rotear para agendamento se essas perguntas ainda nao foram respondidas. Manter em casos_especiais.
+
 ### 6. explicacao
 O cliente tem duvida sobre o servico, honorarios, como funciona o escritorio ou metodologia.
 
@@ -128,6 +135,9 @@ Independente de qualquer outra analise, se qualquer um dos itens abaixo for verd
 9. Cliente NAO fez cirurgia. Sem cirurgia realizada = caso inviavel para agendamento, independente do tempo do acidente. Apenas agendar se o cliente JA PASSOU pela cirurgia (placa, pino, parafuso, artroscopia, etc). "Vai fazer cirurgia", "aguardando cirurgia", "medico indicou cirurgia" NAO conta — so conta cirurgia JA REALIZADA.
 10. (REMOVIDO — casos de terceiros devem seguir o fluxo normal de qualificacao)
 11. Cliente recebeu seguro-desemprego mas o acidente foi ANTES do periodo de graca do seguro-desemprego (acidente anterior ao desemprego).
+12. Caso e BPC/LOAS, Aposentadoria por Invalidez, Auxilio-Doenca puro (sem sequela permanente), doenca comum sem relacao com trabalho. Esses casos TEM seu proprio fluxo em casos_especiais (perguntas obrigatorias sobre laudo, doenca, afastamento, renda). NUNCA rotear direto para agendamento — SEMPRE casos_especiais.
+13. Acidente recente (menos de 6 meses) SEM confirmacao explicita de sequela permanente no historico. Tem que passar por avaliacao para confirmar sequela antes de agendar.
+14. Cliente perguntou sobre BPC/LOAS mas AINDA NAO respondeu sobre doenca/deficiencia, laudo, numero de moradores e renda familiar. Essas 4 informacoes sao OBRIGATORIAS — sem elas, manter em casos_especiais.
 
 Em caso de duvida sobre o enquadramento: rotear para transferir_humano, NUNCA para agendamento.
 
