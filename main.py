@@ -2648,6 +2648,66 @@ async def recriar_funis_conta(account_id: int):
     return {"status": "ok", "detail": f"Funis recriados para conta {account_id}"}
 
 
+@app.get("/api/admin/cobranca-docs/labels-chatwoot/{account_id}")
+async def listar_labels_chatwoot(account_id: int):
+    """Lista todas as labels da conta no Chatwoot + amostra de conversas abertas com seus labels.
+
+    Útil para confirmar o slug exato da label que o humano adicionou (pode ser
+    diferente do título visível, ex: "Cobrar Documentos" vs "cobrar-documentos").
+    """
+    config = carregar_config_cliente(account_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    base = (config.get("chatwoot_url") or "").rstrip("/")
+    token = config.get("chatwoot_token", "")
+    if not base or not token:
+        raise HTTPException(status_code=400, detail="chatwoot_url/token não configurados")
+
+    labels = []
+    conversas = []
+    async with httpx.AsyncClient(timeout=15) as http:
+        # 1. Labels cadastradas na conta
+        try:
+            r = await http.get(
+                f"{base}/api/v1/accounts/{account_id}/labels",
+                headers={"api_access_token": token},
+            )
+            if r.is_success:
+                labels = r.json().get("payload", []) or []
+        except Exception as e:
+            labels = [{"erro": str(e)}]
+
+        # 2. Amostra de 25 conversas abertas com seus labels
+        try:
+            r2 = await http.get(
+                f"{base}/api/v1/accounts/{account_id}/conversations",
+                headers={"api_access_token": token},
+                params={"status": "open", "page": 1},
+            )
+            if r2.is_success:
+                payload = r2.json().get("data", {}).get("payload", []) or []
+                for c in payload[:25]:
+                    labels_conv = c.get("labels") or []
+                    if labels_conv:
+                        conversas.append({
+                            "id": c.get("id"),
+                            "nome": ((c.get("meta") or {}).get("sender") or {}).get("name"),
+                            "labels": labels_conv,
+                        })
+        except Exception:
+            pass
+
+    return {
+        "account_id": account_id,
+        "labels_totais_na_conta": len(labels),
+        "labels": [
+            {"title": l.get("title"), "slug": l.get("slug") or l.get("title"), "color": l.get("color")}
+            for l in labels if isinstance(l, dict)
+        ],
+        "conversas_abertas_com_label": conversas,
+    }
+
+
 @app.get("/api/admin/cobranca-docs/diagnostico/{account_id}")
 async def diagnostico_cobranca_docs(account_id: int):
     """Diagnóstico do fluxo de cobrança de documentos para uma conta.
