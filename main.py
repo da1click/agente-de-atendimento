@@ -2648,6 +2648,68 @@ async def recriar_funis_conta(account_id: int):
     return {"status": "ok", "detail": f"Funis recriados para conta {account_id}"}
 
 
+@app.get("/api/admin/kanban/debug-listar/{account_id}")
+async def debug_listar_funnel_items(account_id: int):
+    """Testa múltiplos endpoints de listagem de funnel_items para descobrir
+    qual realmente retorna os cards visíveis na UI do Chatwoot."""
+    config = carregar_config_cliente(account_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    base = (config.get("chatwoot_url") or "").rstrip("/")
+    token = config.get("chatwoot_token", "")
+    h = {"api_access_token": token}
+
+    resultado: dict = {"account_id": account_id, "tentativas": {}}
+
+    async with httpx.AsyncClient(timeout=15) as http:
+        # Pegar primeiro funil e primeira etapa para os testes
+        try:
+            rf = await http.get(f"{base}/api/v1/accounts/{account_id}/funnels", headers=h)
+            funnels = rf.json().get("payload", []) if rf.is_success else []
+        except Exception as e:
+            return {"erro": str(e)}
+        if not funnels:
+            return {"erro": "sem_funis"}
+        funil = funnels[0]
+        fid = funil["id"]
+        sid = funil["funnel_steps"][0]["id"] if funil.get("funnel_steps") else None
+
+        # Endpoints a testar
+        endpoints = [
+            ("step_scoped_v1", f"{base}/api/v1/accounts/{account_id}/funnels/{fid}/funnel_steps/{sid}/funnel_items"),
+            ("funnel_scoped", f"{base}/api/v1/accounts/{account_id}/funnels/{fid}/funnel_items"),
+            ("account_scoped", f"{base}/api/v1/accounts/{account_id}/funnel_items"),
+            ("v2_step_scoped", f"{base}/api/v2/accounts/{account_id}/funnels/{fid}/funnel_steps/{sid}/funnel_items"),
+        ]
+        for nome, url in endpoints:
+            if not url:
+                continue
+            try:
+                r = await http.get(url, headers=h)
+                resultado["tentativas"][nome] = {
+                    "url": url,
+                    "status": r.status_code,
+                    "body_preview": r.text[:400],
+                }
+            except Exception as e:
+                resultado["tentativas"][nome] = {"url": url, "erro": str(e)}
+
+        # Também tenta com paginação
+        try:
+            r = await http.get(
+                f"{base}/api/v1/accounts/{account_id}/funnels/{fid}/funnel_items",
+                headers=h, params={"page": 1, "per_page": 100},
+            )
+            resultado["tentativas"]["funnel_scoped_paginado"] = {
+                "status": r.status_code,
+                "body_preview": r.text[:400],
+            }
+        except Exception as e:
+            resultado["tentativas"]["funnel_scoped_paginado"] = {"erro": str(e)}
+
+    return resultado
+
+
 @app.get("/api/admin/kanban/orfaos-global")
 async def orfaos_kanban_todas_contas():
     """Varre TODAS as contas ativas e reporta cards órfãos (sem conversation_id
