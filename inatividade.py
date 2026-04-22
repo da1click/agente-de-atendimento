@@ -131,9 +131,68 @@ def _ultima_msg_cliente(historico: list) -> datetime | None:
     return None
 
 
+async def _buscar_conteudo_template(account_id: int, template_name: str) -> str | None:
+    """Busca o body renderizável do template no Meta Graph. Retorna None se não achar."""
+    try:
+        from main import _get_meta_config, META_GRAPH, META_TEMPLATE_FIELDS, _meta_headers
+    except Exception:
+        return None
+    try:
+        waba_id, meta_token = _get_meta_config(account_id)
+    except Exception:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=15) as http:
+            r = await http.get(
+                f"{META_GRAPH}/{waba_id}/message_templates",
+                headers=_meta_headers(meta_token),
+                params={"fields": META_TEMPLATE_FIELDS, "name": template_name, "limit": 5},
+            )
+            if not r.is_success:
+                return None
+            tpls = r.json().get("data", []) or []
+            # Prioriza o que bate exatamente o nome
+            tpl = next((t for t in tpls if t.get("name") == template_name), None) or (tpls[0] if tpls else None)
+            if not tpl:
+                return None
+            partes = []
+            for comp in tpl.get("components", []) or []:
+                tipo = (comp.get("type") or "").upper()
+                if tipo == "HEADER":
+                    fmt = (comp.get("format") or "").upper()
+                    if fmt == "TEXT" and comp.get("text"):
+                        partes.append(f"*{comp['text']}*")
+                    elif fmt in ("IMAGE", "VIDEO", "DOCUMENT"):
+                        partes.append(f"[{fmt.lower()} anexo]")
+                elif tipo == "BODY" and comp.get("text"):
+                    partes.append(comp["text"])
+                elif tipo == "FOOTER" and comp.get("text"):
+                    partes.append(f"_{comp['text']}_")
+                elif tipo == "BUTTONS":
+                    for b in comp.get("buttons", []) or []:
+                        txt = b.get("text") or b.get("url") or ""
+                        if txt:
+                            partes.append(f"▸ {txt}")
+            return "\n\n".join(partes) if partes else None
+    except Exception as e:
+        logger.debug(f"[inatividade] buscar_conteudo_template erro: {e}")
+        return None
+
+
+async def _enviar_nota_privada(chatwoot_url: str, token: str, account_id: int, conversation_id: int, texto: str):
+    url = f"{chatwoot_url}/api/v1/accounts/{account_id}/conversations/{conversation_id}/messages"
+    async with httpx.AsyncClient(timeout=15) as http:
+        await http.post(
+            url,
+            headers={"api_access_token": token, "Content-Type": "application/json"},
+            json={"content": texto, "message_type": "outgoing", "private": True},
+        )
+
+
 async def _enviar_template_chatwoot(chatwoot_url: str, token: str, account_id: int,
                                      conversation_id: int, template_name: str):
-    """Envia um template WhatsApp via Chatwoot (para inboxes WhatsApp Oficial)."""
+    """Envia um template WhatsApp via Chatwoot (para inboxes WhatsApp Oficial)
+    e registra o conteúdo renderizado como nota privada na conversa."""
     url = f"{chatwoot_url}/api/v1/accounts/{account_id}/conversations/{conversation_id}/messages"
     headers = {"api_access_token": token, "Content-Type": "application/json"}
     payload = {
@@ -148,6 +207,16 @@ async def _enviar_template_chatwoot(chatwoot_url: str, token: str, account_id: i
     async with httpx.AsyncClient(timeout=15) as http:
         resp = await http.post(url, headers=headers, json=payload)
         resp.raise_for_status()
+
+    # Logar o conteúdo do template como nota privada para visibilidade interna
+    conteudo = await _buscar_conteudo_template(account_id, template_name)
+    nota = f"📎 Template enviado: *{template_name}*"
+    if conteudo:
+        nota += f"\n\n{conteudo}"
+    try:
+        await _enviar_nota_privada(chatwoot_url, token, account_id, conversation_id, nota)
+    except Exception as e:
+        logger.debug(f"[inatividade] Falha ao postar nota privada do template: {e}")
 
 
 # ── CHATWOOT HELPERS ──────────────────────────────────────────
