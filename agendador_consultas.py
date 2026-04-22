@@ -51,6 +51,19 @@ async def processar_lembretes():
     if not agendamentos:
         return
 
+    # Dedupe: se houver múltiplos agendamentos ativos para (conv, data, hora),
+    # mantém só o mais recente (maior id). Evita lembrete duplicado quando o mesmo
+    # horário foi inserido mais de uma vez na mesma conversa.
+    _dedup: dict[tuple, dict] = {}
+    for _ag in agendamentos:
+        _key = (_ag.get("conversation_id"), _ag.get("scheduled_date"), (_ag.get("scheduled_time", "") or "")[:5])
+        _prev = _dedup.get(_key)
+        if _prev is None or (_ag.get("id") or 0) > (_prev.get("id") or 0):
+            _dedup[_key] = _ag
+    if len(_dedup) < len(agendamentos):
+        logger.info(f"[lembrete-consulta] Dedupe: {len(agendamentos)} → {len(_dedup)} agendamento(s) únicos")
+    agendamentos = list(_dedup.values())
+
     now = datetime.now(BR_TZ)
     config_cache: dict[int, dict | None] = {}
     enviados = 0
@@ -131,8 +144,10 @@ async def processar_lembretes():
 
                 send_time = ag_dt - timedelta(minutes=minutos_antes)
 
-                # Janela de envio: do momento ideal até 30min depois
-                if not (send_time <= now <= send_time + timedelta(minutes=30)):
+                # Janela de envio: do momento ideal até 10min depois.
+                # Janela curta reduz risco de re-envio quando o cache em memória
+                # é perdido (ex: deploy) e a persistência em banco falha silenciosa.
+                if not (send_time <= now <= send_time + timedelta(minutes=10)):
                     continue
 
                 mensagem_template = lembrete.get("mensagem", _LEMBRETES_PADRAO[0]["mensagem"])
@@ -144,24 +159,36 @@ async def processar_lembretes():
                     .replace("{data}", date_str)
                 )
 
+                # Pré-reserva: marcar no banco ANTES de enviar. Se o container cair
+                # entre a marcação e o envio, cliente perde um lembrete — aceitável.
+                # Se marcarmos DEPOIS e a persistência falhar, duplicaria. Preferimos
+                # a 1ª falha (silêncio) à 2ª (spam).
+                reservado_em_banco = False
+                try:
+                    _db2 = get_db()
+                    _db2.table("ia_agendamentos").update({
+                        "lembretes_enviados_min": list(lembretes_ja_enviados | {minutos_antes})
+                    }).eq("id", ag_id).execute()
+                    reservado_em_banco = True
+                except Exception as e:
+                    logger.warning(f"[lembrete-consulta] Falha ao pré-reservar lembrete no banco (ag {ag_id}): {e} — caindo no cache em memória")
+
+                _lembretes_enviados.add(cache_key)  # reserva em memória sempre
                 try:
                     await enviar_parte_chatwoot(chatwoot_url, token, account_id, conversation_id, mensagem)
-                    _lembretes_enviados.add(cache_key)
                     lembretes_ja_enviados.add(minutos_antes)
                     enviados += 1
                     logger.info(f"[lembrete-consulta] Enviado ({minutos_antes}min antes) para {ag.get('contact_name','')} — ag {ag_id}")
-
-                    # Salvar no banco imediatamente (persistente entre deploys)
-                    try:
-                        _db2 = get_db()
-                        _db2.table("ia_agendamentos").update({
-                            "lembretes_enviados_min": list(lembretes_ja_enviados)
-                        }).eq("id", ag_id).execute()
-                    except Exception:
-                        pass  # coluna pode não existir
-
                 except Exception as e:
-                    logger.error(f"[lembrete-consulta] Erro ao enviar: {e}")
+                    logger.error(f"[lembrete-consulta] Erro ao enviar (ag {ag_id}): {e}")
+                    # Se envio falhou e reservamos no banco, tentar reverter para permitir retry no próximo ciclo
+                    if reservado_em_banco:
+                        try:
+                            _db2.table("ia_agendamentos").update({
+                                "lembretes_enviados_min": list(lembretes_ja_enviados)
+                            }).eq("id", ag_id).execute()
+                        except Exception:
+                            pass
 
             # Marcar lembrete_enviado=true quando todos os lembretes configurados foram enviados
             todos_minutos = {l.get("minutos", 10) for l in lembretes_config}

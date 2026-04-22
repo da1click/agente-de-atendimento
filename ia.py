@@ -15,6 +15,12 @@ CLIENTES_DIR = os.path.join(BASE_DIR, "clientes")
 # Debounce: conversation_id -> asyncio.Task
 _debounce_tasks: dict[int, asyncio.Task] = {}
 
+# Lock serial por conversa: impede duas invocações paralelas de processar_mensagem
+# Sem isso, duas tasks de debounce podem disparar em paralelo e gerar propostas
+# duplicadas (ex: cliente manda "Sim" + msg do bot anterior ainda ecoando no webhook
+# → duas ConsultarAgenda independentes → dois horários diferentes propostos).
+_processing_locks: dict[int, asyncio.Lock] = {}
+
 # ── MAPEAMENTO DE TOOLS POR FASE (WAT Architecture) ─────────
 
 TOOLS_POR_FASE = {
@@ -1495,11 +1501,21 @@ async def chamar_agente(config: dict, fase: str, messages_openai: list, conversa
 async def _executar_com_debounce(config: dict, account_id: int, conversation_id: int, inbox_id: int | None):
     await asyncio.sleep(15)
     _debounce_tasks.pop(conversation_id, None)
-    logger.info(f"[debounce] Processando conversa {conversation_id} (account={account_id})")
-    try:
-        await processar_mensagem(config, account_id, conversation_id, inbox_id)
-    except Exception as e:
-        logger.error(f"[debounce] ERRO FATAL ao processar conv={conversation_id} account={account_id}: {e}", exc_info=True)
+    lock = _processing_locks.setdefault(conversation_id, asyncio.Lock())
+    if lock.locked():
+        logger.info(f"[debounce] Já há processamento em andamento para conv={conversation_id} — pulando esta task (a próxima mensagem reagendará)")
+        return
+    async with lock:
+        logger.info(f"[debounce] Processando conversa {conversation_id} (account={account_id})")
+        try:
+            await processar_mensagem(config, account_id, conversation_id, inbox_id)
+        except Exception as e:
+            logger.error(f"[debounce] ERRO FATAL ao processar conv={conversation_id} account={account_id}: {e}", exc_info=True)
+    # Limpar locks antigos para não vazar memória (mantém só conversas recentes)
+    if len(_processing_locks) > 2000:
+        for cid in list(_processing_locks.keys())[:500]:
+            if not _processing_locks[cid].locked():
+                _processing_locks.pop(cid, None)
 
 
 def agendar_processamento(config: dict, account_id: int, conversation_id: int, inbox_id: int | None = None):
