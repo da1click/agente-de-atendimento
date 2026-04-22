@@ -1,6 +1,6 @@
 from openai import OpenAI
 from datetime import datetime, timezone, timedelta
-from db import upsert_conversation, upsert_lead, inserir_agendamento, listar_advogados_por_especialidade, normalizar_especialidade, existe_agendamento_ativo
+from db import upsert_conversation, upsert_lead, inserir_agendamento, listar_advogados_por_especialidade, normalizar_especialidade, existe_agendamento_ativo, cancelar_agendamentos_anteriores
 import asyncio
 import httpx
 import json
@@ -506,6 +506,15 @@ async def executar_tool(nome: str, args: dict, config: dict, conversation_id: in
                 parts = start_str.split(" ", 1) if start_str else ["", ""]
                 sched_date = parts[0] if len(parts) > 0 else ""
                 sched_time = parts[1] if len(parts) > 1 else ""
+                # Reagendamento: cancelar agendamentos anteriores para impedir
+                # que o sistema de lembretes dispare o horário antigo.
+                if is_reagendamento:
+                    try:
+                        cancelados = cancelar_agendamentos_anteriores(account_id, conversation_id)
+                        if cancelados:
+                            logger.info(f"🗑️ Reagendamento: {cancelados} agendamento(s) anterior(es) cancelado(s) — conv={conversation_id}")
+                    except Exception as e:
+                        logger.warning(f"Erro ao cancelar agendamentos anteriores: {e}")
                 inserir_agendamento(
                     account_id=account_id,
                     inbox_id=inbox_id,

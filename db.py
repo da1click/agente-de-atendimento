@@ -117,6 +117,27 @@ def inserir_agendamento(account_id: int, inbox_id: int, conversation_id: int, co
     }).execute()
 
 
+def cancelar_agendamentos_anteriores(account_id: int, conversation_id: int) -> int:
+    """Marca agendamentos ativos anteriores da conversa como 'cancelado'.
+
+    Usar antes de inserir um reagendamento para impedir lembretes duplicados
+    do horário antigo. Retorna quantos foram cancelados.
+    """
+    db = get_db()
+    try:
+        resp = (
+            db.table("ia_agendamentos")
+            .update({"status": "cancelado", "updated_at": "now()"})
+            .eq("account_id", account_id)
+            .eq("conversation_id", conversation_id)
+            .eq("status", "agendado")
+            .execute()
+        )
+        return len(resp.data or [])
+    except Exception:
+        return 0
+
+
 def existe_agendamento_ativo(account_id: int, conversation_id: int) -> dict | None:
     """Retorna agendamento ativo (status=agendado) mais recente para a conversa, ou None."""
     db = get_db()
