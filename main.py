@@ -2745,30 +2745,37 @@ async def orfaos_kanban_todas_contas():
                 amostra_orfaos = []
                 for funil in funnels:
                     for step in funil.get("funnel_steps", []) or []:
-                        try:
-                            ri = await http.get(
-                                f"{base}/api/v1/accounts/{account_id}/funnels/{funil['id']}/funnel_steps/{step['id']}/funnel_items",
-                                headers={"api_access_token": token},
-                            )
-                            if not ri.is_success:
-                                continue
-                            data = ri.json()
-                            items = data.get("items", data) if isinstance(data, dict) else data
-                            if not isinstance(items, list):
-                                continue
-                            for it in items:
-                                if not it.get("conversation_id") and not it.get("title"):
-                                    orfaos += 1
-                                    if len(amostra_orfaos) < 3:
-                                        amostra_orfaos.append({
-                                            "id": it.get("id"),
-                                            "funnel_step_id": it.get("funnel_step_id"),
-                                            "account_id_card": it.get("account_id"),
-                                        })
-                                else:
-                                    validos += 1
-                        except Exception:
-                            continue
+                        # Paginar: Chatwoot retorna 25 por página
+                        for page in range(1, 21):  # máximo 500 cards por etapa
+                            try:
+                                ri = await http.get(
+                                    f"{base}/api/v1/accounts/{account_id}/funnels/{funil['id']}/funnel_steps/{step['id']}/funnel_items",
+                                    headers={"api_access_token": token},
+                                    params={"page": page},
+                                )
+                                if not ri.is_success:
+                                    break
+                                data = ri.json()
+                                items = data.get("payload") or data.get("items") or []
+                                if not isinstance(items, list) or not items:
+                                    break
+                                for it in items:
+                                    if not it.get("conversation_id") and not it.get("title"):
+                                        orfaos += 1
+                                        if len(amostra_orfaos) < 5:
+                                            amostra_orfaos.append({
+                                                "id": it.get("id"),
+                                                "funnel_step_id": it.get("funnel_step_id"),
+                                                "account_id_card": it.get("account_id"),
+                                                "step_identifier": step.get("identifier"),
+                                            })
+                                    else:
+                                        validos += 1
+                                # Última página: menos de 25 items
+                                if len(items) < 25:
+                                    break
+                            except Exception:
+                                break
                 resumo.append({
                     "account_id": account_id,
                     "nome": cfg.get("nome"),
@@ -2809,27 +2816,32 @@ async def limpar_orfaos_kanban(account_id: int, dry_run: bool = True):
             f_id = funil.get("id")
             for step in funil.get("funnel_steps", []) or []:
                 s_id = step.get("id")
-                try:
-                    ri = await http.get(
-                        f"{base}/api/v1/accounts/{account_id}/funnels/{f_id}/funnel_steps/{s_id}/funnel_items",
-                        headers={"api_access_token": token},
-                    )
-                    if not ri.is_success:
-                        continue
-                    data = ri.json()
-                    items = data.get("items", data) if isinstance(data, dict) else data
-                    if not isinstance(items, list):
-                        continue
-                    for it in items:
-                        if not it.get("conversation_id") and not it.get("title"):
-                            orfaos.append({
-                                "id": it.get("id"),
-                                "funnel_id": f_id,
-                                "step_id": s_id,
-                                "step": step.get("identifier"),
-                            })
-                except Exception:
-                    continue
+                # Paginar
+                for page in range(1, 21):
+                    try:
+                        ri = await http.get(
+                            f"{base}/api/v1/accounts/{account_id}/funnels/{f_id}/funnel_steps/{s_id}/funnel_items",
+                            headers={"api_access_token": token},
+                            params={"page": page},
+                        )
+                        if not ri.is_success:
+                            break
+                        data = ri.json()
+                        items = data.get("payload") or data.get("items") or []
+                        if not isinstance(items, list) or not items:
+                            break
+                        for it in items:
+                            if not it.get("conversation_id") and not it.get("title"):
+                                orfaos.append({
+                                    "id": it.get("id"),
+                                    "funnel_id": f_id,
+                                    "step_id": s_id,
+                                    "step": step.get("identifier"),
+                                })
+                        if len(items) < 25:
+                            break
+                    except Exception:
+                        break
 
         deletados = []
         if not dry_run and orfaos:
