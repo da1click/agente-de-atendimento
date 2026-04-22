@@ -117,6 +117,26 @@ def inserir_agendamento(account_id: int, inbox_id: int, conversation_id: int, co
     }).execute()
 
 
+def existe_agendamento_ativo(account_id: int, conversation_id: int) -> dict | None:
+    """Retorna agendamento ativo (status=agendado) mais recente para a conversa, ou None."""
+    db = get_db()
+    try:
+        resp = (
+            db.table("ia_agendamentos")
+            .select("id,scheduled_date,scheduled_time,advogada,status,created_at")
+            .eq("account_id", account_id)
+            .eq("conversation_id", conversation_id)
+            .eq("status", "agendado")
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        data = resp.data or []
+        return data[0] if data else None
+    except Exception:
+        return None
+
+
 def listar_agendamentos_pendentes() -> list:
     """Retorna agendamentos com status 'agendado' de hoje em diante."""
     db = get_db()

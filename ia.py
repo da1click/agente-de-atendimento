@@ -1,6 +1,6 @@
 from openai import OpenAI
 from datetime import datetime, timezone, timedelta
-from db import upsert_conversation, upsert_lead, inserir_agendamento, listar_advogados_por_especialidade, normalizar_especialidade
+from db import upsert_conversation, upsert_lead, inserir_agendamento, listar_advogados_por_especialidade, normalizar_especialidade, existe_agendamento_ativo
 import asyncio
 import httpx
 import json
@@ -472,6 +472,28 @@ async def executar_tool(nome: str, args: dict, config: dict, conversation_id: in
 
     if nome == "Agendar":
         is_reagendamento = context.get("is_reagendamento", False)
+        # Proteção anti-duplicação: se já existe agendamento ativo pra esta conversa
+        # e não é reagendamento, bloquear nova criação.
+        if not is_reagendamento:
+            try:
+                existente = existe_agendamento_ativo(account_id, conversation_id)
+                if existente:
+                    logger.warning(
+                        f"🚫 [agenda] Agendar duplicado bloqueado — conv={conversation_id} "
+                        f"já tem agendamento em {existente.get('scheduled_date')} {existente.get('scheduled_time')} "
+                        f"com {existente.get('advogada')}"
+                    )
+                    return json.dumps({
+                        "STATUS": "JA_AGENDADO",
+                        "mensagem_sistema": (
+                            f"Ja existe agendamento ativo para esta conversa: "
+                            f"{existente.get('scheduled_date')} {existente.get('scheduled_time')} "
+                            f"com {existente.get('advogada')}. NAO agendar novamente — confirme ao cliente o horario ja reservado."
+                        ),
+                        "advogado": existente.get("advogada", ""),
+                    })
+            except Exception as e:
+                logger.warning(f"[agenda] Erro ao checar agendamento existente: {e}")
         try:
             resultado = await agendar_real(args, config, context)
         except Exception as e:
