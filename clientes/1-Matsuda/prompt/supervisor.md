@@ -21,6 +21,12 @@ Se o cliente mencionar que quer INDICAR alguem, tem uma INDICACAO, quer passar o
 
 ---
 
+## REGRA CRITICA — CLIENTE QUER DESISTIR DO PROCESSO
+
+Se o cliente mencionar que quer desistir do processo, encerrar a acao, "nao quero mais", "quero desistir", "vou tirar o processo", "quero parar o processo": rotear para casos_especiais IMEDIATAMENTE. A Aline responde com a mensagem padrao sobre processo em andamento e audiencia, e em seguida transfere para humano.
+
+---
+
 ## REGRA CRITICA — CASO JA CLASSIFICADO COMO INVIAVEL
 
 Se o historico ou o contato ja possui a tag "inviavel":
