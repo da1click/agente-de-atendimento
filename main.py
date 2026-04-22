@@ -2710,24 +2710,57 @@ async def testar_criacao_kanban(account_id: int, conversation_id: int | None = N
     fid0 = f0.get("funnel_id")
     sid0 = f0.get("steps", {}).get(step_ident0)
     if fid0 and sid0:
+        endpoint_url = f"{base}/api/v1/accounts/{account_id}/funnels/{fid0}/funnel_steps/{sid0}/funnel_items"
+        headers_post = {"api_access_token": token, "Content-Type": "application/json"}
+        # Variante 1: campos no root (como está no código atual)
         try:
             async with httpx.AsyncClient(timeout=10) as http:
-                rp = await http.post(
-                    f"{base}/api/v1/accounts/{account_id}/funnels/{fid0}/funnel_steps/{sid0}/funnel_items",
-                    headers={"api_access_token": token, "Content-Type": "application/json"},
-                    json={
-                        "title": f"Teste Direto {conversation_id}",
+                rp1 = await http.post(endpoint_url, headers=headers_post, json={
+                    "title": f"Teste V1 {conversation_id}",
+                    "conversation_id": conversation_id,
+                    "status": "active",
+                    "priority": "medium",
+                })
+                resultado["post_v1_root"] = {"status_code": rp1.status_code, "body": rp1.text[:300]}
+        except Exception as e:
+            resultado["post_v1_root"] = {"erro": str(e)}
+        # Variante 2: com wrapper funnel_item (como no PUT de mover)
+        try:
+            async with httpx.AsyncClient(timeout=10) as http:
+                rp2 = await http.post(endpoint_url, headers=headers_post, json={
+                    "funnel_item": {
+                        "title": f"Teste V2 {conversation_id}",
                         "conversation_id": conversation_id,
                         "status": "active",
                         "priority": "medium",
-                    },
-                )
-                resultado["post_direto"] = {
-                    "status_code": rp.status_code,
-                    "body": rp.text[:500],
-                }
+                    }
+                })
+                resultado["post_v2_wrapper"] = {"status_code": rp2.status_code, "body": rp2.text[:300]}
         except Exception as e:
-            resultado["post_direto"] = {"erro": str(e)}
+            resultado["post_v2_wrapper"] = {"erro": str(e)}
+        # Variante 3: campos mínimos com wrapper
+        try:
+            async with httpx.AsyncClient(timeout=10) as http:
+                rp3 = await http.post(endpoint_url, headers=headers_post, json={
+                    "funnel_item": {
+                        "title": f"Teste V3 {conversation_id}",
+                        "conversation_id": conversation_id,
+                    }
+                })
+                resultado["post_v3_min_wrapper"] = {"status_code": rp3.status_code, "body": rp3.text[:300]}
+        except Exception as e:
+            resultado["post_v3_min_wrapper"] = {"erro": str(e)}
+        # Variante 4: sem conversation_id (talvez causando constraint única/500)
+        try:
+            async with httpx.AsyncClient(timeout=10) as http:
+                rp4 = await http.post(endpoint_url, headers=headers_post, json={
+                    "funnel_item": {
+                        "title": f"Teste V4 {conversation_id}",
+                    }
+                })
+                resultado["post_v4_sem_conv"] = {"status_code": rp4.status_code, "body": rp4.text[:300]}
+        except Exception as e:
+            resultado["post_v4_sem_conv"] = {"erro": str(e)}
 
     # Verificar se o card existe agora
     funil_ident, step_ident = KANBAN_TOOL_MAP[tool]
