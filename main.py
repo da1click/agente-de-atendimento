@@ -2703,8 +2703,8 @@ async def testar_criacao_kanban(account_id: int, conversation_id: int | None = N
         resultado["erro"] = str(e)
         resultado["traceback"] = traceback.format_exc()
 
-    # Tentativa direta (bypass kanban_mover_card) — para capturar o status code
-    # bruto do Chatwoot e diagnosticar falha silenciosa.
+    # Approach descoberto: POST cria card VAZIO (ignora os campos do body),
+    # é preciso fazer um PATCH em seguida para setar title/conversation_id.
     funil_ident0, step_ident0 = KANBAN_TOOL_MAP[tool]
     f0 = funis.get(funil_ident0, {})
     fid0 = f0.get("funnel_id")
@@ -2712,55 +2712,50 @@ async def testar_criacao_kanban(account_id: int, conversation_id: int | None = N
     if fid0 and sid0:
         endpoint_url = f"{base}/api/v1/accounts/{account_id}/funnels/{fid0}/funnel_steps/{sid0}/funnel_items"
         headers_post = {"api_access_token": token, "Content-Type": "application/json"}
-        # Variante 1: campos no root (como está no código atual)
+        title_teste = f"Teste POST+PATCH {conversation_id}"
+        novo_id = None
         try:
             async with httpx.AsyncClient(timeout=10) as http:
-                rp1 = await http.post(endpoint_url, headers=headers_post, json={
-                    "title": f"Teste V1 {conversation_id}",
-                    "conversation_id": conversation_id,
-                    "status": "active",
-                    "priority": "medium",
-                })
-                resultado["post_v1_root"] = {"status_code": rp1.status_code, "body": rp1.text[:300]}
+                # 1. POST vazio (cria card sem dados)
+                rp = await http.post(endpoint_url, headers=headers_post, json={"funnel_item": {}})
+                resultado["post_criar_vazio"] = {"status_code": rp.status_code, "body": rp.text[:300]}
+                if rp.is_success:
+                    novo_id = rp.json().get("payload", {}).get("id")
+                # 2. PATCH com title e conversation_id
+                if novo_id:
+                    patch_url = f"{base}/api/v1/accounts/{account_id}/funnels/{fid0}/funnel_steps/{sid0}/funnel_items/{novo_id}"
+                    rpp = await http.patch(patch_url, headers=headers_post, json={
+                        "funnel_item": {
+                            "title": title_teste,
+                            "conversation_id": conversation_id,
+                        }
+                    })
+                    resultado["patch_atualizar"] = {"status_code": rpp.status_code, "body": rpp.text[:400]}
+                    # Alternativa: PUT
+                    if not rpp.is_success:
+                        rpu = await http.put(patch_url, headers=headers_post, json={
+                            "funnel_item": {
+                                "title": title_teste,
+                                "conversation_id": conversation_id,
+                            }
+                        })
+                        resultado["put_atualizar"] = {"status_code": rpu.status_code, "body": rpu.text[:400]}
         except Exception as e:
-            resultado["post_v1_root"] = {"erro": str(e)}
-        # Variante 2: com wrapper funnel_item (como no PUT de mover)
+            resultado["erro_post_patch"] = str(e)
+
+    # Limpar fantasmas criados nas rodadas anteriores
+    ids_fantasmas = [37029, 37031, 37033]
+    limpezas = []
+    if fid0 and sid0:
         try:
             async with httpx.AsyncClient(timeout=10) as http:
-                rp2 = await http.post(endpoint_url, headers=headers_post, json={
-                    "funnel_item": {
-                        "title": f"Teste V2 {conversation_id}",
-                        "conversation_id": conversation_id,
-                        "status": "active",
-                        "priority": "medium",
-                    }
-                })
-                resultado["post_v2_wrapper"] = {"status_code": rp2.status_code, "body": rp2.text[:300]}
+                for fid_item in ids_fantasmas:
+                    del_url = f"{base}/api/v1/accounts/{account_id}/funnels/{fid0}/funnel_steps/{sid0}/funnel_items/{fid_item}"
+                    r = await http.delete(del_url, headers={"api_access_token": token})
+                    limpezas.append({"id": fid_item, "status": r.status_code})
         except Exception as e:
-            resultado["post_v2_wrapper"] = {"erro": str(e)}
-        # Variante 3: campos mínimos com wrapper
-        try:
-            async with httpx.AsyncClient(timeout=10) as http:
-                rp3 = await http.post(endpoint_url, headers=headers_post, json={
-                    "funnel_item": {
-                        "title": f"Teste V3 {conversation_id}",
-                        "conversation_id": conversation_id,
-                    }
-                })
-                resultado["post_v3_min_wrapper"] = {"status_code": rp3.status_code, "body": rp3.text[:300]}
-        except Exception as e:
-            resultado["post_v3_min_wrapper"] = {"erro": str(e)}
-        # Variante 4: sem conversation_id (talvez causando constraint única/500)
-        try:
-            async with httpx.AsyncClient(timeout=10) as http:
-                rp4 = await http.post(endpoint_url, headers=headers_post, json={
-                    "funnel_item": {
-                        "title": f"Teste V4 {conversation_id}",
-                    }
-                })
-                resultado["post_v4_sem_conv"] = {"status_code": rp4.status_code, "body": rp4.text[:300]}
-        except Exception as e:
-            resultado["post_v4_sem_conv"] = {"erro": str(e)}
+            resultado["erro_limpeza"] = str(e)
+    resultado["limpeza_fantasmas"] = limpezas
 
     # Verificar se o card existe agora
     funil_ident, step_ident = KANBAN_TOOL_MAP[tool]
