@@ -2648,6 +2648,109 @@ async def recriar_funis_conta(account_id: int):
     return {"status": "ok", "detail": f"Funis recriados para conta {account_id}"}
 
 
+@app.get("/api/admin/kanban/estado/{account_id}")
+async def estado_kanban_conta(account_id: int):
+    """Mostra o estado atual do kanban de uma conta: funis, etapas, quantos
+    cards em cada e amostra dos mais recentes.
+
+    Serve para auditar se a IA está movimentando os cards conforme esperado.
+    """
+    from ia import KANBAN_TOOL_MAP
+
+    config = carregar_config_cliente(account_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    base = (config.get("chatwoot_url") or "").rstrip("/")
+    token = config.get("chatwoot_token", "")
+    if not base or not token:
+        raise HTTPException(status_code=400, detail="chatwoot_url/token não configurados")
+
+    # Mapa reverso: (funil_id, step_id) → nomes de tools que disparam essa etapa
+    tools_por_etapa: dict[tuple, list[str]] = {}
+    for tool_name, (funil_ident, step_ident) in KANBAN_TOOL_MAP.items():
+        key = (funil_ident, step_ident)
+        tools_por_etapa.setdefault(key, []).append(tool_name)
+
+    funis_resp = []
+    async with httpx.AsyncClient(timeout=20) as http:
+        # Listar funis
+        r = await http.get(
+            f"{base}/api/v1/accounts/{account_id}/funnels",
+            headers={"api_access_token": token},
+        )
+        if not r.is_success:
+            raise HTTPException(status_code=500, detail=f"Chatwoot retornou {r.status_code}")
+        funnels = r.json().get("payload", []) or []
+
+        for funil in funnels:
+            f_id = funil.get("id")
+            f_ident = funil.get("identifier", "")
+            etapas_out = []
+            for step in funil.get("funnel_steps", []) or []:
+                s_id = step.get("id")
+                s_ident = step.get("identifier", "")
+                # Buscar items dessa etapa
+                items = []
+                try:
+                    ri = await http.get(
+                        f"{base}/api/v1/accounts/{account_id}/funnels/{f_id}/funnel_steps/{s_id}/funnel_items",
+                        headers={"api_access_token": token},
+                    )
+                    if ri.is_success:
+                        data = ri.json()
+                        items = data.get("items", data) if isinstance(data, dict) else data
+                        if not isinstance(items, list):
+                            items = []
+                except Exception:
+                    items = []
+                amostra = []
+                for it in items[:5]:
+                    amostra.append({
+                        "id": it.get("id"),
+                        "title": it.get("title"),
+                        "conversation_id": it.get("conversation_id"),
+                        "created_at": it.get("created_at"),
+                        "updated_at": it.get("updated_at"),
+                    })
+                etapas_out.append({
+                    "titulo": step.get("title"),
+                    "identifier": s_ident,
+                    "total_cards": len(items),
+                    "tools_que_disparam": tools_por_etapa.get((f_ident, s_ident), []),
+                    "amostra_recentes": amostra,
+                })
+            funis_resp.append({
+                "titulo": funil.get("title"),
+                "identifier": f_ident,
+                "etapas": etapas_out,
+            })
+
+    total_cards = sum(e["total_cards"] for f in funis_resp for e in f["etapas"])
+    cards_ia = sum(
+        1
+        for f in funis_resp
+        for e in f["etapas"]
+        for c in e["amostra_recentes"]
+        if c.get("conversation_id")
+    )
+
+    return {
+        "account_id": account_id,
+        "total_cards_no_kanban": total_cards,
+        "cards_com_conversation_id_amostra": cards_ia,
+        "funis": funis_resp,
+        "legenda_tools": {
+            "novo_lead / em_qualificacao": "ao entrar em identificacao ou outra fase inicial",
+            "Agendar": "quando a IA agenda uma consulta (sucesso)",
+            "convertido": "após agendamento confirmado",
+            "TransferHuman": "quando transfere para humano",
+            "cliente_inviavel": "quando marca inviável",
+            "desqualificado / nao_lead": "quando descarta o lead",
+            "followup / aguardando_cliente / lead_perdido / nao_assinou / nao_alfabetizado": "tools auxiliares",
+        },
+    }
+
+
 @app.post("/api/admin/cobranca-docs/forcar-ciclo")
 async def forcar_ciclo_cobranca_docs():
     """Dispara manualmente um ciclo do loop de cobrança de documentos.
