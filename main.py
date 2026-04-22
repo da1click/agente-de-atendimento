@@ -2648,6 +2648,84 @@ async def recriar_funis_conta(account_id: int):
     return {"status": "ok", "detail": f"Funis recriados para conta {account_id}"}
 
 
+@app.get("/api/admin/cobranca-docs/diagnostico/{account_id}")
+async def diagnostico_cobranca_docs(account_id: int):
+    """Diagnóstico do fluxo de cobrança de documentos para uma conta.
+
+    Retorna: se a tabela existe, se a conta está habilitada, quantas conversas
+    têm a label 'cobrar-documentos', quantos registros ativos no banco,
+    próximo envio agendado e estado do horário comercial.
+    """
+    from cobranca_documentos import (
+        CONTAS_HABILITADAS, LABEL_COBRANCA, _dentro_horario_comercial,
+        _listar_conversas_com_label,
+    )
+    from db import get_db
+
+    config = carregar_config_cliente(account_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+
+    # 1. Tabela existe?
+    tabela_ok = False
+    erro_tabela = None
+    registros_ativos = 0
+    amostra = []
+    try:
+        db = get_db()
+        resp = (
+            db.table("ia_cobranca_docs")
+            .select("conversation_id,inbox_id,tentativas,limite,ativo,proximo_envio,ultimo_envio,motivo_desativacao")
+            .eq("account_id", account_id)
+            .order("updated_at", desc=True)
+            .limit(10)
+            .execute()
+        )
+        amostra = resp.data or []
+        tabela_ok = True
+        # Contar ativos
+        resp2 = (
+            db.table("ia_cobranca_docs")
+            .select("id", count="exact")
+            .eq("account_id", account_id)
+            .eq("ativo", True)
+            .execute()
+        )
+        registros_ativos = resp2.count or 0
+    except Exception as e:
+        erro_tabela = str(e)
+
+    # 2. Conversas com a label no Chatwoot
+    convs_com_label = []
+    erro_chatwoot = None
+    try:
+        convs = await _listar_conversas_com_label(config, LABEL_COBRANCA)
+        convs_com_label = [
+            {"id": c.get("id"), "status": c.get("status"), "labels": c.get("labels")}
+            for c in convs
+        ]
+    except Exception as e:
+        erro_chatwoot = str(e)
+
+    return {
+        "account_id": account_id,
+        "habilitada": account_id in CONTAS_HABILITADAS,
+        "label_esperada": LABEL_COBRANCA,
+        "horario_comercial_agora": _dentro_horario_comercial(),
+        "tabela_ia_cobranca_docs": {
+            "existe": tabela_ok,
+            "erro": erro_tabela,
+            "registros_ativos": registros_ativos,
+            "amostra_recentes": amostra,
+        },
+        "chatwoot": {
+            "conversas_com_label": len(convs_com_label),
+            "amostra": convs_com_label[:10],
+            "erro": erro_chatwoot,
+        },
+    }
+
+
 @app.get("/api/admin/inatividade/diagnostico/{account_id}")
 async def diagnostico_inatividade_conta(account_id: int):
     """Diagnóstico de follow-up/inatividade de uma conta.
