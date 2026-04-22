@@ -2648,6 +2648,41 @@ async def recriar_funis_conta(account_id: int):
     return {"status": "ok", "detail": f"Funis recriados para conta {account_id}"}
 
 
+@app.post("/api/admin/cobranca-docs/forcar-ciclo")
+async def forcar_ciclo_cobranca_docs():
+    """Dispara manualmente um ciclo do loop de cobrança de documentos.
+
+    Útil logo após adicionar/remover a label para não esperar o próximo
+    intervalo automático (5min). Executa: sincronizar → desativar-sem-label →
+    disparar cobranças pendentes. Só opera dentro do horário comercial.
+    """
+    from cobranca_documentos import (
+        _dentro_horario_comercial,
+        _sincronizar_cobrancas,
+        _desativar_sem_label,
+        _disparar_cobrancas,
+    )
+
+    if not _dentro_horario_comercial():
+        return {"status": "fora_do_horario_comercial", "detalhe": "Ciclo só roda entre 8h e 19h BRT"}
+
+    erros = {}
+    try:
+        await _sincronizar_cobrancas()
+    except Exception as e:
+        erros["sincronizar"] = str(e)
+    try:
+        await _desativar_sem_label()
+    except Exception as e:
+        erros["desativar_sem_label"] = str(e)
+    try:
+        await _disparar_cobrancas()
+    except Exception as e:
+        erros["disparar"] = str(e)
+
+    return {"status": "ok" if not erros else "erros", "erros": erros}
+
+
 @app.get("/api/admin/cobranca-docs/labels-chatwoot/{account_id}")
 async def listar_labels_chatwoot(account_id: int):
     """Lista todas as labels da conta no Chatwoot + amostra de conversas abertas com seus labels.
