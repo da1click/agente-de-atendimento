@@ -2703,59 +2703,68 @@ async def testar_criacao_kanban(account_id: int, conversation_id: int | None = N
         resultado["erro"] = str(e)
         resultado["traceback"] = traceback.format_exc()
 
-    # Approach descoberto: POST cria card VAZIO (ignora os campos do body),
-    # é preciso fazer um PATCH em seguida para setar title/conversation_id.
+    # Testa diferentes formatos de PATCH/PUT para setar title e conversation_id.
     funil_ident0, step_ident0 = KANBAN_TOOL_MAP[tool]
     f0 = funis.get(funil_ident0, {})
     fid0 = f0.get("funnel_id")
     sid0 = f0.get("steps", {}).get(step_ident0)
+    novo_id = None
     if fid0 and sid0:
         endpoint_url = f"{base}/api/v1/accounts/{account_id}/funnels/{fid0}/funnel_steps/{sid0}/funnel_items"
-        headers_post = {"api_access_token": token, "Content-Type": "application/json"}
-        title_teste = f"Teste POST+PATCH {conversation_id}"
-        novo_id = None
+        h = {"api_access_token": token, "Content-Type": "application/json"}
+        title_teste = f"Teste {conversation_id}"
         try:
             async with httpx.AsyncClient(timeout=10) as http:
-                # 1. POST vazio (cria card sem dados)
-                rp = await http.post(endpoint_url, headers=headers_post, json={"funnel_item": {}})
-                resultado["post_criar_vazio"] = {"status_code": rp.status_code, "body": rp.text[:300]}
+                rp = await http.post(endpoint_url, headers=h, json={"funnel_item": {}})
+                resultado["post_criar_vazio"] = {"status_code": rp.status_code}
                 if rp.is_success:
                     novo_id = rp.json().get("payload", {}).get("id")
-                # 2. PATCH com title e conversation_id
-                if novo_id:
-                    patch_url = f"{base}/api/v1/accounts/{account_id}/funnels/{fid0}/funnel_steps/{sid0}/funnel_items/{novo_id}"
-                    rpp = await http.patch(patch_url, headers=headers_post, json={
-                        "funnel_item": {
-                            "title": title_teste,
-                            "conversation_id": conversation_id,
-                        }
-                    })
-                    resultado["patch_atualizar"] = {"status_code": rpp.status_code, "body": rpp.text[:400]}
-                    # Alternativa: PUT
-                    if not rpp.is_success:
-                        rpu = await http.put(patch_url, headers=headers_post, json={
-                            "funnel_item": {
-                                "title": title_teste,
-                                "conversation_id": conversation_id,
-                            }
-                        })
-                        resultado["put_atualizar"] = {"status_code": rpu.status_code, "body": rpu.text[:400]}
         except Exception as e:
-            resultado["erro_post_patch"] = str(e)
+            resultado["erro_post"] = str(e)
 
-    # Limpar fantasmas criados nas rodadas anteriores
-    ids_fantasmas = [37029, 37031, 37033]
-    limpezas = []
-    if fid0 and sid0:
+        # Testar vários formatos de PATCH/PUT
+        variantes = [
+            ("patch_wrapper", "PATCH", {"funnel_item": {"title": title_teste, "conversation_id": conversation_id}}),
+            ("patch_root", "PATCH", {"title": title_teste, "conversation_id": conversation_id}),
+            ("put_wrapper", "PUT", {"funnel_item": {"title": title_teste, "conversation_id": conversation_id}}),
+            ("put_root", "PUT", {"title": title_teste, "conversation_id": conversation_id}),
+        ]
+        if novo_id:
+            patch_url = f"{endpoint_url}/{novo_id}"
+            try:
+                async with httpx.AsyncClient(timeout=10) as http:
+                    for nome_var, metodo, body in variantes:
+                        try:
+                            r = await http.request(metodo, patch_url, headers=h, json=body)
+                            title_r = conv_r = None
+                            try:
+                                j = r.json()
+                                inner = j.get("payload", j) if isinstance(j, dict) else j
+                                if isinstance(inner, dict):
+                                    title_r = inner.get("title")
+                                    conv_r = inner.get("conversation_id")
+                            except Exception:
+                                pass
+                            resultado[nome_var] = {"status": r.status_code, "title": title_r, "conv": conv_r}
+                        except Exception as e:
+                            resultado[nome_var] = {"erro": str(e)}
+            except Exception as e:
+                resultado["erro_batch"] = str(e)
+
+        # Limpeza
+        ids_fantasmas = [37029, 37031, 37033, 37046]
+        if novo_id:
+            ids_fantasmas.append(novo_id)
+        limpezas = []
         try:
             async with httpx.AsyncClient(timeout=10) as http:
                 for fid_item in ids_fantasmas:
-                    del_url = f"{base}/api/v1/accounts/{account_id}/funnels/{fid0}/funnel_steps/{sid0}/funnel_items/{fid_item}"
+                    del_url = f"{endpoint_url}/{fid_item}"
                     r = await http.delete(del_url, headers={"api_access_token": token})
                     limpezas.append({"id": fid_item, "status": r.status_code})
         except Exception as e:
             resultado["erro_limpeza"] = str(e)
-    resultado["limpeza_fantasmas"] = limpezas
+        resultado["limpeza"] = limpezas
 
     # Verificar se o card existe agora
     funil_ident, step_ident = KANBAN_TOOL_MAP[tool]
