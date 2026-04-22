@@ -818,25 +818,14 @@ async def kanban_mover_card(url: str, token: str, account_id: int, conversation_
                         f"HTTP {resp_move.status_code} body={resp_move.text[:300]}"
                     )
             elif not item_existente:
-                # Criar novo card
-                resp_create = await http.post(
-                    f"{url}/api/v1/accounts/{account_id}/funnels/{funnel_id}/funnel_steps/{step_id}/funnel_items",
-                    headers=headers,
-                    json={
-                        "title": contact_name or f"Conversa #{conversation_id}",
-                        "conversation_id": conversation_id,
-                        "status": "active",
-                        "priority": "medium",
-                    },
-                    timeout=10
+                # Criação via API v1 do Chatwoot está quebrada: aceita POST mas
+                # ignora title e conversation_id (verificado empiricamente em
+                # 2026-04-22). Cards novos precisam ser criados manualmente ou
+                # via versão futura da API. Apenas loga para manter auditoria.
+                logger.debug(
+                    f"[kanban] Card NAO criado (API v1 nao suporta setar conversation_id) "
+                    f"— conv={conversation_id} destino={step_identifier} funil={funnel_identifier}"
                 )
-                if resp_create.is_success:
-                    logger.info(f"[kanban] Card criado: conv={conversation_id} → {step_identifier} (funil={funnel_identifier})")
-                else:
-                    logger.warning(
-                        f"[kanban] Falha ao CRIAR card conv={conversation_id} em {step_identifier}: "
-                        f"HTTP {resp_create.status_code} body={resp_create.text[:300]}"
-                    )
             else:
                 logger.debug(f"[kanban] Card ja esta na etapa correta: conv={conversation_id}")
 

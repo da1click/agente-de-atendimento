@@ -2648,6 +2648,77 @@ async def recriar_funis_conta(account_id: int):
     return {"status": "ok", "detail": f"Funis recriados para conta {account_id}"}
 
 
+@app.post("/api/admin/kanban/limpar-orfaos/{account_id}")
+async def limpar_orfaos_kanban(account_id: int, dry_run: bool = True):
+    """Remove funnel_items sem conversation_id (cards fantasma/órfãos).
+
+    Com dry_run=True (default), apenas lista os órfãos sem deletar.
+    Com dry_run=false, deleta de fato.
+    """
+    config = carregar_config_cliente(account_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    base = (config.get("chatwoot_url") or "").rstrip("/")
+    token = config.get("chatwoot_token", "")
+
+    orfaos = []
+    async with httpx.AsyncClient(timeout=15) as http:
+        r = await http.get(
+            f"{base}/api/v1/accounts/{account_id}/funnels",
+            headers={"api_access_token": token},
+        )
+        if not r.is_success:
+            raise HTTPException(status_code=500, detail="Falha ao listar funis")
+        funnels = r.json().get("payload", []) or []
+
+        for funil in funnels:
+            f_id = funil.get("id")
+            for step in funil.get("funnel_steps", []) or []:
+                s_id = step.get("id")
+                try:
+                    ri = await http.get(
+                        f"{base}/api/v1/accounts/{account_id}/funnels/{f_id}/funnel_steps/{s_id}/funnel_items",
+                        headers={"api_access_token": token},
+                    )
+                    if not ri.is_success:
+                        continue
+                    data = ri.json()
+                    items = data.get("items", data) if isinstance(data, dict) else data
+                    if not isinstance(items, list):
+                        continue
+                    for it in items:
+                        if not it.get("conversation_id") and not it.get("title"):
+                            orfaos.append({
+                                "id": it.get("id"),
+                                "funnel_id": f_id,
+                                "step_id": s_id,
+                                "step": step.get("identifier"),
+                            })
+                except Exception:
+                    continue
+
+        deletados = []
+        if not dry_run and orfaos:
+            for o in orfaos:
+                try:
+                    del_url = (
+                        f"{base}/api/v1/accounts/{account_id}"
+                        f"/funnels/{o['funnel_id']}/funnel_steps/{o['step_id']}/funnel_items/{o['id']}"
+                    )
+                    rd = await http.delete(del_url, headers={"api_access_token": token})
+                    deletados.append({"id": o["id"], "status": rd.status_code})
+                except Exception as e:
+                    deletados.append({"id": o["id"], "erro": str(e)})
+
+    return {
+        "account_id": account_id,
+        "dry_run": dry_run,
+        "total_orfaos": len(orfaos),
+        "orfaos": orfaos,
+        "deletados": deletados,
+    }
+
+
 @app.post("/api/admin/kanban/teste/{account_id}")
 async def testar_criacao_kanban(account_id: int, conversation_id: int | None = None, tool: str = "novo_lead"):
     """Testa a criação/movimentação de um card no kanban com captura completa de erros.
@@ -2703,68 +2774,11 @@ async def testar_criacao_kanban(account_id: int, conversation_id: int | None = N
         resultado["erro"] = str(e)
         resultado["traceback"] = traceback.format_exc()
 
-    # Testa diferentes formatos de PATCH/PUT para setar title e conversation_id.
-    funil_ident0, step_ident0 = KANBAN_TOOL_MAP[tool]
-    f0 = funis.get(funil_ident0, {})
-    fid0 = f0.get("funnel_id")
-    sid0 = f0.get("steps", {}).get(step_ident0)
-    novo_id = None
-    if fid0 and sid0:
-        endpoint_url = f"{base}/api/v1/accounts/{account_id}/funnels/{fid0}/funnel_steps/{sid0}/funnel_items"
-        h = {"api_access_token": token, "Content-Type": "application/json"}
-        title_teste = f"Teste {conversation_id}"
-        try:
-            async with httpx.AsyncClient(timeout=10) as http:
-                rp = await http.post(endpoint_url, headers=h, json={"funnel_item": {}})
-                resultado["post_criar_vazio"] = {"status_code": rp.status_code}
-                if rp.is_success:
-                    novo_id = rp.json().get("payload", {}).get("id")
-        except Exception as e:
-            resultado["erro_post"] = str(e)
-
-        # Testar vários formatos de PATCH/PUT
-        variantes = [
-            ("patch_wrapper", "PATCH", {"funnel_item": {"title": title_teste, "conversation_id": conversation_id}}),
-            ("patch_root", "PATCH", {"title": title_teste, "conversation_id": conversation_id}),
-            ("put_wrapper", "PUT", {"funnel_item": {"title": title_teste, "conversation_id": conversation_id}}),
-            ("put_root", "PUT", {"title": title_teste, "conversation_id": conversation_id}),
-        ]
-        if novo_id:
-            patch_url = f"{endpoint_url}/{novo_id}"
-            try:
-                async with httpx.AsyncClient(timeout=10) as http:
-                    for nome_var, metodo, body in variantes:
-                        try:
-                            r = await http.request(metodo, patch_url, headers=h, json=body)
-                            title_r = conv_r = None
-                            try:
-                                j = r.json()
-                                inner = j.get("payload", j) if isinstance(j, dict) else j
-                                if isinstance(inner, dict):
-                                    title_r = inner.get("title")
-                                    conv_r = inner.get("conversation_id")
-                            except Exception:
-                                pass
-                            resultado[nome_var] = {"status": r.status_code, "title": title_r, "conv": conv_r}
-                        except Exception as e:
-                            resultado[nome_var] = {"erro": str(e)}
-            except Exception as e:
-                resultado["erro_batch"] = str(e)
-
-        # Limpeza
-        ids_fantasmas = [37029, 37031, 37033, 37046]
-        if novo_id:
-            ids_fantasmas.append(novo_id)
-        limpezas = []
-        try:
-            async with httpx.AsyncClient(timeout=10) as http:
-                for fid_item in ids_fantasmas:
-                    del_url = f"{endpoint_url}/{fid_item}"
-                    r = await http.delete(del_url, headers={"api_access_token": token})
-                    limpezas.append({"id": fid_item, "status": r.status_code})
-        except Exception as e:
-            resultado["erro_limpeza"] = str(e)
-        resultado["limpeza"] = limpezas
+    resultado["nota"] = (
+        "API v1 do Chatwoot ignora title e conversation_id no POST/PATCH de funnel_items. "
+        "Criação automática desabilitada em kanban_mover_card. Apenas movimentação entre "
+        "etapas funciona (quando o card já existe)."
+    )
 
     # Verificar se o card existe agora
     funil_ident, step_ident = KANBAN_TOOL_MAP[tool]
