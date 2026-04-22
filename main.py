@@ -2920,8 +2920,8 @@ async def testar_criacao_kanban(account_id: int, conversation_id: int | None = N
         resultado["erro"] = str(e)
         resultado["traceback"] = traceback.format_exc()
 
-    # Validar: POST + PATCH + GET para ver estado final real (response imediato
-    # pode retornar state stale; o GET é a fonte da verdade).
+    # Teste seguindo swagger oficial: POST com campos no root (sem wrapper).
+    # Schema: https://swagger.cwmkt.com.br/
     funil_ident0, step_ident0 = KANBAN_TOOL_MAP[tool]
     f0 = funis.get(funil_ident0, {})
     fid0 = f0.get("funnel_id")
@@ -2929,43 +2929,75 @@ async def testar_criacao_kanban(account_id: int, conversation_id: int | None = N
     if fid0 and sid0:
         endpoint_url = f"{base}/api/v1/accounts/{account_id}/funnels/{fid0}/funnel_steps/{sid0}/funnel_items"
         h = {"api_access_token": token, "Content-Type": "application/json"}
-        title_teste = f"Teste Validacao {conversation_id}"
-        novo_id = None
+        ids_criados = []
         try:
             async with httpx.AsyncClient(timeout=10) as http:
-                # POST com wrapper
-                rp = await http.post(endpoint_url, headers=h, json={
-                    "funnel_item": {
-                        "title": title_teste,
-                        "conversation_id": conversation_id,
-                    }
+                # V_min: SÓ o campo required (title)
+                r1 = await http.post(endpoint_url, headers=h, json={
+                    "title": f"Teste Min {conversation_id}",
                 })
-                resultado["post"] = {"status": rp.status_code, "body": rp.text[:200]}
-                if rp.is_success:
-                    novo_id = rp.json().get("payload", {}).get("id")
+                resultado["v_min_title"] = {"status": r1.status_code, "body": r1.text[:400]}
+                if r1.is_success:
+                    try:
+                        ids_criados.append(r1.json().get("payload", {}).get("id"))
+                    except Exception:
+                        pass
 
-                # GET do ID para ver se title/conversation_id foram salvos
-                if novo_id:
-                    rg = await http.get(f"{endpoint_url}/{novo_id}", headers={"api_access_token": token})
+                # V_title_conv: title + conversation_id (no root)
+                r2 = await http.post(endpoint_url, headers=h, json={
+                    "title": f"Teste TC {conversation_id}",
+                    "conversation_id": conversation_id,
+                })
+                resultado["v_title_conv"] = {"status": r2.status_code, "body": r2.text[:400]}
+                if r2.is_success:
+                    try:
+                        ids_criados.append(r2.json().get("payload", {}).get("id"))
+                    except Exception:
+                        pass
+
+                # V_completo: title + conversation_id + priority + status
+                r3 = await http.post(endpoint_url, headers=h, json={
+                    "title": f"Teste Full {conversation_id}",
+                    "conversation_id": conversation_id,
+                    "priority": "medium",
+                    "status": "active",
+                })
+                resultado["v_completo"] = {"status": r3.status_code, "body": r3.text[:400]}
+                if r3.is_success:
+                    try:
+                        ids_criados.append(r3.json().get("payload", {}).get("id"))
+                    except Exception:
+                        pass
+
+                # GET para cada criado com sucesso pra ver estado salvo
+                gets = []
+                for cid in ids_criados:
+                    if not cid:
+                        continue
+                    rg = await http.get(f"{endpoint_url}/{cid}", headers={"api_access_token": token})
                     if rg.is_success:
                         j = rg.json()
                         inner = j.get("payload", j) if isinstance(j, dict) else j
-                        resultado["get_apos_post"] = {
-                            "status": rg.status_code,
-                            "title": inner.get("title") if isinstance(inner, dict) else None,
-                            "conversation_id": inner.get("conversation_id") if isinstance(inner, dict) else None,
-                        }
-                    else:
-                        resultado["get_apos_post"] = {"status": rg.status_code, "body": rg.text[:200]}
+                        gets.append({
+                            "id": cid,
+                            "title": inner.get("title"),
+                            "conversation_id": inner.get("conversation_id"),
+                        })
+                resultado["gets"] = gets
         except Exception as e:
             resultado["erro_validacao"] = str(e)
 
-        # Limpar o card criado agora
-        if novo_id:
+        # Limpar criados
+        if ids_criados:
             try:
                 async with httpx.AsyncClient(timeout=10) as http:
-                    rd = await http.delete(f"{endpoint_url}/{novo_id}", headers={"api_access_token": token})
-                    resultado["cleanup"] = {"id": novo_id, "status": rd.status_code}
+                    limpeza = []
+                    for cid in ids_criados:
+                        if not cid:
+                            continue
+                        rd = await http.delete(f"{endpoint_url}/{cid}", headers={"api_access_token": token})
+                        limpeza.append({"id": cid, "status": rd.status_code})
+                    resultado["cleanup"] = limpeza
             except Exception:
                 pass
 
