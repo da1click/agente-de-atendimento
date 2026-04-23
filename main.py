@@ -2648,6 +2648,94 @@ async def recriar_funis_conta(account_id: int):
     return {"status": "ok", "detail": f"Funis recriados para conta {account_id}"}
 
 
+@app.get("/api/admin/kanban/investigar-vazamento/{account_id}")
+async def investigar_vazamento_kanban(account_id: int, limite: int = 50):
+    """Lista cards do funil pipeline_comercial da conta reportando account_id do
+    card e sender da conversa vinculada. Se algum card tem account_id diferente
+    do account_id do escopo da URL, é vazamento cross-account."""
+    config = carregar_config_cliente(account_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    base = (config.get("chatwoot_url") or "").rstrip("/")
+    token = config.get("chatwoot_token", "")
+
+    anomalias = []
+    amostra = []
+    async with httpx.AsyncClient(timeout=20) as http:
+        # Pegar funil pipeline_comercial
+        rf = await http.get(f"{base}/api/v1/accounts/{account_id}/funnels", headers={"api_access_token": token})
+        if not rf.is_success:
+            raise HTTPException(status_code=500, detail="Falha listar funis")
+        funnels = rf.json().get("payload", []) or []
+        funil = next((f for f in funnels if f.get("identifier") == "pipeline_comercial"), None)
+        if not funil:
+            return {"erro": "pipeline_comercial não existe nesta conta"}
+
+        total_verificados = 0
+        for step in funil.get("funnel_steps", []) or []:
+            if total_verificados >= limite:
+                break
+            s_id = step.get("id")
+            s_ident = step.get("identifier", "")
+            for page in range(1, 6):
+                if total_verificados >= limite:
+                    break
+                ri = await http.get(
+                    f"{base}/api/v1/accounts/{account_id}/funnels/{funil['id']}/funnel_steps/{s_id}/funnel_items",
+                    headers={"api_access_token": token},
+                    params={"page": page},
+                )
+                if not ri.is_success:
+                    break
+                items = ri.json().get("payload", []) or []
+                if not items:
+                    break
+                for it in items:
+                    total_verificados += 1
+                    card_account = it.get("account_id")
+                    conv_id = it.get("conversation_id")
+                    card_info = {
+                        "card_id": it.get("id"),
+                        "card_title": it.get("title"),
+                        "card_account_id": card_account,
+                        "card_conversation_id": conv_id,
+                        "step": s_ident,
+                    }
+                    # Se o account_id do card não bate com o da URL, é vazamento
+                    if card_account and card_account != account_id:
+                        anomalias.append({**card_info, "motivo": "account_id_diferente"})
+                    # Se tem conversation_id, checar a qual conta a conversa pertence
+                    elif conv_id:
+                        try:
+                            rc = await http.get(
+                                f"{base}/api/v1/accounts/{account_id}/conversations/{conv_id}",
+                                headers={"api_access_token": token},
+                            )
+                            if rc.status_code == 404:
+                                anomalias.append({**card_info, "motivo": "conv_nao_existe_nesta_conta"})
+                            elif rc.is_success:
+                                conv_json = rc.json()
+                                conv_account = conv_json.get("account_id")
+                                if conv_account and conv_account != account_id:
+                                    anomalias.append({**card_info, "motivo": "conv_de_outra_conta", "conv_account_id": conv_account})
+                        except Exception:
+                            pass
+                    if len(amostra) < 5:
+                        amostra.append(card_info)
+                    if total_verificados >= limite:
+                        break
+                if len(items) < 25:
+                    break
+
+    return {
+        "account_id": account_id,
+        "total_verificados": total_verificados,
+        "anomalias_encontradas": len(anomalias),
+        "anomalias": anomalias,
+        "amostra_5_cards": amostra,
+    }
+
+
 @app.post("/api/admin/kanban/reconciliar/{account_id}")
 async def reconciliar_kanban_por_label(account_id: int, dry_run: bool = True, min_score: float = 0.5):
     """Para cada conversa aberta atribuída à IA, tenta mover/criar card no
