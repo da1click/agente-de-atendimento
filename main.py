@@ -2648,6 +2648,35 @@ async def recriar_funis_conta(account_id: int):
     return {"status": "ok", "detail": f"Funis recriados para conta {account_id}"}
 
 
+@app.get("/api/admin/listar-inboxes/{account_id}")
+async def listar_inboxes_debug(account_id: int):
+    """Lista todas as inboxes da conta com id, nome, channel_type e status."""
+    config = carregar_config_cliente(account_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    base = (config.get("chatwoot_url") or "").rstrip("/")
+    token = config.get("chatwoot_token", "")
+    async with httpx.AsyncClient(timeout=15) as http:
+        r = await http.get(f"{base}/api/v1/accounts/{account_id}/inboxes", headers={"api_access_token": token})
+        if not r.is_success:
+            return {"erro": r.status_code}
+        payload = r.json().get("payload", []) or []
+        return {
+            "account_id": account_id,
+            "total": len(payload),
+            "inboxes": [
+                {
+                    "id": i.get("id"),
+                    "name": i.get("name"),
+                    "channel_type": i.get("channel_type"),
+                    "phone_number": i.get("phone_number"),
+                    "provider": i.get("provider"),
+                }
+                for i in payload
+            ],
+        }
+
+
 @app.get("/api/admin/kanban/buscar-texto-em-cards/{account_id}")
 async def buscar_texto_em_cards(account_id: int, texto: str, limite: int = 200):
     """Varre cards dos funis da conta procurando um texto em title/description/
