@@ -2648,6 +2648,55 @@ async def recriar_funis_conta(account_id: int):
     return {"status": "ok", "detail": f"Funis recriados para conta {account_id}"}
 
 
+@app.get("/api/admin/debug-conv/{account_id}/{conversation_id}")
+async def debug_conversa(account_id: int, conversation_id: int):
+    """Inspeciona uma conversa: detalhes + últimas 10 mensagens com sender e content.
+    Ajuda a descobrir onde está aparecendo um texto 'Aline - Matsuda Ramos...' etc."""
+    config = carregar_config_cliente(account_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    base = (config.get("chatwoot_url") or "").rstrip("/")
+    token = config.get("chatwoot_token", "")
+    h = {"api_access_token": token}
+
+    async with httpx.AsyncClient(timeout=15) as http:
+        rc = await http.get(f"{base}/api/v1/accounts/{account_id}/conversations/{conversation_id}", headers=h)
+        if not rc.is_success:
+            return {"erro_conversa": rc.status_code, "body": rc.text[:300]}
+        conv = rc.json()
+        rm = await http.get(f"{base}/api/v1/accounts/{account_id}/conversations/{conversation_id}/messages", headers=h)
+        msgs = rm.json().get("payload", []) if rm.is_success else []
+
+    # Normalizar mensagens recentes
+    msgs_sorted = sorted(msgs, key=lambda m: m.get("created_at", 0))[-10:]
+    msgs_out = []
+    for m in msgs_sorted:
+        sender = m.get("sender") or {}
+        msgs_out.append({
+            "id": m.get("id"),
+            "message_type": m.get("message_type"),
+            "private": m.get("private"),
+            "content": (m.get("content") or "")[:200],
+            "sender_type": m.get("sender_type"),
+            "sender_name": sender.get("name"),
+            "sender_email": sender.get("email"),
+            "sender_account_id": sender.get("account_id"),
+        })
+
+    meta = conv.get("meta", {})
+    return {
+        "conv_account_id": conv.get("account_id"),
+        "conv_inbox_id": conv.get("inbox_id"),
+        "conv_assignee": (meta.get("assignee") or {}).get("name"),
+        "conv_assignee_email": (meta.get("assignee") or {}).get("email"),
+        "conv_assignee_account_id": (meta.get("assignee") or {}).get("account_id"),
+        "conv_sender_name": (meta.get("sender") or {}).get("name"),
+        "conv_labels": conv.get("labels", []),
+        "conv_status": conv.get("status"),
+        "msgs_recentes": msgs_out,
+    }
+
+
 @app.get("/api/admin/kanban/investigar-vazamento/{account_id}")
 async def investigar_vazamento_kanban(account_id: int, limite: int = 50):
     """Lista cards do funil pipeline_comercial da conta reportando account_id do
