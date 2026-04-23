@@ -80,13 +80,23 @@ O cliente tem duvida sobre o servico, honorarios, como funciona o escritorio ou 
 Usar quando o cliente pergunta "como funciona?", "preciso pagar algo?", "onde fica o escritorio?".
 
 ### 7. agendamento
-Usar APENAS se UMA das condicoes for verdadeira:
+Usar APENAS se TODAS as condicoes forem verdadeiras:
 
-A) O cliente pediu explicitamente agendar ("quero marcar", "como contrato", "quando posso falar com o advogado", "tem horario hoje?", "quero falar com especialista").
+1. O caso JA foi identificado como trabalhista ou previdenciario (a Helena sabe do que se trata).
+2. As informacoes essenciais do caso JA foram coletadas:
+   - TRABALHISTA: carteira assinada, empresa, periodo, funcao e horario (minimo).
+   - PREVIDENCIARIO: situacao atual (pedido novo ou negado), idade e historico de contribuicao/laudos (minimo).
+3. UMA destas situacoes:
+   A) A Helena ja ofereceu horarios e o cliente esta escolhendo/confirmando um. MANTER EM AGENDAMENTO ate a Helena confirmar.
+   B) A Helena ja fez a frase de transicao ("com essas informacoes ja conseguimos entender...").
+   C) O cliente pediu explicitamente agendar APOS a triagem minima estar completa.
 
-B) A Helena ja ofereceu horarios e o cliente esta respondendo (escolhendo horario, dizendo "sim"). MANTER EM AGENDAMENTO ate que a Helena confirme.
+REGRA CRITICA — CLIENTE PEDE HORARIO ANTES DA TRIAGEM:
+Se o cliente pede horario/agendamento ANTES de a triagem minima estar completa (ex: primeira mensagem ja pergunta "tem horario hoje?" ou "quero marcar"), NAO rotear para agendamento. Rotear para a fase correta:
+- Sem assunto identificado → identificacao
+- Assunto identificado mas faltam dados → coleta_caso ou vinculo
 
-C) As informacoes essenciais do caso ja foram coletadas e a Helena fez a transicao ("com essas informacoes ja conseguimos entender...").
+A Helena deve primeiro entender o caso, depois oferecer horario. NUNCA marcar sem saber do que se trata.
 
 REGRA DE OURO: Caso inviavel NAO rotear para agendamento. NUNCA.
 
@@ -119,7 +129,7 @@ IMPORTANTE: Casos trabalhistas (demissao, rescisao, verbas, assedio, horas extra
 ## REGRA ANTI-REGRESSAO
 
 NUNCA voltar para uma fase anterior se as informacoes ja foram coletadas.
-Se o cliente perguntar sobre agendamento: rotear para agendamento IMEDIATAMENTE se os dados ja foram coletados.
+Se o cliente perguntar sobre agendamento: rotear para agendamento SOMENTE se a triagem minima ja foi feita. Caso contrario, manter em coleta_caso/vinculo ate ter os dados essenciais.
 
 ---
 

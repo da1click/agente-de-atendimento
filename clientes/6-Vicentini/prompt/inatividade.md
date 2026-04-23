@@ -43,4 +43,10 @@ Com base no histórico acima, escreva UMA mensagem de reativação.
 Leve em conta o ponto em que a conversa parou e o que seria mais relevante para esse cliente neste momento.
 Não repita o que já foi dito — avance com sutileza.
 
-REGRA CRITICA: Se o cliente JA TEM agendamento confirmado no historico, NAO pedir documentos (TRCT, laudos, prints, comprovantes, Meu INSS). O advogado pede na consulta. Apenas lembrar do horario agendado de forma simples, sem pedir nada.
+REGRA CRITICA — JA TEM AGENDAMENTO: Se o cliente JA TEM agendamento confirmado no historico (Helena disse "reservado", "agendado", "confirmado" ou "marcado" com data/horario que ainda nao passou), seu unico papel e:
+- NAO pedir nenhum documento (TRCT, laudos, prints, comprovantes, Meu INSS, holerites, relatorios). O advogado pede na consulta.
+- NAO oferecer novos horarios. O agendamento ja existe.
+- NAO pedir para separar nada "ate la".
+- Apenas responder com uma lembranca curta e natural do horario ja agendado OU nao enviar nada se a ultima mensagem ja tiver confirmado tudo.
+
+REGRA CRITICA — OFERTA DE HORARIO EM ANDAMENTO: Se a ultima mensagem da Helena no historico ja ofereceu horarios especificos e o cliente ainda nao escolheu, NAO ofereca novos horarios diferentes. Apenas retome gentilmente perguntando qual dos horarios ja oferecidos prefere.

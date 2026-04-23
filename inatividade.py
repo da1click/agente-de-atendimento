@@ -1,6 +1,6 @@
 from openai import OpenAI
 from datetime import datetime, timezone, timedelta
-from db import upsert_inatividade, get_inatividades_pendentes, desativar_inatividade
+from db import upsert_inatividade, get_inatividades_pendentes, desativar_inatividade, existe_agendamento_ativo
 import asyncio
 import httpx
 import json
@@ -411,6 +411,35 @@ async def disparar_estagio(config_cliente: dict, row: dict):
         logger.warning(f"[inatividade] Estágio {stagio} não encontrado no config — desativando")
         desativar_inatividade(account_id, conversation_id)
         return
+
+    # Se já existe agendamento confirmado, não disparar follow-up de inatividade.
+    # O lembrete do horário é feito pelo agendador_consultas.
+    try:
+        agendamento_ativo = existe_agendamento_ativo(account_id, conversation_id)
+        if agendamento_ativo:
+            logger.info(
+                f"[inatividade] Agendamento ativo encontrado (id={agendamento_ativo.get('id')}) "
+                f"— desativando inatividade conv={conversation_id}"
+            )
+            desativar_inatividade(account_id, conversation_id)
+            return
+    except Exception as e:
+        logger.warning(f"[inatividade] Erro ao verificar agendamento ativo conv={conversation_id}: {e}")
+
+    # Não disparar se a IA está processando mensagem agora (debounce ativo ou lock ocupado).
+    # Evita mensagem de follow-up sobreposta à resposta normal da IA no mesmo turno.
+    try:
+        from ia import _debounce_tasks, _processing_locks
+        debounce_task = _debounce_tasks.get(conversation_id)
+        if debounce_task and not debounce_task.done():
+            logger.info(f"[inatividade] IA com debounce ativo — adiando disparo conv={conversation_id}")
+            return
+        lock = _processing_locks.get(conversation_id)
+        if lock and lock.locked():
+            logger.info(f"[inatividade] IA processando mensagem agora — adiando disparo conv={conversation_id}")
+            return
+    except Exception as e:
+        logger.warning(f"[inatividade] Erro ao verificar debounce conv={conversation_id}: {e}")
 
     chatwoot_url = config_cliente["chatwoot_url"]
     token = config_cliente["chatwoot_token"]

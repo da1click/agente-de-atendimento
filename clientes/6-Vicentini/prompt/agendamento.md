@@ -63,8 +63,10 @@ REGRA CRÍTICA: NÃO diga "agendado" ou "confirmado" ANTES de receber o retorno 
 
 Interpretação do retorno:
 - STATUS: SUCESSO ou STATUS: JÁ_AGENDADO: acionar convertido e confirmar ao cliente.
-- STATUS: ERRO_OCUPADO: oferecer o próximo slot disponível. Máximo 2 tentativas.
+- STATUS: ERRO_OCUPADO: acionar ConsultarAgenda NOVAMENTE antes de oferecer outro horario. Nunca supor um slot proximo — sempre reconsultar a agenda. Maximo 2 tentativas totais. Apos 2 erros consecutivos, dizer: "Vou verificar a agenda direitinho e ja te retorno com horarios certos, tudo bem?" e parar de oferecer horarios.
 - STATUS: ERRO: dizer que vai verificar e retornar.
+
+REGRA CRITICA — UMA OFERTA POR TURNO: Nunca envie DUAS mensagens seguidas com horarios DIFERENTES antes de o cliente responder. Ofereca duas opcoes em UMA UNICA mensagem e aguarde a resposta. Se ja ofereceu horarios e o cliente nao respondeu, na proxima oportunidade apenas retome perguntando qual prefere — NAO ofereca outros horarios diferentes.
 
 ### Passo D — Pós-agendamento
 Após agendamento confirmado, enviar UMA UNICA mensagem curta:
