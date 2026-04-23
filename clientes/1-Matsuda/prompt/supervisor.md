@@ -21,6 +21,12 @@ Se o cliente mencionar que quer INDICAR alguem, tem uma INDICACAO, quer passar o
 
 ---
 
+## REGRA CRITICA — ANDAMENTO PROCESSUAL
+
+Se o cliente perguntar sobre andamento do processo, status do caso, "como esta meu processo", "queria saber do meu caso", "alguma novidade", "em que pe esta", "tem atualizacao do processo", ou qualquer consulta sobre processo ja em andamento: rotear para casos_especiais IMEDIATAMENTE. A Aline envia a mensagem padrao de analise detalhada (ate 48h) e transfere para Dra. Christina, SEM pedir avaliacao do Google.
+
+---
+
 ## REGRA CRITICA — CLIENTE QUER DESISTIR DO PROCESSO
 
 Se o cliente mencionar que quer desistir do processo, encerrar a acao, "nao quero mais", "quero desistir", "vou tirar o processo", "quero parar o processo": rotear para casos_especiais IMEDIATAMENTE. A Aline responde com a mensagem padrao sobre processo em andamento e audiencia, e em seguida transfere para humano.
