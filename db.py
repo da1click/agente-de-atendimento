@@ -1298,6 +1298,23 @@ def salvar_zapsign_config(account_id: int, config: dict):
     db.table("ia_zapsign_config").upsert(data, on_conflict="account_id").execute()
 
 
+def listar_zapsign_configs_com_token() -> list:
+    """Lista todas as configs ZapSign que possuem api_token preenchido."""
+    db = get_db()
+    resp = db.table("ia_zapsign_config").select("account_id, api_token").execute()
+    return [r for r in (resp.data or []) if (r.get("api_token") or "").strip()]
+
+
+def get_account_id_por_doc_token(doc_token: str) -> int | None:
+    """Retorna account_id do doc ZapSign se já conhecido localmente."""
+    db = get_db()
+    resp = (db.table("ia_zapsign_docs")
+            .select("account_id")
+            .eq("doc_token", doc_token)
+            .maybe_single().execute())
+    return resp.data.get("account_id") if resp.data else None
+
+
 def listar_zapsign_docs(account_id: int, limit: int = 50, offset: int = 0) -> list:
     """Lista documentos ZapSign salvos localmente."""
     db = get_db()

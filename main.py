@@ -55,6 +55,7 @@ from db import (
 from db import (
     remover_doc_token_followup, atualizar_zapsign_doc_status,
     get_zapsign_followup_stats, listar_zapsign_followups,
+    listar_zapsign_configs_com_token, get_account_id_por_doc_token,
 )
 from auth import hash_password, verify_password, create_token, get_current_user, require_super_admin
 from inatividade import registrar_atividade, iniciar_monitoramento
@@ -5150,6 +5151,34 @@ async def api_zapsign_implantar(request: Request, user=Depends(get_current_user)
 # ZAPSIGN WEBHOOK
 # ══════════════════════════════════════════════════════════════
 
+async def _identificar_account_do_doc(doc_token: str) -> tuple[int | None, dict | None]:
+    """Descobre qual account_id do nosso sistema possui esse doc_token.
+
+    1. Tenta cache local (ia_zapsign_docs).
+    2. Se não encontrar, itera todas as contas com api_token e faz GET na API ZapSign.
+    Retorna (account_id, doc_completo) ou (None, None).
+    """
+    account_id = get_account_id_por_doc_token(doc_token)
+    if account_id:
+        return account_id, None
+
+    configs = listar_zapsign_configs_com_token()
+    for cfg in configs:
+        token = cfg.get("api_token")
+        acc = cfg.get("account_id")
+        try:
+            async with httpx.AsyncClient(timeout=8) as http:
+                r = await http.get(
+                    f"{ZAPSIGN_API_BASE}/docs/{doc_token}/",
+                    headers={"Authorization": f"Bearer {token}"},
+                )
+                if r.status_code == 200:
+                    return acc, r.json()
+        except Exception:
+            continue
+    return None, None
+
+
 @app.post("/webhook/zapsign")
 async def webhook_zapsign(request: Request):
     """Recebe webhooks de status do ZapSign (sem auth — endpoint público para webhook)."""
@@ -5168,14 +5197,32 @@ async def webhook_zapsign(request: Request):
     if not doc_token:
         return {"ok": False, "error": "doc_token não encontrado"}
 
-    # Atualizar status local do documento
-    try:
-        atualizar_zapsign_doc_status(doc_token, status)
-    except Exception as e:
-        logger.warning(f"[zapsign-webhook] Erro ao atualizar status doc: {e}")
+    # Descobrir a qual conta o doc pertence e obter dados completos se necessário
+    account_id, doc_remoto = await _identificar_account_do_doc(doc_token)
+    if not account_id:
+        logger.warning(f"[zapsign-webhook] Não foi possível identificar account para doc={doc_token}")
+        # Fallback: ao menos tentar atualizar status se já existir
+        try:
+            atualizar_zapsign_doc_status(doc_token, status)
+        except Exception:
+            pass
+    else:
+        # Montar doc para upsert (prioriza body do webhook, completa com API se faltarem campos)
+        doc_final = {
+            "token": doc_token,
+            "name": doc.get("name") or (doc_remoto.get("name") if doc_remoto else ""),
+            "status": status or (doc_remoto.get("status") if doc_remoto else ""),
+            "external_id": doc.get("external_id") or (doc_remoto.get("external_id") if doc_remoto else ""),
+            "created_at": doc.get("created_at") or (doc_remoto.get("created_at") if doc_remoto else ""),
+            "signers": doc.get("signers") or (doc_remoto.get("signers") if doc_remoto else []),
+        }
+        try:
+            upsert_zapsign_doc(account_id, doc_final)
+            logger.info(f"[zapsign-webhook] upsert OK — account={account_id} doc={doc_token} status={doc_final['status']}")
+        except Exception as e:
+            logger.warning(f"[zapsign-webhook] Erro no upsert: {e}")
 
-    # Se documento foi assinado/fechado, remover da lista de pendentes
-    # Se era o último doc pendente, desativa o follow-up da conversa
+    # Se documento foi assinado/fechado, remover da lista de pendentes (follow-up)
     if status in ("signed", "closed") or event_type in ("doc_signed", "doc_closed"):
         try:
             todos_assinaram = remover_doc_token_followup(doc_token)

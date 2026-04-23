@@ -6248,6 +6248,7 @@ let _zapsignConfig = {};
 let _zapsignFollowup = { followup_ativo: false, followup_estagios: [] };
 let _zapsignFuStats = { total: 0, pendentes: 0, assinados: 0, esgotados: 0 };
 let _zapsignFuList = { items: [], total: 0 };
+let _zapsignMetrics = { total: 0, signed: 0, pending: 0, expired: 0, canceled: 0, refunded: 0 };
 let _zapsignFuPage = 0;
 const _ZAPSIGN_FU_LIMIT = 10;
 
@@ -6261,23 +6262,31 @@ async function renderPageZapSign() {
   document.getElementById('topbar-sub').textContent = `Conta #${clienteAtivo}`;
   el.innerHTML = '<div class="loading">Carregando ZapSign...</div>';
 
+  // Sincronizar docs com a API ZapSign antes de buscar métricas (garante dados atualizados)
+  try {
+    await fetch(`/api/zapsign/docs?account_id=${clienteAtivo}`);
+  } catch(e) { /* segue mesmo se falhar — usará cache local */ }
+
   // Carregar config, docs e métricas em paralelo
   try {
-    const [cfgResp, fuResp, fuStatsResp, fuListResp] = await Promise.all([
+    const [cfgResp, fuResp, fuStatsResp, fuListResp, metricsResp] = await Promise.all([
       fetch(`/api/zapsign/config?account_id=${clienteAtivo}`),
       fetch(`/api/zapsign/followup-config?account_id=${clienteAtivo}`).catch(() => null),
       fetch(`/api/zapsign/followup-stats?account_id=${clienteAtivo}`).catch(() => null),
       fetch(`/api/zapsign/followup-list?account_id=${clienteAtivo}&limit=${_ZAPSIGN_FU_LIMIT}&offset=${_zapsignFuPage * _ZAPSIGN_FU_LIMIT}`).catch(() => null),
+      fetch(`/api/zapsign/metrics?account_id=${clienteAtivo}`).catch(() => null),
     ]);
     _zapsignConfig = await cfgResp.json();
     _zapsignFollowup = fuResp ? await fuResp.json() : { followup_ativo: false, followup_estagios: [] };
     _zapsignFuStats = fuStatsResp ? await fuStatsResp.json() : { total: 0, pendentes: 0, assinados: 0, esgotados: 0 };
     _zapsignFuList = fuListResp ? await fuListResp.json() : { items: [], total: 0 };
+    _zapsignMetrics = metricsResp ? await metricsResp.json() : { total: 0, signed: 0, pending: 0, expired: 0, canceled: 0, refunded: 0 };
   } catch(e) {
     _zapsignConfig = {};
     _zapsignFollowup = { followup_ativo: false, followup_estagios: [] };
     _zapsignFuStats = { total: 0, pendentes: 0, assinados: 0, esgotados: 0 };
     _zapsignFuList = { items: [], total: 0 };
+    _zapsignMetrics = { total: 0, signed: 0, pending: 0, expired: 0, canceled: 0, refunded: 0 };
   }
 
   _renderZapSignPage();
@@ -6328,10 +6337,49 @@ function _renderZapSignPage() {
 
   const fu = _zapsignFuStats;
 
+  const m = _zapsignMetrics || {};
+  const mTotal = m.total || 0;
+
   el.innerHTML = `
+    <!-- Contratos ZapSign (total da plataforma, independente de follow-up) -->
+    <div class="card" style="margin-bottom:20px;">
+      <div class="card-header">
+        <span>Contratos na ZapSign</span>
+        <small style="color:var(--text-secondary);">Total direto da plataforma</small>
+      </div>
+      <div class="card-body" style="padding:16px;">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;">
+          <div style="text-align:center;padding:14px;background:var(--bg);border-radius:10px;">
+            <div style="font-size:24px;font-weight:700;color:var(--purple);">${mTotal}</div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">Total</div>
+          </div>
+          <div style="text-align:center;padding:14px;background:var(--bg);border-radius:10px;">
+            <div style="font-size:24px;font-weight:700;color:var(--green);">${m.signed || 0}</div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">Assinados</div>
+          </div>
+          <div style="text-align:center;padding:14px;background:var(--bg);border-radius:10px;">
+            <div style="font-size:24px;font-weight:700;color:var(--yellow);">${m.pending || 0}</div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">Pendentes</div>
+          </div>
+          <div style="text-align:center;padding:14px;background:var(--bg);border-radius:10px;">
+            <div style="font-size:24px;font-weight:700;color:var(--red);">${m.expired || 0}</div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">Expirados</div>
+          </div>
+          <div style="text-align:center;padding:14px;background:var(--bg);border-radius:10px;">
+            <div style="font-size:24px;font-weight:700;color:var(--text-secondary);">${m.canceled || 0}</div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:2px;">Cancelados</div>
+          </div>
+        </div>
+        ${mTotal === 0 && hasToken ? '<div style="text-align:center;color:var(--text-secondary);font-size:13px;padding:10px 0 0 0;">Nenhum contrato encontrado na sua conta ZapSign.</div>' : ''}
+      </div>
+    </div>
+
     <!-- Follow-up Stats -->
     <div class="card" style="margin-bottom:20px;">
-      <div class="card-header"><span>Painel de Assinaturas</span></div>
+      <div class="card-header">
+        <span>Painel de Assinaturas</span>
+        <small style="color:var(--text-secondary);">Follow-up automático via Chatwoot</small>
+      </div>
       <div class="card-body" style="padding:16px;">
         <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:16px;">
           <div style="text-align:center;padding:14px;background:var(--bg);border-radius:10px;">
