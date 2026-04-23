@@ -2648,6 +2648,68 @@ async def recriar_funis_conta(account_id: int):
     return {"status": "ok", "detail": f"Funis recriados para conta {account_id}"}
 
 
+@app.get("/api/admin/kanban/buscar-texto-em-cards/{account_id}")
+async def buscar_texto_em_cards(account_id: int, texto: str, limite: int = 200):
+    """Varre cards dos funis da conta procurando um texto em title/description/
+    observation/custom_attributes. Usado para achar o que contém 'Aline - Matsuda'
+    nos cards da conta 6."""
+    config = carregar_config_cliente(account_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    base = (config.get("chatwoot_url") or "").rstrip("/")
+    token = config.get("chatwoot_token", "")
+    texto_norm = texto.lower()
+
+    achados = []
+    async with httpx.AsyncClient(timeout=20) as http:
+        rf = await http.get(f"{base}/api/v1/accounts/{account_id}/funnels", headers={"api_access_token": token})
+        funnels = rf.json().get("payload", []) or []
+        checados = 0
+        for funil in funnels:
+            if checados >= limite:
+                break
+            for step in funil.get("funnel_steps", []) or []:
+                if checados >= limite:
+                    break
+                for page in range(1, 11):
+                    ri = await http.get(
+                        f"{base}/api/v1/accounts/{account_id}/funnels/{funil['id']}/funnel_steps/{step['id']}/funnel_items",
+                        headers={"api_access_token": token},
+                        params={"page": page},
+                    )
+                    if not ri.is_success:
+                        break
+                    items = ri.json().get("payload", []) or []
+                    if not items:
+                        break
+                    for it in items:
+                        checados += 1
+                        campos = {
+                            "title": it.get("title") or "",
+                            "description": it.get("description") or "",
+                            "observation": it.get("observation") or "",
+                            "abbreviation": it.get("abbreviation") or "",
+                            "custom_attributes": str(it.get("custom_attributes") or {}),
+                            "additional_attributes": str(it.get("additional_attributes") or {}),
+                        }
+                        for nome_campo, val in campos.items():
+                            if texto_norm in val.lower():
+                                achados.append({
+                                    "card_id": it.get("id"),
+                                    "step": step.get("identifier"),
+                                    "funil": funil.get("identifier"),
+                                    "conversation_id": it.get("conversation_id"),
+                                    "campo": nome_campo,
+                                    "valor": val[:400],
+                                })
+                                break
+                        if checados >= limite:
+                            break
+                    if len(items) < 25 or checados >= limite:
+                        break
+    return {"account_id": account_id, "texto_buscado": texto, "cards_checados": checados, "achados": achados}
+
+
 @app.get("/api/admin/debug-conv/{account_id}/{conversation_id}")
 async def debug_conversa(account_id: int, conversation_id: int):
     """Inspeciona uma conversa: detalhes + últimas 10 mensagens com sender e content.
