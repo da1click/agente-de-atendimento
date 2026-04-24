@@ -1218,7 +1218,32 @@ async def _processar_reengajamento(config: dict, account_id: int, conversation_i
                     async with httpx.AsyncClient(timeout=15) as http:
                         resp = await http.post(url_msg, headers=headers_msg, json=payload_tpl)
                         if resp.is_success:
+                            conteudo_template = ""
+                            try:
+                                conteudo_template = (resp.json() or {}).get("content", "") or ""
+                            except Exception:
+                                pass
+                            # Fallback: buscar corpo do template na inbox WABA
+                            if not conteudo_template and inbox_id:
+                                try:
+                                    async with httpx.AsyncClient(timeout=10) as http_tpl:
+                                        r_inbox = await http_tpl.get(
+                                            f"{chatwoot_url}/api/v1/accounts/{account_id}/inboxes/{inbox_id}",
+                                            headers={"api_access_token": token},
+                                        )
+                                        if r_inbox.is_success:
+                                            for tpl in (r_inbox.json() or {}).get("message_templates") or []:
+                                                if tpl.get("name") == template_name:
+                                                    for comp in tpl.get("components") or []:
+                                                        if (comp.get("type") or "").upper() == "BODY":
+                                                            conteudo_template = comp.get("text", "") or ""
+                                                            break
+                                                    break
+                                except Exception as e_tpl:
+                                    logger.warning(f"[@@] Erro ao buscar corpo do template '{template_name}': {e_tpl}")
                             mensagem_enviada = f"Template: {template_name}"
+                            if conteudo_template:
+                                mensagem_enviada += f"\n\nConteúdo:\n{conteudo_template}"
                             metodo = "template (fora da janela 24h)"
                             logger.info(f"[@@] Template '{template_name}' enviado — conv={conversation_id}")
                         else:
@@ -1250,7 +1275,7 @@ async def _processar_reengajamento(config: dict, account_id: int, conversation_i
         # Nota privada com detalhes do envio
         try:
             from ia import enviar_nota_privada
-            nota = f"✅ Reengajamento @@ enviado\nMétodo: {metodo}\n\nMensagem:\n{mensagem_enviada[:500]}"
+            nota = f"✅ Reengajamento @@ enviado\nMétodo: {metodo}\n\nMensagem:\n{mensagem_enviada[:2000]}"
             await enviar_nota_privada(chatwoot_url, token, account_id, conversation_id, nota)
         except Exception:
             pass
