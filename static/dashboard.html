@@ -605,10 +605,6 @@
       <span class="nav-icon"><svg viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span>
       <span class="nav-label">Relatórios</span>
     </div>
-    <div class="nav-item" id="nav-trackeamento" onclick="navTo('trackeamento')">
-      <span class="nav-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span>
-      <span class="nav-label">Trackeamento</span>
-    </div>
     <div class="nav-item" id="nav-audiencias" onclick="navTo('audiencias')">
       <span class="nav-icon"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span>
       <span class="nav-label">Aviso de Audiência</span>
@@ -1401,9 +1397,9 @@ function navTo(secao) {
   closeSidebarMobile();
   // Verificar permissão — redireciona se não tem acesso
   const PERMS_NAV = {
-    super_admin: ['contas','templates','lembretes','inatividade','remarketing','campanhas','relatorios','trackeamento','audiencias','advogados','config','usuarios','terminal','prompt','sugestoes','zapsign','tutoriais'],
-    admin:       ['contas','templates','lembretes','inatividade','remarketing','campanhas','relatorios','trackeamento','audiencias','advogados','config','prompt','sugestoes','zapsign','tutoriais'],
-    moderador:   ['remarketing','campanhas','relatorios','trackeamento','audiencias','prompt','tutoriais'],
+    super_admin: ['contas','templates','lembretes','inatividade','remarketing','campanhas','relatorios','audiencias','advogados','config','usuarios','terminal','prompt','sugestoes','zapsign','tutoriais'],
+    admin:       ['contas','templates','lembretes','inatividade','remarketing','campanhas','relatorios','audiencias','advogados','config','prompt','sugestoes','zapsign','tutoriais'],
+    moderador:   ['remarketing','campanhas','relatorios','audiencias','prompt','tutoriais'],
     agente:      ['templates','lembretes','inatividade','audiencias','prompt','tutoriais'],
   };
   const allowedNav = PERMS_NAV[currentUser?.role] || ['contas','prompt'];
@@ -1415,7 +1411,7 @@ function navTo(secao) {
   localStorage.setItem('da1click_secao_ativa', secao);
   if (clienteAtivo) localStorage.setItem('da1click_conta_ativa', clienteAtivo);
   // Update nav highlights (only for non-conta sections)
-  ['templates','lembretes','inatividade','remarketing','campanhas','relatorios','trackeamento','audiencias','advogados','config','usuarios','terminal','prompt','sugestoes','zapsign','tutoriais'].forEach(s => {
+  ['templates','lembretes','inatividade','remarketing','campanhas','relatorios','audiencias','advogados','config','usuarios','terminal','prompt','sugestoes','zapsign','tutoriais'].forEach(s => {
     document.getElementById(`nav-${s}`)?.classList.toggle('active', s === secao);
   });
   renderSidebarAccounts();
@@ -1423,7 +1419,7 @@ function navTo(secao) {
   const titles = {
     contas: 'Contas', templates: 'Templates Meta', lembretes: 'Lembretes de Consulta',
     inatividade: 'Inatividade', remarketing: 'Remarketing', campanhas: 'Campanhas',
-    relatorios: 'Relatórios', trackeamento: 'Trackeamento', audiencias: 'Aviso de Audiência', advogados: 'Advogados',
+    relatorios: 'Relatórios', audiencias: 'Aviso de Audiência', advogados: 'Advogados',
     config: 'Configurações', usuarios: 'Gerenciar Usuários', terminal: 'Terminal IA',
     prompt: 'Prompt da IA', sugestoes: 'Sugestões de Prompt', zapsign: 'ZapSign', tutoriais: 'Tutoriais',
   };
@@ -1431,7 +1427,7 @@ function navTo(secao) {
 
   const pages = { contas: renderPageContas, templates: renderPageTemplates, lembretes: renderPageLembretes,
     inatividade: renderPageInatividade, remarketing: renderPageRemarketing, campanhas: renderPageCampanhas,
-    relatorios: renderPageRelatorios, trackeamento: renderPageTrackeamento, audiencias: renderPageAvisoAudiencia, advogados: renderPageAdvogados,
+    relatorios: renderPageRelatorios, audiencias: renderPageAvisoAudiencia, advogados: renderPageAdvogados,
     config: renderPageConfig, usuarios: renderPageUsuarios, terminal: renderPageTerminal,
     prompt: renderPagePrompt, sugestoes: renderPageSugestoes, zapsign: renderPageZapSign, tutoriais: renderPageTutoriais };
   (pages[secao] || pages[_paginaPadrao()] || renderPageContas)();
@@ -4777,184 +4773,6 @@ async function criarUsuarios() {
   } catch(e) { errEl.textContent = `Erro: ${e.message}`; errEl.classList.add('show'); }
   finally { btn.textContent = 'Criar / Vincular'; btn.classList.remove('loading'); }
 }
-
-// ══════════════════════════════════════════════
-// PAGE: TRACKEAMENTO
-// ══════════════════════════════════════════════
-let _trkFiltroOrigem = '';
-let _trkInboxFilter = '';
-
-function _trkBadge(origem) {
-  const map = {
-    anuncio_meta: { bg:'#fce7f3', fg:'#be185d', label:'Anúncio Meta' },
-    site:         { bg:'#dbeafe', fg:'#1d4ed8', label:'Site' },
-    direto:       { bg:'#e5e7eb', fg:'#374151', label:'Direto' },
-  };
-  const m = map[origem] || { bg:'#e5e7eb', fg:'#374151', label: origem || '—' };
-  return `<span style="background:${m.bg};color:${m.fg};padding:3px 10px;border-radius:12px;font-size:11px;font-weight:600;white-space:nowrap;">${m.label}</span>`;
-}
-
-function _fmtData(iso) {
-  if (!iso) return '—';
-  try {
-    const d = new Date(iso);
-    return d.toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
-  } catch(e) { return iso; }
-}
-
-function _esc(s) {
-  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
-
-function _trkDetalhes(ev) {
-  if (ev.origem === 'anuncio_meta') {
-    const linhas = [];
-    if (ev.anuncio_fonte) linhas.push(`<b>Fonte:</b> ${_esc(ev.anuncio_fonte)}`);
-    if (ev.anuncio_texto) linhas.push(`<b>Texto:</b> ${_esc(ev.anuncio_texto)}`);
-    if (ev.anuncio_url)   linhas.push(`<b>URL:</b> <a href="${_esc(ev.anuncio_url)}" target="_blank" style="color:var(--purple);">${_esc(ev.anuncio_url)}</a>`);
-    if (ev.anuncio_source_id) linhas.push(`<b>SourceID:</b> <code style="font-size:11px;">${_esc(ev.anuncio_source_id)}</code>`);
-    if (ev.anuncio_resposta) linhas.push(`<b>Resposta:</b> ${_esc(ev.anuncio_resposta)}`);
-    return linhas.join('<br>');
-  }
-  if (ev.origem === 'site') {
-    const linhas = [];
-    if (ev.site_nome) linhas.push(`<b>Nome:</b> ${_esc(ev.site_nome)}`);
-    if (ev.site_email) linhas.push(`<b>E-mail:</b> ${_esc(ev.site_email)}`);
-    if (ev.site_telefone) linhas.push(`<b>Telefone:</b> ${_esc(ev.site_telefone)}`);
-    if (ev.site_assunto) linhas.push(`<b>Assunto:</b> ${_esc(ev.site_assunto)}`);
-    if (ev.site_mensagem) linhas.push(`<b>Mensagem:</b> ${_esc(ev.site_mensagem)}`);
-    return linhas.join('<br>');
-  }
-  return `<span style="color:var(--text-secondary);">${_esc(ev.direto_frase || ev.content_raw || '—')}</span>`;
-}
-
-async function renderPageTrackeamento() {
-  const el = document.getElementById('page-content');
-  if (!clienteAtivo) {
-    document.getElementById('topbar-sub').textContent = 'Selecione uma conta';
-    el.innerHTML = `<div class="empty-state"><p>Selecione uma conta no menu acima</p></div>`;
-    return;
-  }
-  document.getElementById('topbar-sub').textContent = `Trackeamento — Conta #${clienteAtivo}`;
-  el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:20px 0;">Carregando eventos...</div>';
-
-  try {
-    // Status do webhook + lista
-    const [whRes, listRes] = await Promise.all([
-      fetch(`/api/tracking/${clienteAtivo}/webhook-status`).then(r => r.json()),
-      fetch(`/api/tracking/${clienteAtivo}?` + new URLSearchParams({
-        ...(_trkFiltroOrigem ? { origem: _trkFiltroOrigem } : {}),
-        ...(_trkInboxFilter ? { inbox_id: _trkInboxFilter } : {}),
-        limite: '200',
-      })).then(r => r.json()),
-    ]);
-
-    const resumo = listRes.resumo || { anuncio_meta:0, site:0, direto:0, total:0 };
-    const eventos = listRes.eventos || [];
-    const registrado = whRes.registrado;
-
-    const banner = registrado
-      ? `<div style="background:#d1fae5;border:1px solid #10b981;border-radius:8px;padding:10px 14px;font-size:13px;color:#065f46;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;">
-           <span>✓ Webhook registrado (id ${whRes.webhook_id}). Eventos sendo capturados.</span>
-         </div>`
-      : `<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:12px 16px;font-size:13px;color:#92400e;margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;gap:12px;">
-           <span>Webhook de tracking <b>não está registrado</b> nesta conta. Até registrar, nenhum evento novo será capturado.</span>
-           <button class="btn btn-primary btn-sm" onclick="_trkRegistrarWebhook()">Registrar webhook</button>
-         </div>`;
-
-    const cards = `
-      <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(140px,1fr));gap:12px;margin-bottom:20px;">
-        ${_trkCard('Total', resumo.total, '#6c63ff', '')}
-        ${_trkCard('Anúncio Meta', resumo.anuncio_meta, '#be185d', 'anuncio_meta')}
-        ${_trkCard('Site', resumo.site, '#1d4ed8', 'site')}
-        ${_trkCard('Direto', resumo.direto, '#374151', 'direto')}
-      </div>`;
-
-    const linhasTabela = eventos.length === 0
-      ? `<tr><td colspan="5" style="padding:30px;text-align:center;color:var(--text-muted);">Nenhum evento registrado ainda.</td></tr>`
-      : eventos.map(ev => `
-        <tr>
-          <td style="padding:10px;font-size:12px;color:var(--text-secondary);white-space:nowrap;">${_fmtData(ev.created_at)}</td>
-          <td style="padding:10px;">${_trkBadge(ev.origem)}</td>
-          <td style="padding:10px;font-size:13px;">
-            <div style="font-weight:600;">${_esc(ev.contact_name || '—')}</div>
-            <div style="color:var(--text-muted);font-size:11px;">${_esc(ev.contact_phone || '')}</div>
-          </td>
-          <td style="padding:10px;font-size:12px;color:var(--text-secondary);white-space:nowrap;">${_esc(ev.inbox_name || '')} <span style="color:var(--text-muted);">#${ev.inbox_id ?? '—'}</span></td>
-          <td style="padding:10px;font-size:12px;line-height:1.5;">${_trkDetalhes(ev)}</td>
-        </tr>
-      `).join('');
-
-    el.innerHTML = `
-      ${banner}
-      ${cards}
-
-      <div class="card" style="padding:0;overflow:hidden;">
-        <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-          <div style="font-weight:700;font-size:14px;">Eventos de origem</div>
-          <div style="flex:1;"></div>
-          <select onchange="_trkFiltroOrigem=this.value;renderPageTrackeamento();" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;">
-            <option value="" ${!_trkFiltroOrigem ? 'selected' : ''}>Todas as origens</option>
-            <option value="anuncio_meta" ${_trkFiltroOrigem==='anuncio_meta'?'selected':''}>Anúncio Meta</option>
-            <option value="site" ${_trkFiltroOrigem==='site'?'selected':''}>Site</option>
-            <option value="direto" ${_trkFiltroOrigem==='direto'?'selected':''}>Direto</option>
-          </select>
-          ${registrado ? `<button class="btn btn-secondary btn-sm" onclick="_trkRegistrarWebhook()" title="Reregistrar/validar webhook">Revalidar webhook</button>` : ''}
-        </div>
-        <div style="overflow-x:auto;">
-          <table style="width:100%;border-collapse:collapse;font-size:13px;">
-            <thead style="background:var(--bg);">
-              <tr>
-                <th style="padding:10px;text-align:left;font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">Quando</th>
-                <th style="padding:10px;text-align:left;font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">Origem</th>
-                <th style="padding:10px;text-align:left;font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">Contato</th>
-                <th style="padding:10px;text-align:left;font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">Inbox</th>
-                <th style="padding:10px;text-align:left;font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;">Detalhes</th>
-              </tr>
-            </thead>
-            <tbody>${linhasTabela}</tbody>
-          </table>
-        </div>
-      </div>
-    `;
-  } catch (e) {
-    console.error(e);
-    el.innerHTML = `<div class="empty-state"><p>Erro ao carregar trackeamento: ${_esc(e.message || e)}</p></div>`;
-  }
-}
-
-function _trkCard(label, valor, cor, origem) {
-  const clickable = origem !== undefined;
-  const onclick = clickable ? `onclick="_trkFiltroOrigem='${origem}';renderPageTrackeamento();"` : '';
-  const cursor = clickable ? 'cursor:pointer;' : '';
-  const ativo = origem && _trkFiltroOrigem === origem ? `outline:2px solid ${cor};` : '';
-  return `
-    <div class="card" style="padding:16px;${cursor}${ativo}" ${onclick}>
-      <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;font-weight:600;">${label}</div>
-      <div style="font-size:26px;font-weight:700;color:${cor};margin-top:4px;">${Number(valor||0).toLocaleString('pt-BR')}</div>
-    </div>
-  `;
-}
-
-async function _trkRegistrarWebhook() {
-  if (!clienteAtivo) return;
-  const btn = event && event.target;
-  if (btn) { btn.disabled = true; btn.textContent = 'Registrando...'; }
-  try {
-    const res = await fetch(`/api/tracking/${clienteAtivo}/registrar-webhook`, { method:'POST' });
-    const data = await res.json();
-    if (data.ok) {
-      alert(data.status === 'ja_existe' ? 'Webhook já estava registrado.' : 'Webhook registrado com sucesso.');
-    } else {
-      alert('Falha ao registrar webhook: ' + (data.motivo || 'erro desconhecido'));
-    }
-    renderPageTrackeamento();
-  } catch (e) {
-    alert('Erro: ' + e.message);
-    if (btn) { btn.disabled = false; btn.textContent = 'Registrar webhook'; }
-  }
-}
-
 
 // ══════════════════════════════════════════════
 // PAGE: AVISO DE AUDIÊNCIA
