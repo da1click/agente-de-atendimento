@@ -5418,8 +5418,17 @@ async def _chatwoot_webhooks_da_conta(base_url: str, token: str, account_id: int
         if r.status_code != 200:
             return []
         data = r.json()
-        # Chatwoot retorna {"payload": [...]} ou lista direta
-        return data.get("payload") if isinstance(data, dict) else data or []
+        # Chatwoot v3 retorna {"payload": {"webhooks": [...]}}
+        # Outras versões podem retornar {"payload": [...]} ou lista direta
+        if isinstance(data, list):
+            return data
+        if isinstance(data, dict):
+            payload = data.get("payload")
+            if isinstance(payload, list):
+                return payload
+            if isinstance(payload, dict) and isinstance(payload.get("webhooks"), list):
+                return payload["webhooks"]
+        return []
 
 
 async def _registrar_webhook_tracking(account_id: int) -> dict:
