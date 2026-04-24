@@ -79,6 +79,73 @@ def salvar_mensagem(account_id: int, conversation_id: int, inbox_id: int,
         pass
 
 
+# ── TRACKING (ORIGEM DA CONVERSA) ─────────────────────────────
+
+def inserir_tracking_event(dados: dict) -> dict | None:
+    """Insere evento de tracking. Idempotente por (account_id, conversation_id)."""
+    db = get_db()
+    try:
+        resp = (
+            db.table("ia_tracking_events")
+            .upsert(dados, on_conflict="account_id,conversation_id", ignore_duplicates=True)
+            .execute()
+        )
+        return (resp.data or [None])[0]
+    except Exception as e:
+        logger.warning(f"[tracking] falha ao inserir: {e}")
+        return None
+
+
+def tracking_event_existe(account_id: int, conversation_id: int) -> bool:
+    db = get_db()
+    resp = (
+        db.table("ia_tracking_events")
+        .select("id")
+        .eq("account_id", account_id)
+        .eq("conversation_id", conversation_id)
+        .limit(1)
+        .execute()
+    )
+    return bool(resp.data)
+
+
+def listar_tracking_events(account_id: int, origem: str | None = None,
+                           inbox_id: int | None = None, limite: int = 100,
+                           offset: int = 0) -> list[dict]:
+    db = get_db()
+    q = (
+        db.table("ia_tracking_events")
+        .select("*")
+        .eq("account_id", account_id)
+        .order("created_at", desc=True)
+        .range(offset, offset + limite - 1)
+    )
+    if origem:
+        q = q.eq("origem", origem)
+    if inbox_id is not None:
+        q = q.eq("inbox_id", inbox_id)
+    resp = q.execute()
+    return resp.data or []
+
+
+def contar_tracking_por_origem(account_id: int) -> dict:
+    """Retorna {anuncio_meta: N, site: N, direto: N, total: N}."""
+    db = get_db()
+    resp = (
+        db.table("ia_tracking_events")
+        .select("origem")
+        .eq("account_id", account_id)
+        .execute()
+    )
+    rows = resp.data or []
+    out = {"anuncio_meta": 0, "site": 0, "direto": 0, "total": 0}
+    for r in rows:
+        origem = r.get("origem") or "direto"
+        out[origem] = out.get(origem, 0) + 1
+        out["total"] += 1
+    return out
+
+
 # ── LEADS ─────────────────────────────────────────────────────
 
 def upsert_lead(account_id: int, inbox_id: int, conversation_id: int, contact_name: str, contact_phone: str, status: str = "em_atendimento", inviability_reason: str = None, qualification_data: dict = None):
