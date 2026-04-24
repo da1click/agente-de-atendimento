@@ -434,12 +434,47 @@ async def executar_tool(nome: str, args: dict, config: dict, conversation_id: in
                     "status": "bloqueado",
                     "motivo": "Qualificacao minima incompleta (menos de 5 mensagens do cliente). Continue perguntando sobre o caso, sequela, laudo e profissao. NAO acione TransferHuman sem confirmar os dados basicos."
                 })
-        await chatwoot_transferir_humano(chatwoot_url, chatwoot_token, account_id, conversation_id, motivo=f"tool:TransferHuman — {args.get('motivo','')}")
+        # Roteamento especial conta 1 (Matsuda): advogado da reclamada / representante / dono
+        # Atribui direto para Dra. Fernanda (agente 6) e notifica o grupo de novos leads.
+        motivo_txt = (args.get("motivo", "") or "").lower()
+        routing_especial_conta1 = account_id == 1 and any(
+            chave in motivo_txt for chave in [
+                "advogado da reclamada", "advogada da reclamada",
+                "representante da empresa", "representante legal",
+                "dono da empresa", "dona da empresa",
+                "socio da empresa", "sócia da empresa", "socia da empresa",
+                "preposto", "dra. fernanda", "dra fernanda",
+            ]
+        )
+        if routing_especial_conta1:
+            await chatwoot_transferir_humano(
+                chatwoot_url, chatwoot_token, account_id, conversation_id,
+                motivo=f"tool:TransferHuman — {args.get('motivo','')}",
+                assignee_id=6,
+            )
+            try:
+                notif_conv_id = config.get("id_notificacao_convertido")
+                if notif_conv_id:
+                    msg_notif = (
+                        f"⚖️ ADVOGADO/REPRESENTANTE DA EMPRESA\n\n"
+                        f"Nome: {contact_name}\n"
+                        f"Número: {contact_phone}\n"
+                        f"Motivo: {args.get('motivo','')}\n"
+                        f"Atribuído a: Dra. Fernanda (agente 6)\n"
+                        f"Conversa: {conversation_id}"
+                    )
+                    await _enviar_notificacao(config, account_id, int(notif_conv_id), msg_notif)
+                    logger.info(f"[notificação] Advogado/representante notificado no grupo novos leads — conv={conversation_id}")
+            except Exception as e:
+                logger.warning(f"[notificação] Erro ao notificar advogado/representante — conv={conversation_id}: {e}")
+        else:
+            await chatwoot_transferir_humano(chatwoot_url, chatwoot_token, account_id, conversation_id, motivo=f"tool:TransferHuman — {args.get('motivo','')}")
         try:
             upsert_lead(account_id, inbox_id, conversation_id, contact_name, contact_phone, status="transferido")
         except Exception as e:
             logger.warning(f"Supabase erro (TransferHuman): {e}")
-        await _notificar_transferencia_humano(config, account_id, conversation_id, contact_name, contact_phone, "Solicitação do cliente", args.get("motivo", ""))
+        if not routing_especial_conta1:
+            await _notificar_transferencia_humano(config, account_id, conversation_id, contact_name, contact_phone, "Solicitação do cliente", args.get("motivo", ""))
         logger.info(f"Tool: TransferHuman — {args.get('motivo')}")
         return json.dumps({"status": "ok"})
 
@@ -665,15 +700,16 @@ async def chatwoot_atualizar_contato(url: str, token: str, account_id: int, conv
                 logger.info(f"Contato {contact_id} atualizado para '{nome}'")
 
 
-async def chatwoot_transferir_humano(url: str, token: str, account_id: int, conversation_id: int, motivo: str = ""):
+async def chatwoot_transferir_humano(url: str, token: str, account_id: int, conversation_id: int, motivo: str = "", assignee_id: int | None = None):
     headers = {"api_access_token": token, "Content-Type": "application/json"}
     assign_url = f"{url}/api/v1/accounts/{account_id}/conversations/{conversation_id}/assignments"
     async with httpx.AsyncClient() as http:
-        await http.post(assign_url, headers=headers, json={"assignee_id": None}, timeout=10)
-    # Log detalhado com stack trace para rastrear origem da desatribuição
+        await http.post(assign_url, headers=headers, json={"assignee_id": assignee_id}, timeout=10)
+    # Log detalhado com stack trace para rastrear origem da atribuição/desatribuição
     import traceback
     caller = traceback.extract_stack()[-2]
-    logger.info(f"🔴 DESATRIBUIÇÃO — conta={account_id} conv={conversation_id} motivo='{motivo}' chamado_de={caller.filename}:{caller.lineno} ({caller.name})")
+    acao = f"ATRIBUIÇÃO→agente={assignee_id}" if assignee_id else "DESATRIBUIÇÃO"
+    logger.info(f"🔴 {acao} — conta={account_id} conv={conversation_id} motivo='{motivo}' chamado_de={caller.filename}:{caller.lineno} ({caller.name})")
 
     # Desativar inatividade (follow-up) ao transferir para humano
     try:
