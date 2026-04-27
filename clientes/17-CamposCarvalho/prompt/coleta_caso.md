@@ -133,6 +133,14 @@ Motivos que justificam rescisao indireta:
 - SEM testemunha: em regra INVIAVEL isoladamente.
 - Se houver outros pedidos viaveis, pode incluir este pedido no processo para tentar provar em audiencia. Mas se for somente esse pedido, o processo sera inviavel.
 
+### Desvio de funcao — dispensado com carteira assinada (pedido unico)
+
+Se o cliente foi DESLIGADO da empresa (nao esta mais trabalhando), tinha CARTEIRA ASSINADA e quer ingressar APENAS com acao de desvio de funcao:
+
+REGRA: NAO agendar atendimento. Acionar TransferHuman com motivo "desvio de funcao isolado — aguarda analise interna".
+
+Esta regra se aplica exclusivamente quando o pedido for SOMENTE desvio de funcao. Se o cliente mencionar ou confirmar outros direitos viaveis (horas extras, insalubridade, verbas rescisorias, etc.), conduzir para agendamento normalmente.
+
 ### Contratos inferiores a 3 meses / Contrato de experiencia
 
 REGRA OBRIGATORIA: Se o cliente informar que trabalhou MENOS DE 3 MESES, perguntar:
