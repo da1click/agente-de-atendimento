@@ -6,11 +6,24 @@ import httpx
 import json
 import logging
 import os
+import re
 
 logger = logging.getLogger(__name__)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CLIENTES_DIR = os.path.join(BASE_DIR, "clientes")
+
+
+def _eh_payload_anuncio(texto: str) -> bool:
+    """Detecta payload estruturado de 'Mensagem de Anúncio' Meta (mesma heurística de classificar_origem)."""
+    if not texto:
+        return False
+    limpo = re.sub(r"\*+", "", texto)
+    return bool(
+        re.search(r"Mensagem de An[uú]ncio", limpo, re.IGNORECASE)
+        or re.search(r"Texto\s+An[uú]ncio\s*:", limpo, re.IGNORECASE)
+        or (re.search(r"SourceID\s*:", limpo) and re.search(r"Fonte\s*:", limpo))
+    )
 
 # Debounce: conversation_id -> asyncio.Task
 _debounce_tasks: dict[int, asyncio.Task] = {}
@@ -1596,6 +1609,23 @@ async def processar_mensagem(config: dict, account_id: int, conversation_id: int
         conversation_id=conversation_id,
     )
     logger.info(f"📜 Histórico: {len(historico)} mensagens carregadas")
+
+    # Conta 18: re-cliques no anúncio inserem o payload "Mensagem de Anúncio: ..." no
+    # meio da conversa, confundindo a IA. Mantém apenas a primeira ocorrência.
+    if account_id == 18:
+        primeiro_visto = False
+        filtrado = []
+        descartados = 0
+        for m in historico:
+            if m.get("message_type") == 0 and _eh_payload_anuncio(m.get("content") or ""):
+                if primeiro_visto:
+                    descartados += 1
+                    continue
+                primeiro_visto = True
+            filtrado.append(m)
+        if descartados:
+            logger.info(f"[conta18] Removidas {descartados} mensagens de anúncio duplicadas do histórico (conv={conversation_id})")
+        historico = filtrado
 
     historico_texto = formatar_conversa_texto(historico)
     historico_openai = formatar_conversa_openai(historico)

@@ -3,7 +3,7 @@ from fastapi import FastAPI, Request, HTTPException, Depends, UploadFile, File, 
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from openai import OpenAI
-from ia import agendar_processamento, processar_mensagem, transcrever_audio, enviar_nota_privada
+from ia import agendar_processamento, processar_mensagem, transcrever_audio, enviar_nota_privada, _eh_payload_anuncio
 from db import upsert_lead, salvar_transcricao, deletar_dados_conta
 from db import (
     super_admin_existe, criar_usuario, get_usuario_por_email, get_usuario_por_id,
@@ -1654,6 +1654,14 @@ async def chatwoot_webhook(request: Request):
             logger.info(f"🤖 IA ativa: {ia_ativa} (assignee={assignee_id}, ia_agent={ia_agent_id})")
 
         # Transcrição já foi feita acima (antes do filtro de modo teste)
+
+        # Conta 18: re-cliques no anúncio Meta enviam o payload "Mensagem de Anúncio: ..."
+        # como nova mensagem do cliente. Se já há tracking event para esta conversa, é re-clique
+        # — pular IA (mensagem fica salva no Chatwoot, mas IA não responde a ela).
+        if account_id == 18 and ia_ativa and texto and _eh_payload_anuncio(texto):
+            if tracking_event_existe(account_id, conversation_id):
+                logger.info(f"[conta18] Re-clique em anúncio detectado — IA não responde (conv={conversation_id})")
+                continue
 
         if ia_ativa:
             logger.info(f"[{account_id}] IA ativa — agendando processamento de {nome}: {texto or '[áudio]'}")
