@@ -640,13 +640,19 @@ def contar_leads_por_status(account_id: int, data_inicio: str, data_fim: str) ->
     db = get_db()
     resultado = {"em_atendimento": 0, "convertido": 0, "inviavel": 0, "transferido": 0, "perdido": 0}
     try:
-        resp = db.table("ia_leads").select("status").eq(
-            "account_id", account_id
-        ).gte("created_at", data_inicio).lte("created_at", data_fim).execute()
-        for r in (resp.data or []):
-            s = r.get("status", "em_atendimento")
-            if s in resultado:
-                resultado[s] += 1
+        page_size = 1000
+        offset = 0
+        while True:
+            resp = db.table("ia_leads").select("status").eq(
+                "account_id", account_id
+            ).gte("created_at", data_inicio).lte("created_at", data_fim).range(offset, offset + page_size - 1).execute()
+            for r in (resp.data or []):
+                s = r.get("status", "em_atendimento")
+                if s in resultado:
+                    resultado[s] += 1
+            if len(resp.data or []) < page_size:
+                break
+            offset += page_size
     except Exception:
         pass
     return resultado

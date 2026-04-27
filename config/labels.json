@@ -12,5 +12,13 @@
   { "title": "inatividade",           "description": "Cliente sem resposta ha algum tempo" },
   { "title": "inatividade-2",         "description": "Inatividade estagio 2" },
   { "title": "inatividade-3",         "description": "Inatividade estagio 3" },
-  { "title": "inatividade-4",         "description": "Inatividade estagio 4" }
+  { "title": "inatividade-4",         "description": "Inatividade estagio 4" },
+  { "title": "convertido",            "description": "Lead convertido em cliente" },
+  { "title": "inviavel",              "description": "Lead inviavel apos triagem" },
+  { "title": "lead-disponivel",       "description": "Lead disponivel para atendimento imediato" },
+  { "title": "nao-lead",              "description": "Contato que nao e um lead" },
+  { "title": "nao-alfabetizado",      "description": "Contato nao alfabetizado" },
+  { "title": "reagendamento",         "description": "Consulta reagendada" },
+  { "title": "ia-teste",              "description": "Conversa em modo de teste da IA" },
+  { "title": "aguardando-cliente",    "description": "Aguardando resposta do cliente" }
 ]
