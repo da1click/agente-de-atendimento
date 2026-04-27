@@ -604,8 +604,11 @@ def _dentro_horario_comercial() -> bool:
     return 8 <= hora < 19
 
 
+_LABELS_REATIVAR = {"reativar-followup", "reativar-follow-up"}
+
+
 async def verificar_reativacoes():
-    """Verifica conversas com label 'reativar-followup' e reinicia o ciclo de inatividade."""
+    """Verifica conversas com labels de reativação e reinicia o ciclo de inatividade."""
     from main import carregar_config_cliente
     from db import get_db
 
@@ -633,40 +636,41 @@ async def verificar_reativacoes():
                     # e também statuses diferentes de "open" (resolved/pending).
                     convs_url = f"{chatwoot_url}/api/v1/accounts/{account_id}/conversations"
                     convs_por_id: dict[int, dict] = {}
-                    for status in ("open", "resolved", "pending"):
-                        for assignee_type in ("assigned", "unassigned"):
-                            for page in range(1, 4):
-                                try:
-                                    resp = await http.get(
-                                        convs_url,
-                                        headers={"api_access_token": token},
-                                        params={
-                                            "labels[]": "reativar-followup",
-                                            "status": status,
-                                            "assignee_type": assignee_type,
-                                            "page": page,
-                                        },
-                                    )
-                                except Exception as e:
-                                    logger.warning(f"[inatividade] Erro ao listar conversas account={account_id} status={status} assignee={assignee_type}: {e}")
-                                    break
-                                if not resp.is_success:
-                                    break
-                                page_convs = resp.json().get("data", {}).get("payload", [])
-                                # Filtro client-side: garante que só processamos conversas
-                                # que realmente têm a label (alguns Chatwoots ignoram labels[]).
-                                for c in page_convs:
-                                    if "reativar-followup" in (c.get("labels") or []):
-                                        cid = c.get("id")
-                                        if cid:
-                                            convs_por_id[cid] = c
-                                if len(page_convs) < 25:
-                                    break
+                    for label_busca in _LABELS_REATIVAR:
+                        for status in ("open", "resolved", "pending"):
+                            for assignee_type in ("assigned", "unassigned"):
+                                for page in range(1, 4):
+                                    try:
+                                        resp = await http.get(
+                                            convs_url,
+                                            headers={"api_access_token": token},
+                                            params={
+                                                "labels[]": label_busca,
+                                                "status": status,
+                                                "assignee_type": assignee_type,
+                                                "page": page,
+                                            },
+                                        )
+                                    except Exception as e:
+                                        logger.warning(f"[inatividade] Erro ao listar conversas account={account_id} status={status} assignee={assignee_type}: {e}")
+                                        break
+                                    if not resp.is_success:
+                                        break
+                                    page_convs = resp.json().get("data", {}).get("payload", [])
+                                    # Filtro client-side: garante que só processamos conversas
+                                    # que realmente têm a label (alguns Chatwoots ignoram labels[]).
+                                    for c in page_convs:
+                                        if any(l in (c.get("labels") or []) for l in _LABELS_REATIVAR):
+                                            cid = c.get("id")
+                                            if cid:
+                                                convs_por_id[cid] = c
+                                    if len(page_convs) < 25:
+                                        break
 
                     if not convs_por_id:
                         continue
 
-                    logger.info(f"[inatividade] {len(convs_por_id)} conversa(s) com label 'reativar-followup' — account={account_id}")
+                    logger.info(f"[inatividade] {len(convs_por_id)} conversa(s) com label de reativação — account={account_id}")
 
                     # Buscar config completa uma vez por conta
                     config_full = carregar_config_cliente(account_id)
@@ -734,13 +738,13 @@ async def verificar_reativacoes():
                             # Não removemos a label se o upsert falhou — tenta de novo no próximo ciclo
                             continue
 
-                        # Remover a label "reativar-followup" para não reprocessar
+                        # Remover labels de reativação para não reprocessar
                         try:
                             labels_url = f"{chatwoot_url}/api/v1/accounts/{account_id}/conversations/{conv_id}/labels"
                             resp_labels = await http.get(labels_url, headers={"api_access_token": token})
                             if resp_labels.is_success:
                                 labels_atuais = resp_labels.json().get("payload", [])
-                                novas_labels = [l for l in labels_atuais if l != "reativar-followup"]
+                                novas_labels = [l for l in labels_atuais if l not in _LABELS_REATIVAR]
                                 await http.post(labels_url, headers={"api_access_token": token, "Content-Type": "application/json"}, json={"labels": novas_labels})
                         except Exception as e:
                             logger.warning(f"[inatividade] Erro ao remover label conv={conv_id}: {e}")
