@@ -639,6 +639,8 @@ def contar_conversas(account_id: int, data_inicio: str, data_fim: str) -> int:
 def contar_leads_por_status(account_id: int, data_inicio: str, data_fim: str) -> dict:
     db = get_db()
     resultado = {"em_atendimento": 0, "convertido": 0, "inviavel": 0, "transferido": 0, "perdido": 0}
+    # resolved = conversa fechada no Chatwoot sem desfecho IA definido → conta como perdido
+    _alias = {"resolved": "perdido", "aguardando": "em_atendimento", "desqualificado": "inviavel"}
     try:
         page_size = 1000
         offset = 0
@@ -648,6 +650,7 @@ def contar_leads_por_status(account_id: int, data_inicio: str, data_fim: str) ->
             ).gte("created_at", data_inicio).lte("created_at", data_fim).range(offset, offset + page_size - 1).execute()
             for r in (resp.data or []):
                 s = r.get("status", "em_atendimento")
+                s = _alias.get(s, s)
                 if s in resultado:
                     resultado[s] += 1
             if len(resp.data or []) < page_size:

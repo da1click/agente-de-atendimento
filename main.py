@@ -620,9 +620,9 @@ def relatorio_conta(account_id: int, user: dict = Depends(get_current_user)):
     dia_ciclo = config.get("dia_ciclo", 1)
     ciclo_id, data_inicio, data_fim = _ciclo_mes(dia_ciclo)
 
-    # Uso mensal — conta por período de datas (created_at), não por ciclo_id string
-    # Isso garante que mudar dia_ciclo ou plano NÃO reseta a contagem
-    conversas_mes = contar_uso_por_periodo(account_id, data_inicio, data_fim)
+    # Uso mensal — usa o campo 'mes' (ciclo_id) que é gravado no momento certo,
+    # evitando contaminação por backfills que inserem com created_at retroativo
+    conversas_mes = contar_uso_mensal(account_id, ciclo_id)
 
     # Leads por status
     leads = contar_leads_por_status(account_id, data_inicio, data_fim)
@@ -638,18 +638,18 @@ def relatorio_conta(account_id: int, user: dict = Depends(get_current_user)):
     excedente = max(0, conversas_mes - limite)
     valor_excedente = round(excedente * plano["excedente_conversa"], 2)
 
-    # Histórico últimos 6 ciclos — também por período de datas
-    periodos_hist = []
+    # Histórico últimos 6 ciclos — usa campo 'mes' para evitar contaminação por backfills
+    meses_hist = []
     dt = _dt.now()
     ciclos_vistos = set()
     for i in range(5, -1, -1):
         d = dt - timedelta(days=i * 30)
-        cid, ini, fim_h = _ciclo_mes(dia_ciclo, d)
+        cid, _, _ = _ciclo_mes(dia_ciclo, d)
         if cid not in ciclos_vistos:
             ciclos_vistos.add(cid)
-            periodos_hist.append({"ciclo_id": cid, "inicio": ini, "fim": fim_h})
-    periodos_hist = periodos_hist[-6:]
-    historico = historico_uso_por_periodos(account_id, periodos_hist)
+            meses_hist.append(cid)
+    meses_hist = meses_hist[-6:]
+    historico = historico_uso_mensal(account_id, meses_hist)
 
     return {
         "account_id": account_id,
