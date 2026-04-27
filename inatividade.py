@@ -589,8 +589,8 @@ async def _loop_inatividade():
             await processar_inatividades()
         except Exception as e:
             logger.error(f"[inatividade] Erro no loop: {e}")
-        # A cada 5 minutos, verificar reativações via label
-        if _ciclo % 5 == 0:
+        # A cada 2 minutos, verificar reativações via label
+        if _ciclo % 2 == 0:
             try:
                 await verificar_reativacoes()
             except Exception as e:
@@ -627,37 +627,110 @@ async def verificar_reativacoes():
 
             try:
                 async with httpx.AsyncClient(timeout=15) as http:
-                    # Buscar conversas com label "reativar-followup"
-                    url = f"{chatwoot_url}/api/v1/accounts/{account_id}/conversations"
-                    resp = await http.get(url, headers={"api_access_token": token}, params={"labels[]": "reativar-followup", "status": "open"})
-                    if not resp.is_success:
+                    # Chatwoot API default é assignee_type=me, o que filtra conversas
+                    # atribuídas ao usuário do token. Precisamos varrer tanto conversas
+                    # atribuídas a qualquer agente (IA, admin, etc.) quanto não atribuídas,
+                    # e também statuses diferentes de "open" (resolved/pending).
+                    convs_url = f"{chatwoot_url}/api/v1/accounts/{account_id}/conversations"
+                    convs_por_id: dict[int, dict] = {}
+                    for status in ("open", "resolved", "pending"):
+                        for assignee_type in ("assigned", "unassigned"):
+                            for page in range(1, 4):
+                                try:
+                                    resp = await http.get(
+                                        convs_url,
+                                        headers={"api_access_token": token},
+                                        params={
+                                            "labels[]": "reativar-followup",
+                                            "status": status,
+                                            "assignee_type": assignee_type,
+                                            "page": page,
+                                        },
+                                    )
+                                except Exception as e:
+                                    logger.warning(f"[inatividade] Erro ao listar conversas account={account_id} status={status} assignee={assignee_type}: {e}")
+                                    break
+                                if not resp.is_success:
+                                    break
+                                page_convs = resp.json().get("data", {}).get("payload", [])
+                                # Filtro client-side: garante que só processamos conversas
+                                # que realmente têm a label (alguns Chatwoots ignoram labels[]).
+                                for c in page_convs:
+                                    if "reativar-followup" in (c.get("labels") or []):
+                                        cid = c.get("id")
+                                        if cid:
+                                            convs_por_id[cid] = c
+                                if len(page_convs) < 25:
+                                    break
+
+                    if not convs_por_id:
                         continue
-                    convs = resp.json().get("data", {}).get("payload", [])
-                    for conv in convs:
-                        conv_id = conv.get("id")
+
+                    logger.info(f"[inatividade] {len(convs_por_id)} conversa(s) com label 'reativar-followup' — account={account_id}")
+
+                    # Buscar config completa uma vez por conta
+                    config_full = carregar_config_cliente(account_id)
+                    ia_agent_id = config_full.get("ia_agent_id") if config_full else None
+                    info = _estagio_info(1, account_id)
+                    if not info:
+                        logger.warning(f"[inatividade] Estágio 1 não configurado — account={account_id}, pulando reativação")
+                        continue
+
+                    for conv_id, conv in convs_por_id.items():
                         inbox_id = conv.get("inbox_id")
-                        if not conv_id:
-                            continue
 
-                        # Buscar config completa para ia_agent_id
-                        config_full = carregar_config_cliente(account_id)
-                        ia_agent_id = config_full.get("ia_agent_id") if config_full else None
-
-                        # Reatribuir a IA à conversa (necessário para o follow-up funcionar)
+                        # Reatribuir a IA (verificando sucesso). Sem IA atribuída,
+                        # disparar_estagio desativa o follow-up no próximo ciclo.
+                        reassigned_ok = False
                         if ia_agent_id:
                             try:
                                 assign_url = f"{chatwoot_url}/api/v1/accounts/{account_id}/conversations/{conv_id}/assignments"
-                                await http.post(assign_url, headers={"api_access_token": token, "Content-Type": "application/json"}, json={"assignee_id": ia_agent_id})
-                                logger.info(f"[inatividade] ♻️ IA reatribuída à conv={conv_id}")
+                                resp_assign = await http.post(
+                                    assign_url,
+                                    headers={"api_access_token": token, "Content-Type": "application/json"},
+                                    json={"assignee_id": ia_agent_id},
+                                )
+                                reassigned_ok = resp_assign.is_success
+                                if reassigned_ok:
+                                    logger.info(f"[inatividade] ♻️ IA reatribuída à conv={conv_id}")
+                                else:
+                                    logger.warning(f"[inatividade] Reatribuição IA falhou conv={conv_id} status={resp_assign.status_code} body={resp_assign.text[:200]}")
                             except Exception as e:
                                 logger.warning(f"[inatividade] Erro ao reatribuir IA conv={conv_id}: {e}")
+                        else:
+                            logger.warning(f"[inatividade] Sem ia_agent_id em account={account_id} — não é possível reativar follow-up conv={conv_id}")
+
+                        if not reassigned_ok:
+                            # Sem IA atribuída, follow-up não dispararia. Mantemos a label
+                            # para nova tentativa no próximo ciclo.
+                            continue
+
+                        # Reabrir conversa se estiver resolved (caso contrário a IA não responde)
+                        conv_status = conv.get("status")
+                        if conv_status in ("resolved", "pending"):
+                            try:
+                                toggle_url = f"{chatwoot_url}/api/v1/accounts/{account_id}/conversations/{conv_id}/toggle_status"
+                                resp_toggle = await http.post(
+                                    toggle_url,
+                                    headers={"api_access_token": token, "Content-Type": "application/json"},
+                                    json={"status": "open"},
+                                )
+                                if resp_toggle.is_success:
+                                    logger.info(f"[inatividade] Conversa reaberta conv={conv_id} (era {conv_status})")
+                                else:
+                                    logger.warning(f"[inatividade] Falha ao reabrir conv={conv_id} status={resp_toggle.status_code}")
+                            except Exception as e:
+                                logger.warning(f"[inatividade] Erro ao reabrir conv={conv_id}: {e}")
 
                         # Reiniciar ciclo de inatividade
-                        info = _estagio_info(1, account_id)
-                        if info:
+                        try:
                             proximo = _proximo_disparo(info["horas"])
                             upsert_inatividade(account_id, conv_id, inbox_id, stagio=1, proximo_disparo=proximo)
-                            logger.info(f"[inatividade] ♻️ Follow-up reativado via label — conv={conv_id} account={account_id}")
+                            logger.info(f"[inatividade] ♻️ Follow-up reativado via label — conv={conv_id} account={account_id} próximo={proximo}")
+                        except Exception as e:
+                            logger.warning(f"[inatividade] Erro ao upsert inatividade conv={conv_id}: {e}")
+                            # Não removemos a label se o upsert falhou — tenta de novo no próximo ciclo
+                            continue
 
                         # Remover a label "reativar-followup" para não reprocessar
                         try:
@@ -667,8 +740,8 @@ async def verificar_reativacoes():
                                 labels_atuais = resp_labels.json().get("payload", [])
                                 novas_labels = [l for l in labels_atuais if l != "reativar-followup"]
                                 await http.post(labels_url, headers={"api_access_token": token, "Content-Type": "application/json"}, json={"labels": novas_labels})
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            logger.warning(f"[inatividade] Erro ao remover label conv={conv_id}: {e}")
 
             except Exception as e:
                 logger.warning(f"[inatividade] Erro ao verificar reativações account={account_id}: {e}")
