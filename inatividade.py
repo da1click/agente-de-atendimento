@@ -722,11 +722,13 @@ async def verificar_reativacoes():
                             except Exception as e:
                                 logger.warning(f"[inatividade] Erro ao reabrir conv={conv_id}: {e}")
 
-                        # Reiniciar ciclo de inatividade
+                        # Reiniciar ciclo de inatividade. Disparo imediato (proximo=now)
+                        # para que processar_inatividades envie o estagio 1 no proximo ciclo
+                        # (~60s) em vez de esperar info["horas"].
                         try:
-                            proximo = _proximo_disparo(info["horas"])
+                            proximo = datetime.now(timezone.utc).isoformat()
                             upsert_inatividade(account_id, conv_id, inbox_id, stagio=1, proximo_disparo=proximo)
-                            logger.info(f"[inatividade] ♻️ Follow-up reativado via label — conv={conv_id} account={account_id} próximo={proximo}")
+                            logger.info(f"[inatividade] ♻️ Follow-up reativado via label (disparo imediato) — conv={conv_id} account={account_id}")
                         except Exception as e:
                             logger.warning(f"[inatividade] Erro ao upsert inatividade conv={conv_id}: {e}")
                             # Não removemos a label se o upsert falhou — tenta de novo no próximo ciclo
