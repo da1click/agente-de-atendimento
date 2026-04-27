@@ -20,5 +20,6 @@
   { "title": "nao-alfabetizado",      "description": "Contato nao alfabetizado" },
   { "title": "reagendamento",         "description": "Consulta reagendada" },
   { "title": "ia-teste",              "description": "Conversa em modo de teste da IA" },
-  { "title": "aguardando-cliente",    "description": "Aguardando resposta do cliente" }
+  { "title": "aguardando-cliente",    "description": "Aguardando resposta do cliente" },
+  { "title": "reativar-followup",     "description": "Reativar ciclo de follow-up" }
 ]
