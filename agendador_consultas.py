@@ -8,6 +8,8 @@ import asyncio
 import logging
 from datetime import datetime, timezone, timedelta
 
+import httpx
+
 logger = logging.getLogger(__name__)
 
 BR_TZ = timezone(timedelta(hours=-3))
@@ -24,6 +26,65 @@ _MAX_CACHE = 5000
 def _dentro_horario_comercial() -> bool:
     hora = datetime.now(BR_TZ).hour
     return 7 <= hora < 22
+
+
+def _formatar_data_lembrete(date_str: str) -> str:
+    """Converte 'YYYY-MM-DD' em 'DD/MM/YYYY'."""
+    if not date_str or "-" not in date_str:
+        return date_str or ""
+    try:
+        partes = date_str.split("-")
+        return f"{partes[2]}/{partes[1]}/{partes[0]}"
+    except (IndexError, ValueError):
+        return date_str
+
+
+def _build_processed_params_lembrete(template_vars: dict, ctx: dict) -> dict:
+    """Mapeia placeholders ([NOME], [HORARIO], etc.) para processed_params do template.
+
+    template_vars ex: {"1": "[NOME]", "2": "[HORARIO]"}
+    ctx contém os valores ja resolvidos: nome, advogada, horario, data, contact_name, etc.
+    """
+    placeholder_map = {
+        "[NOME]": ctx.get("nome", "") or ctx.get("contact_name", ""),
+        "[CONTACT_NAME]": ctx.get("contact_name", ""),
+        "[ADVOGADA]": ctx.get("advogada", ""),
+        "[HORARIO]": ctx.get("horario", ""),
+        "[DATA]": _formatar_data_lembrete(ctx.get("data", "")),
+    }
+    params = {}
+    for num, placeholder in (template_vars or {}).items():
+        valor = placeholder_map.get(placeholder, "")
+        params[str(num)] = valor or "-"
+    return params
+
+
+async def _enviar_template_lembrete(
+    chatwoot_url: str,
+    token: str,
+    account_id: int,
+    conversation_id: int,
+    template_name: str,
+    processed_params: dict,
+) -> None:
+    """Envia template WhatsApp via Chatwoot com processed_params (variáveis do template)."""
+    url = f"{chatwoot_url}/api/v1/accounts/{account_id}/conversations/{conversation_id}/messages"
+    payload = {
+        "message_type": "outgoing",
+        "private": False,
+        "template_params": {
+            "name": template_name,
+            "language": "pt_BR",
+            "processed_params": processed_params or {},
+        },
+    }
+    async with httpx.AsyncClient(timeout=15) as http:
+        resp = await http.post(
+            url,
+            headers={"api_access_token": token, "Content-Type": "application/json"},
+            json=payload,
+        )
+        resp.raise_for_status()
 
 
 async def _loop():
@@ -44,8 +105,15 @@ async def processar_lembretes():
     if not _dentro_horario_comercial():
         return
 
-    from db import listar_agendamentos_pendentes, marcar_lembrete_enviado, carregar_config_cliente
-    from ia import enviar_parte_chatwoot
+    from db import (
+        listar_agendamentos_pendentes,
+        marcar_lembrete_enviado,
+        carregar_config_cliente,
+        houve_reagendamento_na_conversa,
+        cancelar_agendamento_por_id,
+    )
+    from ia import enviar_parte_chatwoot, confirmar_evento_no_calendar
+    from inatividade import _get_inbox_channel_type
 
     agendamentos = listar_agendamentos_pendentes()
     if not agendamentos:
@@ -115,8 +183,24 @@ async def processar_lembretes():
             advogada = ag.get("advogada", "")
             horario = time_str
 
+            # Confirmação no calendar feita uma única vez por agendamento por ciclo.
+            # None = ainda não verificou; True = ok pra enviar; False = pular
+            confirmacao_calendar: bool | None = None
+            agendamento_cancelado_por_calendar = False
+
             chatwoot_url = config["chatwoot_url"].rstrip("/")
             token = config["chatwoot_token"]
+
+            # Detectar inbox WhatsApp Oficial: nesses casos, texto livre falha fora da janela
+            # de 24h (e o lembrete quase sempre dispara fora da janela). Usar template.
+            inbox_id_ag = ag.get("inbox_id")
+            channel_type = ""
+            if inbox_id_ag:
+                try:
+                    channel_type = await _get_inbox_channel_type(config, inbox_id_ag)
+                except Exception as e:
+                    logger.warning(f"[lembrete-consulta] Falha ao detectar channel_type ag {ag_id}: {e}")
+            is_whatsapp_oficial = "whatsapp" in (channel_type or "").lower()
 
             # Buscar quais lembretes já foram enviados para este agendamento (do banco)
             lembretes_ja_enviados = set()
@@ -150,6 +234,48 @@ async def processar_lembretes():
                 if not (send_time <= now <= send_time + timedelta(minutes=10)):
                     continue
 
+                # Antes de enviar, confirmar que o agendamento ainda existe na agenda.
+                # Pulamos a confirmação se houve reagendamento na conversa: o evento antigo
+                # permanece no Google Calendar (n8n nao deleta), entao consultar daria
+                # falso-positivo. Confiamos no DB nesse caso.
+                if confirmacao_calendar is None:
+                    if houve_reagendamento_na_conversa(account_id, conversation_id):
+                        confirmacao_calendar = True
+                    else:
+                        try:
+                            confirmado = await confirmar_evento_no_calendar(
+                                config, date_str, time_str, advogada, ag.get("contact_name", "")
+                            )
+                        except Exception as e:
+                            logger.warning(f"[lembrete-consulta] Erro inesperado em confirmar_evento_no_calendar (ag {ag_id}): {e}")
+                            confirmado = None
+                        if confirmado is False:
+                            logger.info(
+                                f"[lembrete-consulta] Agendamento {ag_id} nao localizado no calendar "
+                                f"({date_str} {time_str} — {advogada}) — marcando cancelado e pulando lembretes"
+                            )
+                            cancelar_agendamento_por_id(ag_id)
+                            agendamento_cancelado_por_calendar = True
+                            confirmacao_calendar = False
+                            break  # sai do for lembrete
+                        # True ou None (fail-open): segue o envio
+                        confirmacao_calendar = True
+
+                if confirmacao_calendar is False:
+                    break
+
+                template_name = (lembrete.get("template_whatsapp") or "").strip()
+                template_vars = lembrete.get("template_vars") or {}
+
+                # Inbox WhatsApp Oficial sem template configurado → não pode garantir
+                # entrega fora da janela 24h. Pula com warning.
+                if is_whatsapp_oficial and not template_name:
+                    logger.warning(
+                        f"[lembrete-consulta] WhatsApp Oficial sem template_whatsapp configurado — "
+                        f"envio pulado conv={conversation_id} ag={ag_id} ({minutos_antes}min antes)"
+                    )
+                    continue
+
                 mensagem_template = lembrete.get("mensagem", _LEMBRETES_PADRAO[0]["mensagem"])
                 mensagem = (
                     mensagem_template
@@ -175,10 +301,27 @@ async def processar_lembretes():
 
                 _lembretes_enviados.add(cache_key)  # reserva em memória sempre
                 try:
-                    await enviar_parte_chatwoot(chatwoot_url, token, account_id, conversation_id, mensagem)
+                    if is_whatsapp_oficial and template_name:
+                        ctx_lembrete = {
+                            "nome": nome,
+                            "contact_name": ag.get("contact_name", ""),
+                            "advogada": advogada,
+                            "horario": horario,
+                            "data": date_str,
+                        }
+                        processed_params = _build_processed_params_lembrete(template_vars, ctx_lembrete)
+                        await _enviar_template_lembrete(
+                            chatwoot_url, token, account_id, conversation_id, template_name, processed_params
+                        )
+                        logger.info(
+                            f"[lembrete-consulta] Template '{template_name}' enviado ({minutos_antes}min antes) "
+                            f"para {ag.get('contact_name','')} — ag {ag_id} params={processed_params}"
+                        )
+                    else:
+                        await enviar_parte_chatwoot(chatwoot_url, token, account_id, conversation_id, mensagem)
+                        logger.info(f"[lembrete-consulta] Enviado ({minutos_antes}min antes) para {ag.get('contact_name','')} — ag {ag_id}")
                     lembretes_ja_enviados.add(minutos_antes)
                     enviados += 1
-                    logger.info(f"[lembrete-consulta] Enviado ({minutos_antes}min antes) para {ag.get('contact_name','')} — ag {ag_id}")
                 except Exception as e:
                     logger.error(f"[lembrete-consulta] Erro ao enviar (ag {ag_id}): {e}")
                     # Se envio falhou e reservamos no banco, tentar reverter para permitir retry no próximo ciclo
@@ -191,6 +334,8 @@ async def processar_lembretes():
                             pass
 
             # Marcar lembrete_enviado=true quando todos os lembretes configurados foram enviados
+            if agendamento_cancelado_por_calendar:
+                continue
             todos_minutos = {l.get("minutos", 10) for l in lembretes_config}
             if todos_minutos.issubset(lembretes_ja_enviados) and ag.get("lembrete_enviado") is not True:
                 try:

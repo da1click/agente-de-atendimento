@@ -303,7 +303,7 @@ def listar_agendamentos_pendentes() -> list:
     from datetime import date
     resp = (
         db.table("ia_agendamentos")
-        .select("id,account_id,conversation_id,contact_name,contact_phone,scheduled_date,scheduled_time,advogada,lembrete_enviado")
+        .select("id,account_id,inbox_id,conversation_id,contact_name,contact_phone,scheduled_date,scheduled_time,advogada,lembrete_enviado")
         .eq("status", "agendado")
         .gte("scheduled_date", date.today().isoformat())
         .execute()
@@ -318,6 +318,42 @@ def marcar_lembrete_enviado(agendamento_id: int):
         "lembrete_enviado": True,
         "updated_at": "now()",
     }).eq("id", agendamento_id).execute()
+
+
+def houve_reagendamento_na_conversa(account_id: int, conversation_id: int) -> bool:
+    """Retorna True se a conversa já tem agendamento(s) cancelado(s) — sinal de reagendamento.
+
+    Quando há reagendamento, o evento antigo permanece no Google Calendar (n8n nao deleta),
+    entao consultar o calendar daria falso-positivo. Usado pelo lembrete para decidir se
+    confia no DB ou confirma o evento na agenda.
+    """
+    db = get_db()
+    try:
+        resp = (
+            db.table("ia_agendamentos")
+            .select("id")
+            .eq("account_id", account_id)
+            .eq("conversation_id", conversation_id)
+            .eq("status", "cancelado")
+            .limit(1)
+            .execute()
+        )
+        return bool(resp.data)
+    except Exception:
+        return False
+
+
+def cancelar_agendamento_por_id(agendamento_id: int) -> bool:
+    """Marca um agendamento específico como 'cancelado' (uso: lembrete não localizou no calendar)."""
+    db = get_db()
+    try:
+        db.table("ia_agendamentos").update({
+            "status": "cancelado",
+            "updated_at": "now()",
+        }).eq("id", agendamento_id).execute()
+        return True
+    except Exception:
+        return False
 
 
 # ── TRANSCRIÇÕES ──────────────────────────────────────────────

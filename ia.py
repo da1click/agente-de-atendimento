@@ -914,6 +914,72 @@ WEBHOOK_CONSULTAR_AGENDA = "https://flow.advbrasil.ai/webhook/consultar-agenda"
 WEBHOOK_AGENDAR = "https://flow.advbrasil.ai/webhook/agendar"
 
 
+async def confirmar_evento_no_calendar(
+    config: dict,
+    scheduled_date: str,
+    scheduled_time: str,
+    advogada: str,
+    contact_name: str = "",
+) -> bool | None:
+    """Verifica se existe evento no Google Calendar batendo com o agendamento.
+
+    Retorna:
+        True  → evento localizado (lembrete deve ser enviado)
+        False → nenhum evento naquele horário (agendamento sumiu da agenda)
+        None  → não foi possível verificar (falha de rede/config) — chamador deve fail-open
+    """
+    email_agenda = config.get("email_agenda", "")
+    if not email_agenda:
+        return None
+
+    hhmm = (scheduled_time or "")[:5]
+    if not scheduled_date or not hhmm:
+        return None
+
+    payload = {
+        "email_agenda": email_agenda,
+        "horas_inicial_busca": 0,
+        "quantidade_dias_a_buscar": 14,
+        "duracao_agendamento": 30,
+        "disponibilidade": {"0": [], "1": [], "2": [], "3": [], "4": [], "5": [], "6": []},
+        "especialidade": "",
+    }
+
+    try:
+        async with httpx.AsyncClient() as http:
+            resp = await http.post(WEBHOOK_CONSULTAR_AGENDA, json=payload, timeout=30)
+            resp.raise_for_status()
+            events = resp.json()
+    except Exception as e:
+        logger.warning(f"[agenda] Falha ao consultar calendar para confirmar evento: {e}")
+        return None
+
+    if not events or (len(events) == 1 and not events[0]):
+        events = []
+
+    target_prefix = f"{scheduled_date}T{hhmm}"
+    adv_lower = (advogada or "").lower().strip()
+    contact_lower = (contact_name or "").lower().strip()
+
+    encontrou_no_horario = False
+    for ev in events:
+        start_raw = ev.get("start", {})
+        start_str = start_raw.get("dateTime", "") if isinstance(start_raw, dict) else ""
+        if not start_str or not start_str.startswith(target_prefix):
+            continue
+        encontrou_no_horario = True
+        description = (ev.get("description") or "").lower()
+        summary = (ev.get("summary") or "").lower()
+        if (contact_lower and contact_lower in summary) or (adv_lower and adv_lower in description):
+            return True
+
+    # Achou evento(s) no mesmo horário mas sem match de nome — assume que é o nosso (lenient).
+    if encontrou_no_horario:
+        return True
+
+    return False
+
+
 async def consultar_agenda_real(config: dict, especialidade: str = "") -> list:
     """Consulta horários disponíveis: busca eventos do Google Calendar via n8n e calcula slots livres."""
     account_id = config["account_id"]
