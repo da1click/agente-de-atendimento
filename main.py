@@ -1612,20 +1612,6 @@ async def chatwoot_webhook(request: Request):
                         except Exception as e:
                             logger.warning(f"[race-condition] Erro ao força-atribuir IA (null) — conv={conversation_id}: {e}")
 
-                    # Caso 2: outra pessoa atribuída (automação do Chatwoot atribuiu Camila etc.).
-                    # Forçar apenas nas contas com automação conhecida, somente no 1º contato.
-                    elif last_rc_assignee_id != ia_agent_id and account_id in (8, 17, 19) and msgs_count <= 1:
-                        try:
-                            async with httpx.AsyncClient(timeout=10) as hc:
-                                r = await hc.post(assign_url, headers={"api_access_token": chatwoot_token_rc, "Content-Type": "application/json"}, json={"assignee_id": ia_agent_id})
-                                if r.is_success:
-                                    assignee_id = ia_agent_id
-                                    ia_ativa = True
-                                    logger.info(f"[race-condition] IA força-atribuída no primeiro contato (conta {account_id}) — conv={conversation_id}")
-                                else:
-                                    logger.warning(f"[race-condition] Falha ao força-atribuir IA: {r.status_code} — conv={conversation_id}")
-                        except Exception as e:
-                            logger.warning(f"[race-condition] Erro ao força-atribuir IA — conv={conversation_id}: {e}")
                     else:
                         logger.info(f"[race-condition] Não forçar atribuição — assignee={last_rc_assignee_id}, msgs={msgs_count}, account={account_id} — conv={conversation_id}")
 
