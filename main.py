@@ -1564,8 +1564,6 @@ async def chatwoot_webhook(request: Request):
 
         # Race condition: se assignee_id é None ou diferente, pode ser que a atribuição
         # ainda não chegou. Aguardar e re-checar via API (2 tentativas com intervalo crescente).
-        # Se após os retries a IA ainda não estiver atribuída, forçar a atribuição —
-        # evita que automações do Chatwoot (ex: "Assign to Camila") bloqueiem a IA permanentemente.
         ia_config_ok = (modo_teste and "ia-teste" in conv_labels) or config.get("ia_ativa", True)
         if not ia_ativa and ia_config_ok and ia_agent_id is not None and inbox_permitido and conversation_id:
             if assignee_id is None or assignee_id != ia_agent_id:
@@ -1588,23 +1586,6 @@ async def chatwoot_webhook(request: Request):
                                     break
                                 else:
                                     logger.info(f"[race-condition] Tentativa {tentativa}: assignee={rc_assignee_id} != ia_agent={ia_agent_id} — conv={conversation_id}")
-                    except Exception as e:
-                        logger.warning(f"[race-condition] Erro tentativa {tentativa} — conv={conversation_id}: {e}")
-
-                # Retries esgotados e IA ainda não atribuída: forçar atribuição ao agente IA
-                if not ia_ativa:
-                    try:
-                        assign_url = f"{chatwoot_url_rc}/api/v1/accounts/{account_id}/conversations/{conversation_id}/assignments"
-                        async with httpx.AsyncClient(timeout=10) as hc:
-                            r = await hc.post(assign_url, headers={"api_access_token": chatwoot_token_rc, "Content-Type": "application/json"}, json={"assignee_id": ia_agent_id})
-                            if r.is_success:
-                                assignee_id = ia_agent_id
-                                ia_ativa = True
-                                logger.info(f"[race-condition] IA força-atribuída após retries esgotados — conv={conversation_id}")
-                            else:
-                                logger.warning(f"[race-condition] Falha ao força-atribuir IA: {r.status_code} — conv={conversation_id}")
-                    except Exception as e:
-                        logger.warning(f"[race-condition] Erro ao força-atribuir IA — conv={conversation_id}: {e}")
 
         # Registrar lead no Supabase (sempre — independente da IA)
         try:
