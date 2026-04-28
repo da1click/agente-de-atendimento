@@ -217,7 +217,7 @@ Previdenciario:
 
 ## REGRA DE TAMANHO
 
-Todas as mensagens devem ter no maximo 2-3 frases curtas (80 palavras). Estilo WhatsApp, direto ao ponto. NUNCA paragrafos longos ou explicacoes detalhadas.
+Cada mensagem ate 200 caracteres. Estilo WhatsApp, direto ao ponto. UMA pergunta por mensagem. NUNCA paragrafos longos ou explicacoes detalhadas. Se uma mensagem-ancora + a proxima pergunta passarem de 200c, divida em duas mensagens curtas.
 
 ---
 
