@@ -46,6 +46,9 @@ COBRANCA_INTERVALO_HORAS = 12
 COBRANCA_LIMITE_PADRAO = 5
 LOOP_INTERVALO_SEGUNDOS = 300  # 5 min
 
+# Nome do template WhatsApp usado quando a janela de 24h está fechada
+COBRANCA_TEMPLATE_PADRAO = "cobranca_documentos_v1"
+
 # 3 mensagens variantes — alternadas conforme o número da tentativa
 _MENSAGENS_VARIANTES: list[str] = [
     (
@@ -178,10 +181,63 @@ async def _desativar_sem_label():
             logger.info(f"[cobranca-docs] Desativada (label removida) conv={conv_id} account={account_id}")
 
 
+async def _janela_aberta(chatwoot_url: str, token: str, account_id: int, conversation_id: int) -> bool:
+    """Retorna True se o cliente enviou mensagem nas últimas 24h (janela WhatsApp aberta)."""
+    url = f"{chatwoot_url}/api/v1/accounts/{account_id}/conversations/{conversation_id}/messages"
+    try:
+        async with httpx.AsyncClient(timeout=15) as http:
+            resp = await http.get(url, headers={"api_access_token": token})
+            if not resp.is_success:
+                return True  # fail-open: prefere enviar texto a falhar silenciosamente
+            msgs = resp.json().get("payload", []) or []
+        limite_24h = datetime.now(timezone.utc) - timedelta(hours=24)
+        for m in reversed(msgs):
+            if m.get("message_type") == 0:  # incoming — mensagem do cliente
+                ts = m.get("created_at") or 0
+                dt = datetime.fromtimestamp(ts, tz=timezone.utc)
+                return dt >= limite_24h
+        return False  # nenhuma mensagem do cliente encontrada → janela fechada
+    except Exception:
+        return True  # fail-open
+
+
+async def _enviar_template_cobranca(
+    chatwoot_url: str, token: str, account_id: int, conversation_id: int, template_name: str
+) -> None:
+    """Envia template WhatsApp via Chatwoot e posta nota privada com conteúdo."""
+    url = f"{chatwoot_url}/api/v1/accounts/{account_id}/conversations/{conversation_id}/messages"
+    payload = {
+        "message_type": "outgoing",
+        "private": False,
+        "template_params": {
+            "name": template_name,
+            "language": "pt_BR",
+            "processed_params": {},
+        },
+    }
+    async with httpx.AsyncClient(timeout=15) as http:
+        resp = await http.post(
+            url,
+            headers={"api_access_token": token, "Content-Type": "application/json"},
+            json=payload,
+        )
+        resp.raise_for_status()
+    try:
+        from inatividade import _buscar_conteudo_template, _enviar_nota_privada
+        conteudo = await _buscar_conteudo_template(account_id, template_name)
+        nota = f"📎 Template enviado: *{template_name}*"
+        if conteudo:
+            nota += f"\n\n{conteudo}"
+        await _enviar_nota_privada(chatwoot_url, token, account_id, conversation_id, nota)
+    except Exception as e:
+        logger.debug(f"[cobranca-docs] Falha ao postar nota privada do template: {e}")
+
+
 async def _disparar_cobrancas():
-    """Envia cobranças pendentes."""
+    """Envia cobranças pendentes. Se janela WhatsApp 24h aberta → texto; se fechada → template."""
     from main import carregar_config_cliente
     from ia import enviar_parte_chatwoot
+    from inatividade import _get_inbox_channel_type
 
     pendentes = listar_cobrancas_docs_pendentes()
     if not pendentes:
@@ -201,16 +257,42 @@ async def _disparar_cobrancas():
             desativar_cobranca_docs(account_id, conv_id, motivo="limite_atingido")
             logger.info(f"[cobranca-docs] Limite atingido — conv={conv_id} account={account_id}")
             continue
-        nome = (row.get("contact_name") or "").split()[0] if row.get("contact_name") else ""
-        template = _MENSAGENS_VARIANTES[tentativas % len(_MENSAGENS_VARIANTES)]
-        mensagem = template.replace("{nome}", nome or "").replace("  ", " ").strip()
-        if mensagem.startswith(", "):
-            mensagem = mensagem[2:]
 
+        nome = (row.get("contact_name") or "").split()[0] if row.get("contact_name") else ""
         chatwoot_url = (config.get("chatwoot_url") or "").rstrip("/")
         token = config.get("chatwoot_token", "")
+        inbox_id = row.get("inbox_id")
+
+        # Detectar se é WhatsApp Oficial e se a janela de 24h está aberta
+        usar_template = False
+        if inbox_id:
+            try:
+                channel_type = await _get_inbox_channel_type(config, inbox_id)
+                is_whatsapp_oficial = "whatsapp" in (channel_type or "").lower()
+                if is_whatsapp_oficial:
+                    janela_ok = await _janela_aberta(chatwoot_url, token, account_id, conv_id)
+                    usar_template = not janela_ok
+            except Exception as e:
+                logger.warning(f"[cobranca-docs] Erro ao checar canal/janela conv={conv_id}: {e}")
+
         try:
-            await enviar_parte_chatwoot(chatwoot_url, token, account_id, conv_id, mensagem)
+            if usar_template:
+                template_name = COBRANCA_TEMPLATE_PADRAO
+                await _enviar_template_cobranca(chatwoot_url, token, account_id, conv_id, template_name)
+                logger.info(
+                    f"[cobranca-docs] Template '{template_name}' enviado (janela fechada) — "
+                    f"conv={conv_id} tentativa={tentativas + 1}/{limite}"
+                )
+            else:
+                variante = _MENSAGENS_VARIANTES[tentativas % len(_MENSAGENS_VARIANTES)]
+                mensagem = variante.replace("{nome}", nome or "").replace("  ", " ").strip()
+                if mensagem.startswith(", "):
+                    mensagem = mensagem[2:]
+                await enviar_parte_chatwoot(chatwoot_url, token, account_id, conv_id, mensagem)
+                logger.info(
+                    f"[cobranca-docs] Mensagem enviada (janela aberta) — "
+                    f"conv={conv_id} tentativa={tentativas + 1}/{limite}"
+                )
         except Exception as e:
             logger.warning(f"[cobranca-docs] Erro ao enviar cobrança conv={conv_id}: {e}")
             continue
