@@ -1348,22 +1348,20 @@ async def chatwoot_webhook(request: Request):
         conversation_id_upd = conv_upd.get("id")
         inbox_id_upd = conv_upd.get("inbox_id")
 
-        # Guard: só processar se assignee mudou OU conversa criada < 10 min
+        # Guard: só processar se changed_attributes indica mudança de assignee
+        # NÃO usar conversa_nova como fallback — causa loop (IA responde → conversation_updated → IA responde...)
         changed = payload.get("changed_attributes") or []
         assignee_mudou = any(
             "assignee" in str(attr) for attr in changed
         ) if changed else False
-        conv_criada_em = conv_upd.get("created_at") or 0
-        conversa_nova = ((_time.time() - conv_criada_em) < 600) if conv_criada_em else False
 
         logger.info(
             f"[conv-updated] event recebido — conv={conversation_id_upd} account={account_id_upd} "
-            f"assignee_mudou={assignee_mudou} conversa_nova={conversa_nova} "
-            f"created_at={conv_criada_em} changed={changed}"
+            f"assignee_mudou={assignee_mudou} changed={changed}"
         )
 
-        if not assignee_mudou and not conversa_nova:
-            return {"status": "ignorado", "event": event, "motivo": "sem mudança de assignee e conversa antiga"}
+        if not assignee_mudou:
+            return {"status": "ignorado", "event": event, "motivo": "changed_attributes sem mudança de assignee"}
 
         if not account_id_upd or not conversation_id_upd:
             return {"status": "ignorado", "event": event}
