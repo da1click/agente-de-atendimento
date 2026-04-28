@@ -866,11 +866,12 @@ async def kanban_mover_card(url: str, token: str, account_id: int, conversation_
                         break
 
             if item_existente and step_atual != step_id:
-                # Mover card para nova etapa
+                # Mover card para nova etapa — formato sem wrapper conforme
+                # doc oficial advbrasil.ai (chatwoot-kanban-api-curls.txt).
                 resp_move = await http.put(
                     f"{url}/api/v1/accounts/{account_id}/funnels/{funnel_id}/funnel_steps/{step_atual}/funnel_items/{item_existente['id']}/update_step",
                     headers=headers,
-                    json={"funnel_item": {"funnel_step_id": step_id}},
+                    json={"funnel_step_id": step_id},
                     timeout=10
                 )
                 if resp_move.is_success:

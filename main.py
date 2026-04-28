@@ -3145,10 +3145,11 @@ async def reconciliar_kanban_por_label(account_id: int, dry_run: bool = True, mi
 
             try:
                 if item_existente and step_atual != step_id_alvo:
+                    # Sem wrapper conforme doc oficial advbrasil.ai.
                     rr = await http.put(
                         f"{base}/api/v1/accounts/{account_id}/funnels/{funnel_id}/funnel_steps/{step_atual}/funnel_items/{item_existente['id']}/update_step",
                         headers={"api_access_token": token, "Content-Type": "application/json"},
-                        json={"funnel_item": {"funnel_step_id": step_id_alvo}},
+                        json={"funnel_step_id": step_id_alvo},
                     )
                     item_plano["acao"] = "movido" if rr.is_success else f"erro_mover_{rr.status_code}"
                 elif item_existente:
