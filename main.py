@@ -3928,6 +3928,59 @@ async def diagnostico_cobranca_docs(account_id: int):
     }
 
 
+@app.get("/api/admin/agenda/diagnostico/{account_id}")
+async def diagnostico_agenda(account_id: int):
+    """Diagnóstico do fluxo de agendamento: verifica config, advogados e consulta slots reais."""
+    from ia import consultar_agenda_real
+    from db import listar_advogados_por_especialidade
+
+    config = carregar_config_cliente(account_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+
+    email_agenda = config.get("email_agenda", "")
+    especialidade = config.get("especialidade", "")
+    advogados = listar_advogados_por_especialidade(account_id, especialidade) or listar_advogados_por_especialidade(account_id, "")
+
+    slots = []
+    erro_slots = None
+    if email_agenda:
+        try:
+            slots = await consultar_agenda_real(config, especialidade)
+        except Exception as e:
+            erro_slots = str(e)
+
+    return {
+        "account_id": account_id,
+        "nome": config.get("nome", ""),
+        "ia_ativa": config.get("ia_ativa", True),
+        "email_agenda": email_agenda or "(não configurado)",
+        "especialidade": especialidade or "(não configurada)",
+        "quantidade_dias_a_buscar": config.get("quantidade_dias_a_buscar", 14),
+        "advogados_ativos": [
+            {
+                "id": str(a.get("id")),
+                "nome": a.get("nome"),
+                "especialidade": a.get("especialidade"),
+                "duracao": a.get("duracao_agendamento"),
+                "disponibilidade_dias": [d for d, h in (a.get("disponibilidade") or {}).items() if h],
+            }
+            for a in advogados
+        ],
+        "slots": {
+            "erro": erro_slots,
+            "total_advogados_com_slots": len(slots),
+            "amostra": [
+                {
+                    "advogado": s.get("nome"),
+                    "primeiros_slots": (s.get("slots") or [])[:3],
+                }
+                for s in slots
+            ],
+        },
+    }
+
+
 @app.get("/api/admin/inatividade/diagnostico/{account_id}")
 async def diagnostico_inatividade_conta(account_id: int):
     """Diagnóstico de follow-up/inatividade de uma conta.
