@@ -2710,6 +2710,59 @@ async def buscar_inboxes_direto(request: Request):
     return data.get("payload", data)
 
 
+@app.post("/api/clientes/{account_id}/sync-inboxes")
+async def sync_inboxes_conta(account_id: int, exclude_pattern: str | None = None):
+    """Sincroniza o array `inboxes` da config da conta com TODAS as inboxes
+    ativas no Chatwoot. Util para contas que tinham apenas 1 inbox cadastrada
+    e ganharam mais depois (a IA so atuava na inbox antiga).
+
+    Query param opcional `exclude_pattern`: regex case-insensitive aplicado ao
+    nome da inbox para excluir (ex: "desabilitad|disabled|teste").
+    """
+    import re
+    config = carregar_config_cliente(account_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    chatwoot_url = (config.get("chatwoot_url") or "").strip().rstrip("/")
+    chatwoot_token = (config.get("chatwoot_token") or "").strip()
+    if not chatwoot_url or not chatwoot_token:
+        raise HTTPException(status_code=400, detail="chatwoot_url e chatwoot_token não configurados")
+
+    pattern = re.compile(exclude_pattern, re.IGNORECASE) if exclude_pattern else None
+    async with httpx.AsyncClient(timeout=15) as http:
+        r = await http.get(f"{chatwoot_url}/api/v1/accounts/{account_id}/inboxes",
+                           headers={"api_access_token": chatwoot_token})
+        if not r.is_success:
+            raise HTTPException(status_code=r.status_code, detail=f"Chatwoot retornou {r.status_code}")
+        payload = r.json().get("payload", r.json()) or []
+
+    detalhes = []
+    inboxes_novas = []
+    for ib in payload:
+        ib_id = ib.get("id")
+        nome = ib.get("name", "")
+        excluida = bool(pattern and pattern.search(nome))
+        detalhes.append({
+            "id": ib_id, "name": nome, "channel_type": ib.get("channel_type"),
+            "incluida": not excluida, "motivo_exclusao": "match exclude_pattern" if excluida else None,
+        })
+        if not excluida and ib_id is not None:
+            inboxes_novas.append(int(ib_id))
+
+    inboxes_antigas = [int(x) for x in (config.get("inboxes") or [])]
+    config["inboxes"] = inboxes_novas
+    salvar_config_cliente(account_id, config)
+    return {
+        "status": "ok",
+        "account_id": account_id,
+        "inboxes_anteriores": inboxes_antigas,
+        "inboxes_atuais": inboxes_novas,
+        "adicionadas": [i for i in inboxes_novas if i not in inboxes_antigas],
+        "removidas": [i for i in inboxes_antigas if i not in inboxes_novas],
+        "detalhes": detalhes,
+    }
+
+
 @app.post("/api/clientes/{account_id}/recriar-funis")
 async def recriar_funis_conta(account_id: int):
     """Recria os funis (kanban) padrão em uma conta existente."""

@@ -1647,6 +1647,22 @@ async function carregarFormConta(id) {
         </div>
       </div>
 
+      <!-- ── INBOXES MONITORADAS PELA IA ── -->
+      <div class="section-divider">Inboxes Monitoradas pela IA</div>
+      <div class="fields-grid">
+        <div class="field-group full">
+          <label>Caixas de entrada onde a IA atua ${_tag(inboxItems.length, 'inboxes')}</label>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+            <button type="button" class="btn btn-secondary" style="font-size:11px;padding:4px 10px;" onclick="_selectAllInboxes(true)">Selecionar todas</button>
+            <button type="button" class="btn btn-secondary" style="font-size:11px;padding:4px 10px;" onclick="_selectAllInboxes(false)">Desmarcar todas</button>
+          </div>
+          <div id="f-inboxes-list" style="max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:8px 10px;background:var(--bg-card);">
+            ${_buildInboxCheckboxes(inboxItems, v('inboxes', []))}
+          </div>
+          <span class="field-hint">A IA (e o Kanban) só atua nas inboxes marcadas. Se nenhuma marcada, atua em todas (legacy).</span>
+        </div>
+      </div>
+
       <!-- ── OPENAI ── -->
       <div class="section-divider">OpenAI</div>
       <div class="fields-grid">
@@ -1892,6 +1908,28 @@ function _buildSelect(id, items, currentVal, placeholder) {
   return `<select id="${id}">${opts}</select>`;
 }
 
+function _buildInboxCheckboxes(items, currentArr) {
+  if (!items || !items.length) {
+    return '<span style="font-size:12px;color:var(--text-muted);">Nenhuma inbox encontrada — preencha URL e Token acima e clique em Buscar Inboxes.</span>';
+  }
+  const checked = new Set((currentArr || []).map(x => Number(x)));
+  return items.map(it => {
+    const isChecked = checked.has(Number(it.id));
+    return `<label style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px;cursor:pointer;">
+      <input type="checkbox" class="f-inbox-chk" value="${it.id}" ${isChecked ? 'checked' : ''} />
+      <span>${it.label}</span>
+    </label>`;
+  }).join('');
+}
+
+function _selectAllInboxes(check) {
+  document.querySelectorAll('.f-inbox-chk').forEach(c => c.checked = !!check);
+}
+
+function _getInboxesSelected() {
+  return [...document.querySelectorAll('.f-inbox-chk:checked')].map(c => parseInt(c.value));
+}
+
 // ── SCHEDULE WIDGET ──────────────────────────────────────────
 const _DIAS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
@@ -1966,6 +2004,7 @@ async function salvarConta(id) {
     ia_agent_id:                _intOrNull(document.getElementById('f-ia-agent-id').value),
     team_id:                    _intOrNull(document.getElementById('f-team-id').value),
     inbox_id:                   _intOrNull(document.getElementById('f-inbox-id').value),
+    inboxes:                    _getInboxesSelected(),
     email_agenda:               document.getElementById('f-email-agenda').value.trim(),
     quantidade_dias_a_buscar:   _intOrNull(document.getElementById('f-qtd-dias').value),
     especialidade:              document.getElementById('f-especialidade').value.trim(),
