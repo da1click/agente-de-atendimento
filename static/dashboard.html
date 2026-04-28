@@ -2901,9 +2901,15 @@ function _renderLembretesUI() {
       </div>
       <div style="display:flex;flex-direction:column;gap:2px;">
         <span style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;">Template WhatsApp (API Oficial)</span>
-        <input type="text" id="lembrete-tpl-${i}" value="${l.template_whatsapp || ''}"
+        ${_inativTemplates.length > 0
+          ? `<select id="lembrete-tpl-${i}" style="padding:6px 8px;font-size:12px;border-radius:6px;border:1px solid var(--border);">
+              <option value="">— nenhum (usar texto livre) —</option>
+              ${_inativTemplates.map(t => `<option value="${t.name}" ${t.name === (l.template_whatsapp||'') ? 'selected' : ''}>${t.name}</option>`).join('')}
+            </select>`
+          : `<input type="text" id="lembrete-tpl-${i}" value="${l.template_whatsapp || ''}"
                placeholder="nome_do_template (deixe vazio se não usar API Oficial)"
-               style="padding:6px 8px;font-size:12px;border-radius:6px;border:1px solid var(--border);" />
+               style="padding:6px 8px;font-size:12px;border-radius:6px;border:1px solid var(--border);" />`
+        }
         <span style="font-size:10px;color:var(--text-muted);">Variáveis do template: {{1}}=nome · {{2}}=horário · {{3}}=data · {{4}}=advogado(a)</span>
       </div>
     </div>
@@ -2965,7 +2971,14 @@ async function renderPageLembretes() {
   }
   document.getElementById('topbar-sub').textContent = `Lembretes de Consulta — Conta #${clienteAtivo}`;
   el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:20px 0;">Carregando...</div>';
-  const res = await fetch(`/api/config/lembretes-consulta?account_id=${clienteAtivo}`);
+  // Carregar config e templates em paralelo
+  const [res] = await Promise.all([
+    fetch(`/api/config/lembretes-consulta?account_id=${clienteAtivo}`),
+    _inativTemplates.length === 0 ? fetch(`/api/clientes/${clienteAtivo}/templates`)
+      .then(r => r.ok ? r.json() : {})
+      .then(d => { _inativTemplates = (d.data || []).filter(t => t.status === 'APPROVED'); })
+      .catch(() => {}) : Promise.resolve(),
+  ]);
   _lembretesCfg = await res.json();
   _renderLembretesUI();
 }
