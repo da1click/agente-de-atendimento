@@ -1569,8 +1569,6 @@ async def chatwoot_webhook(request: Request):
             if assignee_id is None or assignee_id != ia_agent_id:
                 chatwoot_url_rc = config["chatwoot_url"].rstrip("/")
                 chatwoot_token_rc = config["chatwoot_token"]
-                last_rc_json = None
-                last_rc_assignee_id = assignee_id  # guardar o que havia antes das tentativas
                 for tentativa, espera in enumerate([5, 10], 1):
                     try:
                         await asyncio.sleep(espera)
@@ -1579,10 +1577,8 @@ async def chatwoot_webhook(request: Request):
                             resp_rc = await hc.get(url_rc, headers={"api_access_token": chatwoot_token_rc})
                             if resp_rc.is_success:
                                 rc_json = resp_rc.json()
-                                last_rc_json = rc_json
                                 rc_assignee = rc_json.get("meta", {}).get("assignee") or rc_json.get("assignee")
                                 rc_assignee_id = rc_assignee.get("id") if isinstance(rc_assignee, dict) else None
-                                last_rc_assignee_id = rc_assignee_id
                                 if rc_assignee_id == ia_agent_id:
                                     assignee_id = rc_assignee_id
                                     ia_ativa = True
@@ -1592,28 +1588,6 @@ async def chatwoot_webhook(request: Request):
                                     logger.info(f"[race-condition] Tentativa {tentativa}: assignee={rc_assignee_id} != ia_agent={ia_agent_id} — conv={conversation_id}")
                     except Exception as e:
                         logger.warning(f"[race-condition] Erro tentativa {tentativa} — conv={conversation_id}: {e}")
-
-                if not ia_ativa and last_rc_json is not None:
-                    msgs_count = last_rc_json.get("messages_count", 99)
-                    assign_url = f"{chatwoot_url_rc}/api/v1/accounts/{account_id}/conversations/{conversation_id}/assignments"
-
-                    # Caso 1: assignee ainda None após as tentativas → automação ainda não rodou.
-                    # Inbox configurada = conversa destinada à IA. Forçar para todas as contas.
-                    if last_rc_assignee_id is None and msgs_count <= 2:
-                        try:
-                            async with httpx.AsyncClient(timeout=10) as hc:
-                                r = await hc.post(assign_url, headers={"api_access_token": chatwoot_token_rc, "Content-Type": "application/json"}, json={"assignee_id": ia_agent_id})
-                                if r.is_success:
-                                    assignee_id = ia_agent_id
-                                    ia_ativa = True
-                                    logger.info(f"[race-condition] IA força-atribuída (assignee null, inbox configurada) — conv={conversation_id} account={account_id}")
-                                else:
-                                    logger.warning(f"[race-condition] Falha ao força-atribuir IA (null): {r.status_code} — conv={conversation_id}")
-                        except Exception as e:
-                            logger.warning(f"[race-condition] Erro ao força-atribuir IA (null) — conv={conversation_id}: {e}")
-
-                    else:
-                        logger.info(f"[race-condition] Não forçar atribuição — assignee={last_rc_assignee_id}, msgs={msgs_count}, account={account_id} — conv={conversation_id}")
 
         # Registrar lead no Supabase (sempre — independente da IA)
         try:
