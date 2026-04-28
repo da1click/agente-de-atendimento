@@ -447,19 +447,53 @@ async def executar_tool(nome: str, args: dict, config: dict, conversation_id: in
                     "status": "bloqueado",
                     "motivo": "Qualificacao minima incompleta (menos de 5 mensagens do cliente). Continue perguntando sobre o caso, sequela, laudo e profissao. NAO acione TransferHuman sem confirmar os dados basicos."
                 })
-        # Roteamento especial conta 1 (Matsuda): advogado da reclamada / representante / dono
-        # Atribui direto para Dra. Fernanda (agente 6) e notifica o grupo de novos leads.
+        # Roteamento especial conta 1 (Matsuda)
         motivo_txt = (args.get("motivo", "") or "").lower()
-        routing_especial_conta1 = account_id == 1 and any(
+
+        # Dra. Christina Matias (agente 76) — andamento/acompanhamento processual
+        routing_christina = account_id == 1 and any(
+            chave in motivo_txt for chave in [
+                "andamento processual", "acompanhamento processual",
+                "consulta processual", "dra. christina", "dra christina",
+            ]
+        )
+
+        # Dra. Fernanda Matsuda (agente 6) — advogado da reclamada, acordo, empresa
+        routing_fernanda = account_id == 1 and not routing_christina and any(
             chave in motivo_txt for chave in [
                 "advogado da reclamada", "advogada da reclamada",
                 "representante da empresa", "representante legal",
                 "dono da empresa", "dona da empresa",
                 "socio da empresa", "sócia da empresa", "socia da empresa",
                 "preposto", "dra. fernanda", "dra fernanda",
+                "acordo", "adv reclamada",
             ]
         )
-        if routing_especial_conta1:
+
+        routing_especial_conta1 = routing_christina or routing_fernanda
+
+        if routing_christina:
+            await chatwoot_transferir_humano(
+                chatwoot_url, chatwoot_token, account_id, conversation_id,
+                motivo=f"tool:TransferHuman — {args.get('motivo','')}",
+                assignee_id=76,
+            )
+            try:
+                notif_conv_id = config.get("id_notificacao_convertido")
+                if notif_conv_id:
+                    msg_notif = (
+                        f"📂 ANDAMENTO PROCESSUAL\n\n"
+                        f"Nome: {contact_name}\n"
+                        f"Número: {contact_phone}\n"
+                        f"Motivo: {args.get('motivo','')}\n"
+                        f"Atribuído a: Dra. Christina Matias (agente 76)\n"
+                        f"Conversa: {conversation_id}"
+                    )
+                    await _enviar_notificacao(config, account_id, int(notif_conv_id), msg_notif)
+                    logger.info(f"[notificação] Andamento processual notificado no grupo — conv={conversation_id}")
+            except Exception as e:
+                logger.warning(f"[notificação] Erro ao notificar andamento processual — conv={conversation_id}: {e}")
+        elif routing_fernanda:
             await chatwoot_transferir_humano(
                 chatwoot_url, chatwoot_token, account_id, conversation_id,
                 motivo=f"tool:TransferHuman — {args.get('motivo','')}",
@@ -469,17 +503,17 @@ async def executar_tool(nome: str, args: dict, config: dict, conversation_id: in
                 notif_conv_id = config.get("id_notificacao_convertido")
                 if notif_conv_id:
                     msg_notif = (
-                        f"⚖️ ADVOGADO/REPRESENTANTE DA EMPRESA\n\n"
+                        f"⚖️ ADVOGADO/REPRESENTANTE/ACORDO\n\n"
                         f"Nome: {contact_name}\n"
                         f"Número: {contact_phone}\n"
                         f"Motivo: {args.get('motivo','')}\n"
-                        f"Atribuído a: Dra. Fernanda (agente 6)\n"
+                        f"Atribuído a: Dra. Fernanda Matsuda (agente 6)\n"
                         f"Conversa: {conversation_id}"
                     )
                     await _enviar_notificacao(config, account_id, int(notif_conv_id), msg_notif)
-                    logger.info(f"[notificação] Advogado/representante notificado no grupo novos leads — conv={conversation_id}")
+                    logger.info(f"[notificação] Advogado/representante/acordo notificado no grupo — conv={conversation_id}")
             except Exception as e:
-                logger.warning(f"[notificação] Erro ao notificar advogado/representante — conv={conversation_id}: {e}")
+                logger.warning(f"[notificação] Erro ao notificar advogado/representante/acordo — conv={conversation_id}: {e}")
         else:
             await chatwoot_transferir_humano(chatwoot_url, chatwoot_token, account_id, conversation_id, motivo=f"tool:TransferHuman — {args.get('motivo','')}")
         try:
