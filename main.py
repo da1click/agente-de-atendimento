@@ -2803,6 +2803,32 @@ async def buscar_texto_em_cards(account_id: int, texto: str, limite: int = 200):
     return {"account_id": account_id, "texto_buscado": texto, "cards_checados": checados, "achados": achados}
 
 
+@app.post("/api/admin/processar-conversa/{account_id}/{conversation_id}")
+async def admin_processar_conversa(account_id: int, conversation_id: int):
+    """Dispara manualmente o processamento da IA para uma conversa específica."""
+    config = carregar_config_cliente(account_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    if not config.get("ia_ativa", True) or not config.get("ia_agent_id"):
+        raise HTTPException(status_code=400, detail="IA não configurada para esta conta")
+    # Buscar inbox_id da conversa
+    inbox_id = None
+    try:
+        base = config["chatwoot_url"].rstrip("/")
+        async with httpx.AsyncClient(timeout=10) as http:
+            rc = await http.get(
+                f"{base}/api/v1/accounts/{account_id}/conversations/{conversation_id}",
+                headers={"api_access_token": config["chatwoot_token"]},
+            )
+            if rc.is_success:
+                inbox_id = rc.json().get("inbox_id")
+    except Exception:
+        pass
+    agendar_processamento(config, account_id, conversation_id, inbox_id)
+    logger.info(f"[admin] Processamento manual disparado — conv={conversation_id} account={account_id}")
+    return {"status": "agendado", "conversation_id": conversation_id, "account_id": account_id}
+
+
 @app.get("/api/admin/debug-conv/{account_id}/{conversation_id}")
 async def debug_conversa(account_id: int, conversation_id: int):
     """Inspeciona uma conversa: detalhes + últimas 10 mensagens com sender e content.
