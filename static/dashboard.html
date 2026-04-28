@@ -1659,7 +1659,7 @@ async function carregarFormConta(id) {
           <div id="f-inboxes-list" style="max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:8px 10px;background:var(--bg-card);">
             ${_buildInboxCheckboxes(inboxItems, v('inboxes', []))}
           </div>
-          <span class="field-hint">A IA (e o Kanban) só atua nas inboxes marcadas. Se nenhuma marcada, atua em todas (legacy).</span>
+          <span class="field-hint">Esta seção controla onde a IA atua. <strong>Kanban e Agenda herdam automaticamente</strong> — a agenda agendará leads que chegarem em qualquer inbox marcada aqui. Se nenhuma marcada, atua em todas (legacy).</span>
         </div>
       </div>
 
@@ -1678,11 +1678,6 @@ async function carregarFormConta(id) {
       <!-- ── AGENDA ── -->
       <div class="section-divider">Agenda</div>
       <div class="fields-grid">
-        <div class="field-group">
-          <label>Inbox ${_tag(inboxItems.length, 'inboxes')}</label>
-          ${_buildSelect('f-inbox-id', inboxItems, v('inbox_id'), 'Selecione a inbox')}
-          <span class="field-hint">Inbox usada para agendamentos</span>
-        </div>
         <div class="field-group">
           <label>Email da Agenda (Google Calendar)</label>
           <input type="text" id="f-email-agenda" value="${v('email_agenda')}" placeholder="agenda@empresa.com" />
@@ -2003,7 +1998,6 @@ async function salvarConta(id) {
     openai_api_key:             document.getElementById('f-openai-key').value.trim(),
     ia_agent_id:                _intOrNull(document.getElementById('f-ia-agent-id').value),
     team_id:                    _intOrNull(document.getElementById('f-team-id').value),
-    inbox_id:                   _intOrNull(document.getElementById('f-inbox-id').value),
     inboxes:                    _getInboxesSelected(),
     email_agenda:               document.getElementById('f-email-agenda').value.trim(),
     quantidade_dias_a_buscar:   _intOrNull(document.getElementById('f-qtd-dias').value),
