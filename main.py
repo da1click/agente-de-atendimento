@@ -2884,12 +2884,18 @@ async def debug_conversa(account_id: int, conversation_id: int):
         })
 
     meta = conv.get("meta", {})
+    assignee_obj = meta.get("assignee") or {}
+    config_debug = carregar_config_cliente(account_id)
+    ia_agent_id_debug = config_debug.get("ia_agent_id") if config_debug else None
+    assignee_id_debug = assignee_obj.get("id")
     return {
         "conv_account_id": conv.get("account_id"),
         "conv_inbox_id": conv.get("inbox_id"),
-        "conv_assignee": (meta.get("assignee") or {}).get("name"),
-        "conv_assignee_email": (meta.get("assignee") or {}).get("email"),
-        "conv_assignee_account_id": (meta.get("assignee") or {}).get("account_id"),
+        "conv_assignee": assignee_obj.get("name"),
+        "conv_assignee_id": assignee_id_debug,
+        "conv_assignee_email": assignee_obj.get("email"),
+        "ia_agent_id_config": ia_agent_id_debug,
+        "assignee_eh_ia": assignee_id_debug == ia_agent_id_debug,
         "conv_sender_name": (meta.get("sender") or {}).get("name"),
         "conv_labels": conv.get("labels", []),
         "conv_status": conv.get("status"),
