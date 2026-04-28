@@ -2865,21 +2865,11 @@ async function carregarTemplatesInatividade() {
 // ══════════════════════════════════════════════
 let _lembretesCfg = null;
 
-async function renderPageLembretes() {
+function _renderLembretesUI() {
   const el = document.getElementById('page-content');
-  if (!clienteAtivo) {
-    document.getElementById('topbar-sub').textContent = 'Selecione uma conta';
-    el.innerHTML = `<div class="empty-state"><p>Selecione uma conta no menu acima</p></div>`;
-    return;
-  }
-  document.getElementById('topbar-sub').textContent = `Lembretes de Consulta — Conta #${clienteAtivo}`;
-  el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:20px 0;">Carregando...</div>';
-
-  const res = await fetch(`/api/config/lembretes-consulta?account_id=${clienteAtivo}`);
-  _lembretesCfg = await res.json();
-
-  const lembretes = _lembretesCfg.lembretes || [];
-  const ativo = _lembretesCfg.ativo !== false;
+  if (!el) return;
+  const lembretes = _lembretesCfg?.lembretes || [];
+  const ativo = _lembretesCfg?.ativo !== false;
 
   const stageColors = ['#f0fdf4','#fffbeb','#fff1f2','#f5f3ff','#eff6ff'];
   const stageBorder = ['#bbf7d0','#fde68a','#fecdd3','#ddd6fe','#bfdbfe'];
@@ -2906,8 +2896,15 @@ async function renderPageLembretes() {
         <button onclick="removerLembrete(${i})" style="margin-left:auto;background:none;border:none;cursor:pointer;color:#ef4444;font-size:16px;" title="Remover">✕</button>
       </div>
       <div style="display:flex;flex-direction:column;gap:2px;">
-        <span style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;">Mensagem</span>
-        <textarea id="lembrete-msg-${i}" rows="2" style="padding:8px;font-size:12px;resize:vertical;border-radius:6px;border:1px solid var(--border);">${l.mensagem}</textarea>
+        <span style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;">Mensagem (texto livre / não-oficial)</span>
+        <textarea id="lembrete-msg-${i}" rows="2" style="padding:8px;font-size:12px;resize:vertical;border-radius:6px;border:1px solid var(--border);">${l.mensagem || ''}</textarea>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:2px;">
+        <span style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;">Template WhatsApp (API Oficial)</span>
+        <input type="text" id="lembrete-tpl-${i}" value="${l.template_whatsapp || ''}"
+               placeholder="nome_do_template (deixe vazio se não usar API Oficial)"
+               style="padding:6px 8px;font-size:12px;border-radius:6px;border:1px solid var(--border);" />
+        <span style="font-size:10px;color:var(--text-muted);">Variáveis do template: {{1}}=nome · {{2}}=horário · {{3}}=data · {{4}}=advogado(a)</span>
       </div>
     </div>
   `).join('');
@@ -2938,7 +2935,7 @@ async function renderPageLembretes() {
         </button>
 
         <div style="margin-top:16px;padding:12px;background:#f8f9fb;border-radius:8px;font-size:12px;color:var(--text-muted);line-height:1.7;">
-          <strong style="color:var(--text-secondary);">Variáveis disponíveis:</strong><br>
+          <strong style="color:var(--text-secondary);">Variáveis disponíveis (mensagem texto):</strong><br>
           <code style="background:#e8e8ee;padding:1px 5px;border-radius:3px;">{nome}</code> — Primeiro nome do cliente<br>
           <code style="background:#e8e8ee;padding:1px 5px;border-radius:3px;">{advogada}</code> — Nome do advogado(a)<br>
           <code style="background:#e8e8ee;padding:1px 5px;border-radius:3px;">{horario}</code> — Horário da consulta<br>
@@ -2959,19 +2956,41 @@ async function renderPageLembretes() {
   `;
 }
 
+async function renderPageLembretes() {
+  const el = document.getElementById('page-content');
+  if (!clienteAtivo) {
+    document.getElementById('topbar-sub').textContent = 'Selecione uma conta';
+    el.innerHTML = `<div class="empty-state"><p>Selecione uma conta no menu acima</p></div>`;
+    return;
+  }
+  document.getElementById('topbar-sub').textContent = `Lembretes de Consulta — Conta #${clienteAtivo}`;
+  el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:20px 0;">Carregando...</div>';
+  const res = await fetch(`/api/config/lembretes-consulta?account_id=${clienteAtivo}`);
+  _lembretesCfg = await res.json();
+  _renderLembretesUI();
+}
+
 function adicionarLembrete() {
   if (!_lembretesCfg) _lembretesCfg = { ativo: true, lembretes: [] };
   _lembretesCfg.lembretes.push({
     minutos: 60,
-    mensagem: "{nome}, só passando para lembrar do seu atendimento com {advogada} às {horario}. Até já!"
+    mensagem: "{nome}, só passando para lembrar do seu atendimento com {advogada} às {horario}. Até já!",
+    template_whatsapp: "",
   });
-  renderPageLembretes();
+  _renderLembretesUI();
 }
 
 function removerLembrete(idx) {
   if (!_lembretesCfg || !_lembretesCfg.lembretes) return;
+  // Salvar valores atuais dos inputs antes de remover
+  _lembretesCfg.lembretes = _lembretesCfg.lembretes.map((l, i) => ({
+    ...l,
+    minutos: parseInt(document.getElementById(`lembrete-min-${i}`)?.value) || l.minutos,
+    mensagem: document.getElementById(`lembrete-msg-${i}`)?.value ?? l.mensagem,
+    template_whatsapp: document.getElementById(`lembrete-tpl-${i}`)?.value.trim() ?? l.template_whatsapp ?? '',
+  }));
   _lembretesCfg.lembretes.splice(idx, 1);
-  renderPageLembretes();
+  _renderLembretesUI();
 }
 
 async function salvarLembretes() {
@@ -2979,7 +2998,8 @@ async function salvarLembretes() {
   const ativo = document.getElementById('lembretes-ativo')?.checked ?? true;
   const lembretes = (_lembretesCfg.lembretes || []).map((l, i) => ({
     minutos: parseInt(document.getElementById(`lembrete-min-${i}`)?.value) || l.minutos,
-    mensagem: document.getElementById(`lembrete-msg-${i}`)?.value.trim() || l.mensagem,
+    mensagem: document.getElementById(`lembrete-msg-${i}`)?.value.trim() ?? l.mensagem,
+    template_whatsapp: document.getElementById(`lembrete-tpl-${i}`)?.value.trim() || '',
   }));
 
   // Ordenar por minutos (maior primeiro = envia primeiro)
