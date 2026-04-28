@@ -1628,7 +1628,25 @@ async def chamar_agente(config: dict, fase: str, messages_openai: list, conversa
                 "content": resultado,
             })
 
-    return None  # fallback se loop esgotar
+    # Loop esgotou sem gerar texto — forçar resposta final sem tools
+    logger.warning(f"🤖 Agente [{fase}]: loop de 5 rodadas esgotado sem resposta textual — forçando resposta final")
+    msgs.append({
+        "role": "user",
+        "content": "Responda agora com uma mensagem de texto para o cliente. Não acione nenhuma ferramenta.",
+    })
+    try:
+        resp_final = client.chat.completions.create(
+            model="gpt-5.2",
+            messages=msgs,
+            reasoning_effort="low",
+        )
+        resposta = (resp_final.choices[0].message.content or "").strip()
+        if resposta:
+            logger.info(f"🤖 Agente [{fase}] → resposta de fallback ({len(resposta)} chars)")
+            return resposta
+    except Exception as e_fallback:
+        logger.error(f"🤖 Agente [{fase}]: erro no fallback final: {e_fallback}")
+    return None  # esgotou todas as tentativas
 
 
 # ── DEBOUNCE ──────────────────────────────────────────────────
