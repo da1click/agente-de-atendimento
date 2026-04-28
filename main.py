@@ -1340,29 +1340,31 @@ async def chatwoot_webhook(request: Request):
 
     logger.info(f"🔔 WEBHOOK RECEBIDO — event={event} | keys={list(payload.keys())}")
 
-    # Evento de atribuição: quando automação atribui conversa à IA, disparar processamento
-    if event == "conversation_assignment":
-        conv_assign = payload.get("conversation", {})
-        account_id_assign = conv_assign.get("account_id") or payload.get("account_id")
-        conversation_id_assign = conv_assign.get("id")
-        assignee_assign = payload.get("assignee") or {}
-        assignee_id_assign = assignee_assign.get("id")
-        inbox_id_assign = conv_assign.get("inbox_id")
+    # conversation_updated: pode indicar mudança de assignee (automação atribuindo à IA)
+    if event == "conversation_updated":
+        conv_upd = payload.get("conversation", {})
+        account_id_upd = conv_upd.get("account_id") or payload.get("account_id")
+        conversation_id_upd = conv_upd.get("id")
+        inbox_id_upd = conv_upd.get("inbox_id")
+        meta_upd = conv_upd.get("meta", {})
+        assignee_upd = meta_upd.get("assignee") or conv_upd.get("assignee") or {}
+        assignee_id_upd = assignee_upd.get("id") if isinstance(assignee_upd, dict) else None
 
-        if account_id_assign and conversation_id_assign and assignee_id_assign:
-            config_assign = carregar_config_cliente(account_id_assign)
-            if config_assign:
-                ia_agent_id_assign = config_assign.get("ia_agent_id")
-                inboxes_assign = config_assign.get("inboxes", [])
-                inbox_ok = not inboxes_assign or inbox_id_assign in inboxes_assign
-                if (assignee_id_assign == ia_agent_id_assign
-                        and config_assign.get("ia_ativa", True)
-                        and inbox_ok):
+        if account_id_upd and conversation_id_upd and assignee_id_upd:
+            config_upd = carregar_config_cliente(account_id_upd)
+            if config_upd:
+                ia_agent_id_upd = config_upd.get("ia_agent_id")
+                inboxes_upd = config_upd.get("inboxes", [])
+                inbox_ok_upd = not inboxes_upd or inbox_id_upd in inboxes_upd
+                if (assignee_id_upd == ia_agent_id_upd
+                        and config_upd.get("ia_ativa", True)
+                        and inbox_ok_upd
+                        and conv_upd.get("status") == "open"):
                     logger.info(
-                        f"[assignment-hook] Conversa atribuída à IA — conv={conversation_id_assign} "
-                        f"account={account_id_assign} inbox={inbox_id_assign}"
+                        f"[conv-updated] Assignee = IA detectado — conv={conversation_id_upd} "
+                        f"account={account_id_upd} inbox={inbox_id_upd}"
                     )
-                    agendar_processamento(config_assign, account_id_assign, conversation_id_assign, inbox_id_assign)
+                    agendar_processamento(config_upd, account_id_upd, conversation_id_upd, inbox_id_upd)
                     return {"status": "ok", "event": event}
         return {"status": "ignorado", "event": event}
 
