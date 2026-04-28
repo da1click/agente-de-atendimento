@@ -881,16 +881,22 @@ async def kanban_mover_card(url: str, token: str, account_id: int, conversation_
                         f"HTTP {resp_move.status_code} body={resp_move.text[:300]}"
                     )
             elif not item_existente:
-                # Criar novo card. Formato conforme swagger oficial CRM Funnels
-                # (https://swagger.cwmkt.com.br/): campos no root, sem wrapper.
+                # Criar novo card via bulk_create — único endpoint POST que
+                # aceita title + conversation_id e os persiste corretamente
+                # (verificado em 2026-04-28 contra swagger.cwmkt.com.br/.../bulk_create).
+                # POST direto em /funnel_items retorna 200 mas IGNORA os dados
+                # silenciosamente, criando cards orfãos sem title/conversation.
                 resp_create = await http.post(
-                    f"{url}/api/v1/accounts/{account_id}/funnels/{funnel_id}/funnel_steps/{step_id}/funnel_items",
+                    f"{url}/api/v1/accounts/{account_id}/funnels/{funnel_id}/funnel_steps/{step_id}/funnel_items/bulk_create",
                     headers=headers,
                     json={
-                        "title": contact_name or f"Conversa #{conversation_id}",
-                        "conversation_id": conversation_id,
-                        "status": "active",
-                        "priority": "medium",
+                        "items": [
+                            {
+                                "title": contact_name or f"Conversa #{conversation_id}",
+                                "conversation_id": conversation_id,
+                                "priority": "medium",
+                            }
+                        ]
                     },
                     timeout=10
                 )

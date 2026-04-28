@@ -3154,14 +3154,19 @@ async def reconciliar_kanban_por_label(account_id: int, dry_run: bool = True, mi
                 elif item_existente:
                     item_plano["acao"] = "ja_na_etapa_correta"
                 else:
+                    # Criar via bulk_create — POST direto em /funnel_items
+                    # retorna 200 mas ignora dados (orfãos sem title/conv).
                     rc = await http.post(
-                        f"{base}/api/v1/accounts/{account_id}/funnels/{funnel_id}/funnel_steps/{step_id_alvo}/funnel_items",
+                        f"{base}/api/v1/accounts/{account_id}/funnels/{funnel_id}/funnel_steps/{step_id_alvo}/funnel_items/bulk_create",
                         headers={"api_access_token": token, "Content-Type": "application/json"},
                         json={
-                            "title": nome,
-                            "conversation_id": conv_id,
-                            "status": "active",
-                            "priority": "medium",
+                            "items": [
+                                {
+                                    "title": nome,
+                                    "conversation_id": conv_id,
+                                    "priority": "medium",
+                                }
+                            ]
                         },
                     )
                     item_plano["acao"] = "criado" if rc.is_success else f"erro_criar_{rc.status_code}"
