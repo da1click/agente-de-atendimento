@@ -1586,6 +1586,24 @@ async def chatwoot_webhook(request: Request):
                                     break
                                 else:
                                     logger.info(f"[race-condition] Tentativa {tentativa}: assignee={rc_assignee_id} != ia_agent={ia_agent_id} — conv={conversation_id}")
+                    except Exception as e:
+                        logger.warning(f"[race-condition] Erro tentativa {tentativa} — conv={conversation_id}: {e}")
+
+                # Contas com automação do Chatwoot que atribui outro agente antes da IA:
+                # forçar atribuição ao agente IA após retries esgotados.
+                if not ia_ativa and account_id in (8, 17, 19):
+                    try:
+                        assign_url = f"{chatwoot_url_rc}/api/v1/accounts/{account_id}/conversations/{conversation_id}/assignments"
+                        async with httpx.AsyncClient(timeout=10) as hc:
+                            r = await hc.post(assign_url, headers={"api_access_token": chatwoot_token_rc, "Content-Type": "application/json"}, json={"assignee_id": ia_agent_id})
+                            if r.is_success:
+                                assignee_id = ia_agent_id
+                                ia_ativa = True
+                                logger.info(f"[race-condition] IA força-atribuída (conta {account_id}) — conv={conversation_id}")
+                            else:
+                                logger.warning(f"[race-condition] Falha ao força-atribuir IA: {r.status_code} — conv={conversation_id}")
+                    except Exception as e:
+                        logger.warning(f"[race-condition] Erro ao força-atribuir IA — conv={conversation_id}: {e}")
 
         # Registrar lead no Supabase (sempre — independente da IA)
         try:
