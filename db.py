@@ -1126,17 +1126,19 @@ def contar_envios_remarketing_hoje(campanha_id: int) -> int:
 
 def registrar_envio_remarketing(campanha_id: int, account_id: int, conversation_id: int, status: str = "enviado"):
     db = get_db()
-    db.table("ia_remarketing_envios").insert({
+    db.table("ia_remarketing_envios").upsert({
         "campanha_id": campanha_id,
         "account_id": account_id,
         "conversation_id": conversation_id,
         "status": status,
-    }).execute()
+        "enviado_em": "now()",
+    }, on_conflict="campanha_id,conversation_id").execute()
 
 
 def buscar_conversas_elegiveis_remarketing(account_id: int, campanha_id: int, dias_inatividade: int, limite: int, inbox_id: int = None) -> list:
     """
-    Busca leads inativos há X dias que ainda não foram contactados por esta campanha.
+    Busca leads inativos há X dias que não foram contactados por esta campanha
+    dentro da janela de reenvio (dias_inatividade * 2, mínimo 60 dias).
     Se inbox_id for fornecido, filtra apenas leads dessa inbox.
     Ordena do mais antigo para o mais recente.
     """
@@ -1144,11 +1146,16 @@ def buscar_conversas_elegiveis_remarketing(account_id: int, campanha_id: int, di
     from datetime import datetime, timezone, timedelta
     cutoff = (datetime.now(timezone.utc) - timedelta(days=dias_inatividade)).isoformat()
 
-    # Buscar todos os conversation_ids já contactados por esta campanha
+    # Janela de reenvio: leads enviados fora dessa janela voltam a ser elegíveis
+    janela_reenvio = max(dias_inatividade * 2, 60)
+    cutoff_reenvio = (datetime.now(timezone.utc) - timedelta(days=janela_reenvio)).isoformat()
+
+    # Buscar conversation_ids já contactados dentro da janela de reenvio
     envios_resp = (
         db.table("ia_remarketing_envios")
         .select("conversation_id")
         .eq("campanha_id", campanha_id)
+        .gte("enviado_em", cutoff_reenvio)
         .execute()
     )
     ja_enviados = {e["conversation_id"] for e in (envios_resp.data or [])}
