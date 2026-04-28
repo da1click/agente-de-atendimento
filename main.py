@@ -1340,7 +1340,9 @@ async def chatwoot_webhook(request: Request):
 
     logger.info(f"🔔 WEBHOOK RECEBIDO — event={event} | keys={list(payload.keys())}")
 
-    # conversation_updated: pode indicar mudança de assignee (automação atribuindo à IA)
+    # conversation_updated: só agir se o que mudou foi o assignee → IA
+    # Guard duplo: (1) changed_attributes indica mudança de assignee,
+    # (2) conversa criada há menos de 10 min (novo lead, não reatribuição humana)
     if event == "conversation_updated":
         conv_upd = payload.get("conversation", {})
         account_id_upd = conv_upd.get("account_id") or payload.get("account_id")
@@ -1349,6 +1351,21 @@ async def chatwoot_webhook(request: Request):
         meta_upd = conv_upd.get("meta", {})
         assignee_upd = meta_upd.get("assignee") or conv_upd.get("assignee") or {}
         assignee_id_upd = assignee_upd.get("id") if isinstance(assignee_upd, dict) else None
+
+        # Verificar se o assignee mudou via changed_attributes
+        changed = payload.get("changed_attributes") or []
+        assignee_mudou = any(
+            "assignee" in (attr if isinstance(attr, str) else next(iter(attr), ""))
+            for attr in changed
+        ) if changed else False
+
+        # Fallback se changed_attributes não vier: checar idade da conversa (< 10 min)
+        conv_criada_em = conv_upd.get("created_at") or 0
+        import time as _time
+        conversa_nova = ((_time.time() - conv_criada_em) < 600) if conv_criada_em else False
+
+        if not assignee_mudou and not conversa_nova:
+            return {"status": "ignorado", "event": event, "motivo": "sem mudança de assignee e conversa antiga"}
 
         if account_id_upd and conversation_id_upd and assignee_id_upd:
             config_upd = carregar_config_cliente(account_id_upd)
@@ -1361,8 +1378,8 @@ async def chatwoot_webhook(request: Request):
                         and inbox_ok_upd
                         and conv_upd.get("status") == "open"):
                     logger.info(
-                        f"[conv-updated] Assignee = IA detectado — conv={conversation_id_upd} "
-                        f"account={account_id_upd} inbox={inbox_id_upd}"
+                        f"[conv-updated] Atribuição à IA detectada — conv={conversation_id_upd} "
+                        f"account={account_id_upd} assignee_mudou={assignee_mudou} conversa_nova={conversa_nova}"
                     )
                     agendar_processamento(config_upd, account_id_upd, conversation_id_upd, inbox_id_upd)
                     return {"status": "ok", "event": event}
