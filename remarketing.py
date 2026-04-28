@@ -292,6 +292,16 @@ async def processar_remarketing():
             except Exception as e_nota:
                 logger.warning(f"[remarketing] Erro ao enviar nota privada conv={envio_conv_id}: {e_nota}")
 
+            # Fechar conversa após remarketing
+            try:
+                await asyncio.sleep(1)
+                resolve_url = f"{chatwoot_url}/api/v1/accounts/{account_id}/conversations/{envio_conv_id}/toggle_status"
+                async with httpx.AsyncClient(timeout=10) as http:
+                    await http.post(resolve_url, headers={"api_access_token": token, "Content-Type": "application/json"}, json={"status": "resolved"})
+                logger.info(f"[remarketing] Conversa {envio_conv_id} resolvida após remarketing")
+            except Exception as e_close:
+                logger.warning(f"[remarketing] Erro ao resolver conv {envio_conv_id}: {e_close}")
+
         except Exception as e:
             logger.warning(f"[remarketing] Erro ao enviar — campanha={campanha_id} conv={conversation_id}: {e}")
             try:
