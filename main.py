@@ -1340,49 +1340,68 @@ async def chatwoot_webhook(request: Request):
 
     logger.info(f"🔔 WEBHOOK RECEBIDO — event={event} | keys={list(payload.keys())}")
 
-    # conversation_updated: só agir se o que mudou foi o assignee → IA
-    # Guard duplo: (1) changed_attributes indica mudança de assignee,
-    # (2) conversa criada há menos de 10 min (novo lead, não reatribuição humana)
+    # conversation_updated: disparar IA quando conversa nova é atribuída ao agente IA
     if event == "conversation_updated":
+        import time as _time
         conv_upd = payload.get("conversation", {})
         account_id_upd = conv_upd.get("account_id") or payload.get("account_id")
         conversation_id_upd = conv_upd.get("id")
         inbox_id_upd = conv_upd.get("inbox_id")
-        meta_upd = conv_upd.get("meta", {})
-        assignee_upd = meta_upd.get("assignee") or conv_upd.get("assignee") or {}
-        assignee_id_upd = assignee_upd.get("id") if isinstance(assignee_upd, dict) else None
 
-        # Verificar se o assignee mudou via changed_attributes
+        # Guard: só processar se assignee mudou OU conversa criada < 10 min
         changed = payload.get("changed_attributes") or []
         assignee_mudou = any(
-            "assignee" in (attr if isinstance(attr, str) else next(iter(attr), ""))
-            for attr in changed
+            "assignee" in str(attr) for attr in changed
         ) if changed else False
-
-        # Fallback se changed_attributes não vier: checar idade da conversa (< 10 min)
         conv_criada_em = conv_upd.get("created_at") or 0
-        import time as _time
         conversa_nova = ((_time.time() - conv_criada_em) < 600) if conv_criada_em else False
+
+        logger.info(
+            f"[conv-updated] event recebido — conv={conversation_id_upd} account={account_id_upd} "
+            f"assignee_mudou={assignee_mudou} conversa_nova={conversa_nova} "
+            f"created_at={conv_criada_em} changed={changed}"
+        )
 
         if not assignee_mudou and not conversa_nova:
             return {"status": "ignorado", "event": event, "motivo": "sem mudança de assignee e conversa antiga"}
 
-        if account_id_upd and conversation_id_upd and assignee_id_upd:
-            config_upd = carregar_config_cliente(account_id_upd)
-            if config_upd:
-                ia_agent_id_upd = config_upd.get("ia_agent_id")
-                inboxes_upd = config_upd.get("inboxes", [])
-                inbox_ok_upd = not inboxes_upd or inbox_id_upd in inboxes_upd
-                if (assignee_id_upd == ia_agent_id_upd
-                        and config_upd.get("ia_ativa", True)
-                        and inbox_ok_upd
-                        and conv_upd.get("status") == "open"):
-                    logger.info(
-                        f"[conv-updated] Atribuição à IA detectada — conv={conversation_id_upd} "
-                        f"account={account_id_upd} assignee_mudou={assignee_mudou} conversa_nova={conversa_nova}"
-                    )
+        if not account_id_upd or not conversation_id_upd:
+            return {"status": "ignorado", "event": event}
+
+        config_upd = carregar_config_cliente(account_id_upd)
+        if not config_upd or not config_upd.get("ia_ativa", True) or not config_upd.get("ia_agent_id"):
+            return {"status": "ignorado", "event": event}
+
+        ia_agent_id_upd = config_upd["ia_agent_id"]
+        inboxes_upd = config_upd.get("inboxes", [])
+        inbox_ok_upd = not inboxes_upd or inbox_id_upd in inboxes_upd
+        if not inbox_ok_upd:
+            return {"status": "ignorado", "event": event}
+
+        # Buscar assignee atual via API (payload pode estar desatualizado)
+        try:
+            chatwoot_url_upd = config_upd["chatwoot_url"].rstrip("/")
+            chatwoot_token_upd = config_upd["chatwoot_token"]
+            async with httpx.AsyncClient(timeout=10) as hc_upd:
+                r_upd = await hc_upd.get(
+                    f"{chatwoot_url_upd}/api/v1/accounts/{account_id_upd}/conversations/{conversation_id_upd}",
+                    headers={"api_access_token": chatwoot_token_upd},
+                )
+                if not r_upd.is_success:
+                    return {"status": "ignorado", "event": event}
+                fresh = r_upd.json()
+                fresh_assignee = (fresh.get("meta") or {}).get("assignee") or {}
+                fresh_assignee_id = fresh_assignee.get("id")
+                fresh_status = fresh.get("status")
+                logger.info(
+                    f"[conv-updated] API retornou assignee_id={fresh_assignee_id} "
+                    f"ia_agent_id={ia_agent_id_upd} status={fresh_status} conv={conversation_id_upd}"
+                )
+                if fresh_assignee_id == ia_agent_id_upd and fresh_status == "open":
                     agendar_processamento(config_upd, account_id_upd, conversation_id_upd, inbox_id_upd)
                     return {"status": "ok", "event": event}
+        except Exception as e_upd:
+            logger.warning(f"[conv-updated] Erro ao buscar assignee — conv={conversation_id_upd}: {e_upd}")
         return {"status": "ignorado", "event": event}
 
     if event not in ("automation_event.message_created", "message_created"):
