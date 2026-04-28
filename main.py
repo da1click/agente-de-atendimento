@@ -1872,11 +1872,10 @@ async def upload_media_template(account_id: int, file: UploadFile = File(...), w
     file_bytes = await file.read()
     file_name = file.filename or "upload"
 
-    # 1. Criar sessão de upload
+    # 1. Criar sessão de upload via WABA ID (token WhatsApp Business requer /{waba_id}/uploads)
     async with httpx.AsyncClient(timeout=60) as client:
-        # Upload via resumable upload API
         r = await client.post(
-            f"{META_GRAPH}/app/uploads",
+            f"{META_GRAPH}/{w_id}/uploads",
             headers=_meta_headers(tok),
             params={
                 "file_name": file_name,
