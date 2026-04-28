@@ -1340,6 +1340,32 @@ async def chatwoot_webhook(request: Request):
 
     logger.info(f"🔔 WEBHOOK RECEBIDO — event={event} | keys={list(payload.keys())}")
 
+    # Evento de atribuição: quando automação atribui conversa à IA, disparar processamento
+    if event == "conversation_assignment":
+        conv_assign = payload.get("conversation", {})
+        account_id_assign = conv_assign.get("account_id") or payload.get("account_id")
+        conversation_id_assign = conv_assign.get("id")
+        assignee_assign = payload.get("assignee") or {}
+        assignee_id_assign = assignee_assign.get("id")
+        inbox_id_assign = conv_assign.get("inbox_id")
+
+        if account_id_assign and conversation_id_assign and assignee_id_assign:
+            config_assign = carregar_config_cliente(account_id_assign)
+            if config_assign:
+                ia_agent_id_assign = config_assign.get("ia_agent_id")
+                inboxes_assign = config_assign.get("inboxes", [])
+                inbox_ok = not inboxes_assign or inbox_id_assign in inboxes_assign
+                if (assignee_id_assign == ia_agent_id_assign
+                        and config_assign.get("ia_ativa", True)
+                        and inbox_ok):
+                    logger.info(
+                        f"[assignment-hook] Conversa atribuída à IA — conv={conversation_id_assign} "
+                        f"account={account_id_assign} inbox={inbox_id_assign}"
+                    )
+                    agendar_processamento(config_assign, account_id_assign, conversation_id_assign, inbox_id_assign)
+                    return {"status": "ok", "event": event}
+        return {"status": "ignorado", "event": event}
+
     if event not in ("automation_event.message_created", "message_created"):
         logger.info(f"🔔 WEBHOOK IGNORADO — event={event}")
         return {"status": "ignorado", "event": event}
