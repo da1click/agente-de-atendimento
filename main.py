@@ -161,8 +161,8 @@ async def _recuperar_conversas_pos_deploy():
                                 agora = datetime.now(timezone.utc)
                                 diff_min = (agora - msg_time).total_seconds() / 60
 
-                                # Só reprocessar mensagens dos últimos 30 minutos (janela do deploy)
-                                if diff_min <= 30:
+                                # Só reprocessar mensagens dos últimos 60 minutos (janela do deploy)
+                                if diff_min <= 60:
                                     config_full = carregar_config_cliente(account_id)
                                     if config_full:
                                         from ia import agendar_processamento
