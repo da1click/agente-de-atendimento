@@ -3956,6 +3956,44 @@ async def diagnostico_cobranca_docs(account_id: int):
     }
 
 
+@app.patch("/api/admin/lembrete/{account_id}")
+async def atualizar_template_lembrete(account_id: int, request: Request):
+    """Atualiza o template WhatsApp de um lembrete de consulta.
+
+    Body JSON:
+      { "minutos": 60, "template": "nome_do_template" }
+      { "minutos": 10, "template": "nome_do_template" }
+
+    Atualiza apenas o campo template_whatsapp do lembrete com o minutos informado.
+    """
+    config = carregar_config_cliente(account_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+
+    body = await request.json()
+    minutos = body.get("minutos")
+    template = (body.get("template") or "").strip()
+    if not minutos or not template:
+        raise HTTPException(status_code=400, detail="Informe 'minutos' e 'template'")
+
+    cfg = config.get("config_lembrete_consulta") or {}
+    lembretes = cfg.get("lembretes") or []
+    atualizado = False
+    for lembrete in lembretes:
+        if lembrete.get("minutos") == minutos:
+            lembrete["template_whatsapp"] = template
+            atualizado = True
+            break
+
+    if not atualizado:
+        raise HTTPException(status_code=404, detail=f"Lembrete de {minutos} minutos não encontrado na config")
+
+    cfg["lembretes"] = lembretes
+    from db import get_db as _get_db
+    _get_db().table("ia_clientes_config").update({"config_lembrete_consulta": cfg}).eq("account_id", account_id).execute()
+    return {"ok": True, "account_id": account_id, "minutos": minutos, "template": template}
+
+
 @app.get("/api/admin/agenda/diagnostico/{account_id}")
 async def diagnostico_agenda(account_id: int):
     """Diagnóstico do fluxo de agendamento: verifica config, advogados e consulta slots reais."""

@@ -39,11 +39,13 @@ def _formatar_data_lembrete(date_str: str) -> str:
         return date_str
 
 
+_TEMPLATE_VARS_PADRAO = {"1": "[NOME]", "2": "[HORARIO]"}
+
+
 def _build_processed_params_lembrete(template_vars: dict, ctx: dict) -> dict:
     """Mapeia placeholders ([NOME], [HORARIO], etc.) para processed_params do template.
 
-    template_vars ex: {"1": "[NOME]", "2": "[HORARIO]"}
-    ctx contém os valores ja resolvidos: nome, advogada, horario, data, contact_name, etc.
+    Se template_vars não configurado, usa padrão: {{1}}=nome, {{2}}=horário.
     """
     placeholder_map = {
         "[NOME]": ctx.get("nome", "") or ctx.get("contact_name", ""),
@@ -52,8 +54,9 @@ def _build_processed_params_lembrete(template_vars: dict, ctx: dict) -> dict:
         "[HORARIO]": ctx.get("horario", ""),
         "[DATA]": _formatar_data_lembrete(ctx.get("data", "")),
     }
+    vars_usados = template_vars or _TEMPLATE_VARS_PADRAO
     params = {}
-    for num, placeholder in (template_vars or {}).items():
+    for num, placeholder in vars_usados.items():
         valor = placeholder_map.get(placeholder, "")
         params[str(num)] = valor or "-"
     return params
