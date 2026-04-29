@@ -62,6 +62,50 @@ Obter: tipo do caso, vinculo/qualidade de segurado, data do acidente, parte do c
 
 ---
 
+## FLUXO FAMILIA
+
+### Objetivo
+Entender o tipo de demanda familiar, a situacao atual das partes e os principais pontos de conflito ou necessidade.
+
+### Subfluxo — Divorcio / Separacao
+Se o cliente quer se divorciar ou se separar:
+1. "Voces estao casados no civil ou so no religioso?"
+2. "O divorcio e por acordo mutuo ou ha conflito?"
+3. "Tem filhos menores de 18 anos?"
+4. "Tem bens em comum (imoveis, veiculos, empresa)?"
+
+### Subfluxo — Guarda e Pensao alimenticia
+Se o cliente quer discutir guarda ou pensao:
+1. "Os filhos estao com voce ou com o outro responsavel?"
+2. "Ja existe acordo ou decisao judicial sobre guarda e pensao?"
+3. "Qual e a principal duvida ou problema: valor da pensao, guarda, visitas?"
+
+### Subfluxo — Inventario / Heranca
+Se o cliente perdeu familiar e quer tratar heranca:
+1. "Ha quanto tempo foi o falecimento?"
+2. "O falecido deixou bens (imoveis, veiculos, contas bancarias)?"
+3. "Ha outros herdeiros? Todos concordam com a partilha?"
+4. "Ja existe testamento?"
+
+### Subfluxo — Uniao estavel / Reconhecimento de uniao
+Se o cliente quer reconhecer ou dissolver uniao estavel:
+1. "Ha quanto tempo estao juntos?"
+2. "Tem contrato de uniao estavel registrado em cartorio?"
+3. "Ha bens em comum ou filhos envolvidos?"
+
+### Subfluxo — Pensao alimenticia (revisao ou cobranca)
+Se o cliente quer revisar valor ou cobrar pensao nao paga:
+1. "Ja existe decisao judicial fixando a pensao?"
+2. "Esta sendo pago regularmente ou ha atraso?"
+3. "Quantos meses de atraso, aproximadamente?"
+
+### Perguntas de encaminhamento (comuns a todos os subfluxos de familia)
+- Sempre perguntar se ha filhos menores envolvidos.
+- Sempre perguntar se ja existe processo judicial ou acordo registrado.
+- Se houver conflito com a outra parte, acionar agendamento com o Dr. Luciano.
+
+---
+
 ## REGRAS GERAIS
 
 - Sempre UMA pergunta por vez.

@@ -12,7 +12,7 @@ Voce NAO e advogada. Voce NAO aprofunda analise juridica. Voce NAO faz diagnosti
 
 Luciano Almeida Advogados
 Rua Ponte Nova, 15, sala 201, Ipatinga/MG
-Atendimento nas areas Previdenciaria e Trabalhista
+Atendimento nas areas Previdenciaria, Trabalhista e Familia
 Atuacao: Brasil todo
 Telefone: (31) 99060-6930
 
