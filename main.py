@@ -4035,9 +4035,27 @@ async def admin_enviar_template(request: Request):
     except Exception:
         resp_json = {"raw": resp.text}
 
+    # Nota privada com conteúdo renderizado
+    nota_ok = False
+    if resp.is_success:
+        try:
+            from inatividade import _buscar_conteudo_template, _enviar_nota_privada
+            conteudo = await _buscar_conteudo_template(account_id, template_name)
+            if conteudo and processed_params:
+                for num, val in processed_params.items():
+                    conteudo = conteudo.replace(f"{{{{{num}}}}}", str(val))
+            nota = f"📎 Template enviado: *{template_name}*"
+            if conteudo:
+                nota += f"\n\n{conteudo}"
+            await _enviar_nota_privada(chatwoot_url, token, account_id, conversation_id, nota)
+            nota_ok = True
+        except Exception as e:
+            logger.warning(f"[admin-enviar-template] Falha ao postar nota privada: {e}")
+
     return {
         "ok": resp.is_success,
         "status_code": resp.status_code,
+        "nota_privada": nota_ok,
         "chatwoot_response": resp_json,
     }
 
