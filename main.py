@@ -4313,7 +4313,6 @@ async def diagnostico_leads(account_id: int, de: str = None, ate: str = None):
 
     # 4. ia_uso_mensal — para comparação com o relatório de cobrança
     try:
-        from db import _ciclo_mes
         dia_ciclo = config.get("dia_ciclo", 1)
         ciclo_id, _, _ = _ciclo_mes(dia_ciclo)
         resp = db.table("ia_uso_mensal").select("id", count="exact").eq(
