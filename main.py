@@ -4128,6 +4128,74 @@ async def admin_inbox_info(account_id: int, inbox_id: int):
     }
 
 
+@app.get("/api/admin/conversas-sem-resposta/{account_id}")
+async def admin_conversas_sem_resposta(account_id: int, inbox_id: int = 0, pagina: int = 1):
+    """Lista conversas abertas onde o cliente mandou a última mensagem (IA não respondeu).
+    Útil para diagnosticar conversas paradas."""
+    config = carregar_config_cliente(account_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+
+    chatwoot_url = config["chatwoot_url"].rstrip("/")
+    token = config["chatwoot_token"]
+    ia_agent_id = config.get("ia_agent_id")
+
+    params = {"status": "open", "page": pagina}
+    if inbox_id:
+        params["inbox_id"] = inbox_id
+
+    async with httpx.AsyncClient(timeout=20) as http:
+        r = await http.get(
+            f"{chatwoot_url}/api/v1/accounts/{account_id}/conversations",
+            headers={"api_access_token": token},
+            params=params,
+        )
+    if not r.is_success:
+        raise HTTPException(status_code=r.status_code, detail=r.text)
+
+    data = r.json()
+    convs = data.get("data", {}).get("payload", []) or data.get("payload", [])
+
+    resultado = []
+    for conv in convs:
+        meta = conv.get("meta") or {}
+        assignee = meta.get("assignee") or {}
+        assignee_id = assignee.get("id")
+        conv_inbox_id = conv.get("inbox_id")
+
+        # Filtrar por inbox se especificado
+        if inbox_id and conv_inbox_id != inbox_id:
+            continue
+
+        msgs = conv.get("messages") or []
+        ultima_msg = None
+        for m in reversed(msgs):
+            if not m.get("private"):
+                ultima_msg = m
+                break
+
+        ultima_eh_cliente = ultima_msg and ultima_msg.get("message_type") == 0
+        resultado.append({
+            "id": conv.get("id"),
+            "status": conv.get("status"),
+            "inbox_id": conv_inbox_id,
+            "assignee_id": assignee_id,
+            "assignee_nome": assignee.get("name"),
+            "ia_assignee": assignee_id == ia_agent_id,
+            "cliente": meta.get("sender", {}).get("name"),
+            "ultima_msg_tipo": "cliente" if ultima_eh_cliente else "ia/sistema",
+            "ultima_msg": (ultima_msg.get("content") or "")[:80] if ultima_msg else None,
+            "sem_resposta_ia": ultima_eh_cliente and assignee_id == ia_agent_id,
+        })
+
+    sem_resposta = [c for c in resultado if c["sem_resposta_ia"]]
+    return {
+        "total_abertas": len(resultado),
+        "sem_resposta_ia": len(sem_resposta),
+        "conversas": sem_resposta[:20],
+    }
+
+
 @app.get("/api/admin/agenda/diagnostico/{account_id}")
 async def diagnostico_agenda(account_id: int):
     """Diagnóstico do fluxo de agendamento: verifica config, advogados e consulta slots reais."""
