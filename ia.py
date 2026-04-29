@@ -1760,22 +1760,35 @@ async def processar_mensagem(config: dict, account_id: int, conversation_id: int
     ultimas = linhas[-5:] if len(linhas) > 5 else linhas
     logger.info(f"📜 Últimas mensagens:\n" + "\n".join(f"   {l}" for l in ultimas))
 
-    fase = chamar_supervisor(config, historico_texto)
+    # Verificar labels ANTES do supervisor para detectar clientes já convertidos
+    _labels_conversa: list[str] = []
+    try:
+        chatwoot_url = config["chatwoot_url"].rstrip("/")
+        labels_url = f"{chatwoot_url}/api/v1/accounts/{account_id}/conversations/{conversation_id}/labels"
+        async with httpx.AsyncClient() as http:
+            resp = await http.get(labels_url, headers={"api_access_token": config["chatwoot_token"]}, timeout=10)
+            _labels_conversa = resp.json().get("payload", []) if resp.is_success else []
+    except Exception as e:
+        logger.warning(f"Erro ao buscar labels: {e}")
+
+    # Injetar labels no topo do historico_texto para que supervisor e agentes as vejam
+    if _labels_conversa:
+        labels_str = ", ".join(_labels_conversa)
+        historico_texto = f"[TAGS DA CONVERSA: {labels_str}]\n\n" + historico_texto
+
+    # Cliente com contrato fechado: pular supervisor e transferir direto
+    if "contrato-fechado" in _labels_conversa:
+        logger.info(f"🏷️ Tag 'contrato-fechado' detectada — transferindo para humano sem qualificação (conv={conversation_id})")
+        fase = "transferir_humano"
+    else:
+        fase = chamar_supervisor(config, historico_texto)
 
     # Se já convertido e supervisor quer agendamento → tratar como reagendamento
     _is_reagendamento = False
     if fase == "agendamento":
-        try:
-            chatwoot_url = config["chatwoot_url"].rstrip("/")
-            labels_url = f"{chatwoot_url}/api/v1/accounts/{account_id}/conversations/{conversation_id}/labels"
-            async with httpx.AsyncClient() as http:
-                resp = await http.get(labels_url, headers={"api_access_token": config["chatwoot_token"]}, timeout=10)
-                labels = resp.json().get("payload", []) if resp.is_success else []
-            if "convertido" in labels:
-                _is_reagendamento = True
-                logger.info(f"🔄 Conversa já convertida — tratando como reagendamento (conv={conversation_id})")
-        except Exception as e:
-            logger.warning(f"Erro ao verificar labels: {e}")
+        if "convertido" in _labels_conversa:
+            _is_reagendamento = True
+            logger.info(f"🔄 Conversa já convertida — tratando como reagendamento (conv={conversation_id})")
 
     # Extrair dados do contato do histórico
     contact_name = ""
@@ -1788,8 +1801,9 @@ async def processar_mensagem(config: dict, account_id: int, conversation_id: int
             break
 
     # Proteção anti-desatribuição prematura: se supervisor quer transferir_humano
-    # mas o cliente teve poucas interações, forçar qualificação primeiro
-    if fase == "transferir_humano":
+    # mas o cliente teve poucas interações, forçar qualificação primeiro.
+    # Exceto clientes com contrato-fechado — esses transferem imediatamente.
+    if fase == "transferir_humano" and "contrato-fechado" not in _labels_conversa:
         msgs_cliente = [m for m in historico if m.get("message_type") == 0]
         msgs_ia = [m for m in historico if m.get("message_type") == 1]
         # Se o cliente mandou <= 3 mensagens e a IA mandou <= 2, é muito cedo pra transferir
