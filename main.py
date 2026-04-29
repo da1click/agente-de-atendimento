@@ -4042,6 +4042,43 @@ async def admin_enviar_template(request: Request):
     }
 
 
+@app.get("/api/admin/inbox-info/{account_id}/{inbox_id}")
+async def admin_inbox_info(account_id: int, inbox_id: int):
+    """Retorna detalhes do inbox (channel_type, templates disponíveis) para diagnóstico."""
+    config = carregar_config_cliente(account_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+
+    chatwoot_url = config["chatwoot_url"].rstrip("/")
+    token = config["chatwoot_token"]
+    async with httpx.AsyncClient(timeout=15) as http:
+        r = await http.get(
+            f"{chatwoot_url}/api/v1/accounts/{account_id}/inboxes",
+            headers={"api_access_token": token},
+        )
+    if not r.is_success:
+        raise HTTPException(status_code=r.status_code, detail=r.text)
+
+    target = None
+    for inbox in r.json().get("payload", []):
+        if inbox.get("id") == inbox_id:
+            target = inbox
+            break
+
+    return {
+        "found": target is not None,
+        "inbox": {
+            "id": target.get("id") if target else None,
+            "name": target.get("name") if target else None,
+            "channel_type": target.get("channel_type") if target else None,
+            "channel_id": target.get("channel_id") if target else None,
+            "phone_number": target.get("phone_number") if target else None,
+            "templates_count": len(target.get("message_templates") or []) if target else 0,
+            "templates": [t.get("name") for t in (target.get("message_templates") or [])][:20] if target else [],
+        } if target else None,
+    }
+
+
 @app.get("/api/admin/agenda/diagnostico/{account_id}")
 async def diagnostico_agenda(account_id: int):
     """Diagnóstico do fluxo de agendamento: verifica config, advogados e consulta slots reais."""
