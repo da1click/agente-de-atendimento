@@ -4042,6 +4042,37 @@ async def admin_enviar_template(request: Request):
     }
 
 
+@app.get("/api/admin/inboxes/{account_id}")
+async def admin_listar_inboxes(account_id: int):
+    """Lista todas as inboxes da conta com channel_type e templates disponíveis."""
+    config = carregar_config_cliente(account_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+
+    chatwoot_url = config["chatwoot_url"].rstrip("/")
+    token = config["chatwoot_token"]
+    async with httpx.AsyncClient(timeout=15) as http:
+        r = await http.get(
+            f"{chatwoot_url}/api/v1/accounts/{account_id}/inboxes",
+            headers={"api_access_token": token},
+        )
+    if not r.is_success:
+        raise HTTPException(status_code=r.status_code, detail=r.text)
+
+    inboxes = []
+    for inbox in r.json().get("payload", []):
+        templates = inbox.get("message_templates") or []
+        inboxes.append({
+            "id": inbox.get("id"),
+            "name": inbox.get("name"),
+            "channel_type": inbox.get("channel_type"),
+            "phone_number": inbox.get("phone_number"),
+            "templates_count": len(templates),
+            "templates": [t.get("name") for t in templates][:10],
+        })
+    return {"account_id": account_id, "total": len(inboxes), "inboxes": inboxes}
+
+
 @app.get("/api/admin/inbox-info/{account_id}/{inbox_id}")
 async def admin_inbox_info(account_id: int, inbox_id: int):
     """Retorna detalhes do inbox (channel_type, templates disponíveis) para diagnóstico."""
