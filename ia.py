@@ -244,6 +244,7 @@ def _gerar_resumo_caso(historico_texto: str, openai_api_key: str = None) -> str:
 _NOTIF_CHATWOOT_EXTERNO = {
     8: {"token": "xJq2E7owxv89RaMbippvSV5J", "account_id_externo": 4},
     11: {"token": "xJq2E7owxv89RaMbippvSV5J", "account_id_externo": 4},
+    16: {"token": "xJq2E7owxv89RaMbippvSV5J", "account_id_externo": 4},
 }
 
 
