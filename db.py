@@ -1125,13 +1125,14 @@ def contar_envios_remarketing_hoje(campanha_id: int) -> int:
 
 
 def registrar_envio_remarketing(campanha_id: int, account_id: int, conversation_id: int, status: str = "enviado"):
+    from datetime import datetime, timezone
     db = get_db()
     db.table("ia_remarketing_envios").upsert({
         "campanha_id": campanha_id,
         "account_id": account_id,
         "conversation_id": conversation_id,
         "status": status,
-        "enviado_em": "now()",
+        "enviado_em": datetime.now(timezone.utc).isoformat(),
     }, on_conflict="campanha_id,conversation_id").execute()
 
 
@@ -1150,15 +1151,25 @@ def buscar_conversas_elegiveis_remarketing(account_id: int, campanha_id: int, di
     janela_reenvio = max(dias_inatividade * 2, 60)
     cutoff_reenvio = (datetime.now(timezone.utc) - timedelta(days=janela_reenvio)).isoformat()
 
-    # Buscar conversation_ids já contactados dentro da janela de reenvio
-    envios_resp = (
-        db.table("ia_remarketing_envios")
-        .select("conversation_id")
-        .eq("campanha_id", campanha_id)
-        .gte("enviado_em", cutoff_reenvio)
-        .execute()
-    )
-    ja_enviados = {e["conversation_id"] for e in (envios_resp.data or [])}
+    # Buscar conversation_ids já contactados dentro da janela de reenvio (paginado)
+    ja_enviados: set[int] = set()
+    _page_offset = 0
+    _page_size = 1000
+    while True:
+        envios_resp = (
+            db.table("ia_remarketing_envios")
+            .select("conversation_id")
+            .eq("campanha_id", campanha_id)
+            .gte("enviado_em", cutoff_reenvio)
+            .range(_page_offset, _page_offset + _page_size - 1)
+            .execute()
+        )
+        page_data = envios_resp.data or []
+        for e in page_data:
+            ja_enviados.add(e["conversation_id"])
+        if len(page_data) < _page_size:
+            break
+        _page_offset += _page_size
 
     # Buscar leads inativos em lotes até encontrar suficientes não-contactados
     _offset = 0
