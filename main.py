@@ -4128,6 +4128,41 @@ async def admin_inbox_info(account_id: int, inbox_id: int):
     }
 
 
+@app.post("/api/admin/reprocessar")
+async def admin_reprocessar_conversa(request: Request):
+    """Força o reprocessamento de uma conversa específica.
+    Body: { "account_id": 17, "conversation_id": 1438 }
+    """
+    body = await request.json()
+    account_id = body.get("account_id")
+    conversation_id = body.get("conversation_id")
+    if not account_id or not conversation_id:
+        raise HTTPException(status_code=400, detail="Informe account_id e conversation_id")
+
+    config = carregar_config_cliente(account_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+
+    # Buscar inbox_id da conversa
+    chatwoot_url = config["chatwoot_url"].rstrip("/")
+    token = config["chatwoot_token"]
+    inbox_id = None
+    try:
+        async with httpx.AsyncClient(timeout=10) as http:
+            r = await http.get(
+                f"{chatwoot_url}/api/v1/accounts/{account_id}/conversations/{conversation_id}",
+                headers={"api_access_token": token},
+            )
+            if r.is_success:
+                inbox_id = r.json().get("inbox_id")
+    except Exception:
+        pass
+
+    from ia import agendar_processamento
+    agendar_processamento(config, account_id, conversation_id, inbox_id)
+    return {"ok": True, "account_id": account_id, "conversation_id": conversation_id, "inbox_id": inbox_id}
+
+
 @app.get("/api/admin/conversas-sem-resposta/{account_id}")
 async def admin_conversas_sem_resposta(account_id: int, inbox_id: int = 0, pagina: int = 1):
     """Lista conversas abertas onde o cliente mandou a última mensagem (IA não respondeu).
