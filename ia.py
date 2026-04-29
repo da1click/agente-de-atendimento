@@ -28,6 +28,11 @@ def _eh_payload_anuncio(texto: str) -> bool:
 # Debounce: conversation_id -> asyncio.Task
 _debounce_tasks: dict[int, asyncio.Task] = {}
 
+# Cache de conversas recentemente transferidas: conversation_id -> timestamp UTC
+# Impede que nova mensagem após transferência re-dispare processamento da IA
+_conversas_transferidas: dict[int, float] = {}
+_TRANSFERENCIA_TTL = 7200  # 2 horas
+
 # Lock serial por conversa: impede duas invocações paralelas de processar_mensagem
 # Sem isso, duas tasks de debounce podem disparar em paralelo e gerar propostas
 # duplicadas (ex: cliente manda "Sim" + msg do bot anterior ainda ecoando no webhook
@@ -748,15 +753,34 @@ async def chatwoot_atualizar_contato(url: str, token: str, account_id: int, conv
 
 
 async def chatwoot_transferir_humano(url: str, token: str, account_id: int, conversation_id: int, motivo: str = "", assignee_id: int | None = None):
+    import time as _time
     headers = {"api_access_token": token, "Content-Type": "application/json"}
-    assign_url = f"{url}/api/v1/accounts/{account_id}/conversations/{conversation_id}/assignments"
     async with httpx.AsyncClient() as http:
+        # 1. Atribuir (ou desatribuir) agente
+        assign_url = f"{url}/api/v1/accounts/{account_id}/conversations/{conversation_id}/assignments"
         await http.post(assign_url, headers=headers, json={"assignee_id": assignee_id}, timeout=10)
+        # 2. Quando desatribuindo (transferindo para fila), setar status "pending"
+        # para evitar que o Chatwoot auto-atribua o bot novamente ao receber nova mensagem.
+        if assignee_id is None:
+            status_url = f"{url}/api/v1/accounts/{account_id}/conversations/{conversation_id}"
+            try:
+                await http.patch(status_url, headers=headers, json={"status": "pending"}, timeout=10)
+            except Exception as e:
+                logger.warning(f"[transferir] Falha ao setar status pending conv={conversation_id}: {e}")
+
     # Log detalhado com stack trace para rastrear origem da atribuição/desatribuição
     import traceback
     caller = traceback.extract_stack()[-2]
-    acao = f"ATRIBUIÇÃO→agente={assignee_id}" if assignee_id else "DESATRIBUIÇÃO"
+    acao = f"ATRIBUIÇÃO→agente={assignee_id}" if assignee_id else "DESATRIBUIÇÃO+PENDING"
     logger.info(f"🔴 {acao} — conta={account_id} conv={conversation_id} motivo='{motivo}' chamado_de={caller.filename}:{caller.lineno} ({caller.name})")
+
+    # Registrar no cache de conversas transferidas (previne re-processamento em memória)
+    _conversas_transferidas[conversation_id] = _time.monotonic()
+    # Limpar entradas antigas do cache
+    now = _time.monotonic()
+    expiradas = [cid for cid, ts in _conversas_transferidas.items() if now - ts > _TRANSFERENCIA_TTL]
+    for cid in expiradas:
+        _conversas_transferidas.pop(cid, None)
 
     # Desativar inatividade (follow-up) ao transferir para humano
     try:
@@ -1724,6 +1748,13 @@ def agendar_processamento(config: dict, account_id: int, conversation_id: int, i
 # ── FLUXO PRINCIPAL ───────────────────────────────────────────
 
 async def processar_mensagem(config: dict, account_id: int, conversation_id: int, inbox_id: int | None = None):
+    import time as _time
+    # Verificar cache: conversa foi transferida recentemente → IA não deve responder
+    _ts = _conversas_transferidas.get(conversation_id)
+    if _ts is not None and (_time.monotonic() - _ts) < _TRANSFERENCIA_TTL:
+        logger.info(f"[transferência] Conv={conversation_id} foi transferida há {int(_time.monotonic()-_ts)}s — ignorando processamento")
+        return
+
     logger.info(f"═══ PROCESSANDO [{account_id}] conv={conversation_id} ═══")
 
 
