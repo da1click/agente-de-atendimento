@@ -4179,9 +4179,107 @@ async function renderPageRelatorios() {
           ${histBars}
         </div>
       </div>
+
+      <!-- Relatório de Marketing -->
+      <div class="card" id="mkt-card">
+        <div style="font-size:14px;font-weight:700;margin-bottom:16px;">Relatório de Marketing</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px;">
+          <div style="display:flex;flex-direction:column;gap:4px;">
+            <label style="font-size:11px;color:var(--text-muted);">De</label>
+            <input type="date" id="mkt-de" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:13px;" />
+          </div>
+          <div style="display:flex;flex-direction:column;gap:4px;">
+            <label style="font-size:11px;color:var(--text-muted);">Até</label>
+            <input type="date" id="mkt-ate" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:13px;" />
+          </div>
+          <button onclick="_mktCarregar()" style="padding:7px 18px;background:var(--purple);color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">Gerar Relatório</button>
+        </div>
+        <div id="mkt-resultado"></div>
+      </div>
     `;
+
+    // Preencher datas padrão (últimos 30 dias)
+    const _hoje = new Date();
+    const _30dias = new Date(_hoje); _30dias.setDate(_hoje.getDate() - 30);
+    const _fmt = d => d.toISOString().slice(0, 10);
+    const _deEl = document.getElementById('mkt-de');
+    const _ateEl = document.getElementById('mkt-ate');
+    if (_deEl) _deEl.value = _fmt(_30dias);
+    if (_ateEl) _ateEl.value = _fmt(_hoje);
+
   } catch (e) {
     el.innerHTML = `<div class="empty-state"><p>Erro ao carregar relatório</p><p class="empty-sub">${e.message}</p></div>`;
+  }
+}
+
+async function _mktCarregar() {
+  const de = document.getElementById('mkt-de')?.value;
+  const ate = document.getElementById('mkt-ate')?.value;
+  const res_el = document.getElementById('mkt-resultado');
+  if (!de || !ate) { if (res_el) res_el.innerHTML = '<p style="color:var(--red);font-size:13px;">Selecione as datas.</p>'; return; }
+  if (res_el) res_el.innerHTML = '<p style="color:var(--text-muted);font-size:13px;">Carregando...</p>';
+  try {
+    const res = await fetch(`/api/clientes/${clienteAtivo}/relatorio-marketing?de=${de}&ate=${ate}`);
+    if (!res.ok) throw new Error('Erro ao carregar');
+    const d = await res.json();
+    const f = d.funil;
+    const t = d.taxas;
+
+    // Funil visual
+    const _card = (label, valor, cor, sub) => `
+      <div style="background:var(--bg);border-radius:10px;padding:16px;text-align:center;position:relative;">
+        <div style="font-size:26px;font-weight:800;color:${cor};">${valor}</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">${label}</div>
+        ${sub ? `<div style="font-size:10px;color:var(--text-muted);margin-top:2px;">${sub}</div>` : ''}
+      </div>`;
+
+    const _arrow = pct => `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--text-muted);font-size:18px;">▼<span style="font-size:10px;margin-top:2px;">${pct}%</span></div>`;
+
+    // Objeções
+    let objecoesHtml = '';
+    if (d.objecoes && d.objecoes.length) {
+      const maxOb = d.objecoes[0].qtd || 1;
+      objecoesHtml = `
+        <div class="card" style="margin-top:16px;">
+          <div style="font-size:14px;font-weight:700;margin-bottom:12px;">Principais Objeções / Motivos de Inviabilidade</div>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            ${d.objecoes.map(o => {
+              const w = Math.round((o.qtd / maxOb) * 100);
+              return `<div>
+                <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px;">
+                  <span style="color:var(--text);">${o.motivo}</span>
+                  <span style="font-weight:700;color:var(--red);">${o.qtd}</span>
+                </div>
+                <div style="background:var(--bg);border-radius:4px;height:8px;overflow:hidden;">
+                  <div style="background:var(--red);height:100%;width:${w}%;border-radius:4px;opacity:0.7;"></div>
+                </div>
+              </div>`;
+            }).join('')}
+          </div>
+        </div>`;
+    }
+
+    res_el.innerHTML = `
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:12px;">Período: ${de.split('-').reverse().join('/')} a ${ate.split('-').reverse().join('/')}</div>
+      <div style="display:grid;grid-template-columns:1fr auto 1fr auto 1fr auto 1fr;gap:6px;align-items:center;margin-bottom:4px;">
+        ${_card('Leads chegaram', f.leads_chegaram, 'var(--purple)', '')}
+        ${_arrow(t.qualificacao)}
+        ${_card('Qualificados', f.qualificados, '#6366f1', 'caso viável')}
+        ${_arrow(t.agendamento)}
+        ${_card('Reuniões agendadas', f.reunioes_agendadas, '#0ea5e9', '')}
+        ${_arrow(t.conversao)}
+        ${_card('Contratos', f.contratos, 'var(--green)', 'consulta agendada')}
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-top:12px;">
+        ${_card('Inviáveis', f.inviavel, 'var(--red)', '')}
+        ${_card('Em atendimento', f.em_atendimento, 'var(--yellow)', '')}
+        ${_card('Transferidos', f.transferidos, '#f97316', '')}
+        ${_card('Perdidos', f.perdidos, '#9CA3AF', '')}
+      </div>
+      ${objecoesHtml}
+    `;
+  } catch(e) {
+    if (res_el) res_el.innerHTML = `<p style="color:var(--red);font-size:13px;">Erro: ${e.message}</p>`;
   }
 }
 

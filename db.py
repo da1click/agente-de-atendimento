@@ -683,6 +683,84 @@ def contar_transcricoes(account_id: int, data_inicio: str, data_fim: str) -> int
         return 0
 
 
+def relatorio_marketing(account_id: int, data_inicio: str, data_fim: str) -> dict:
+    """Relatório de funil de marketing por período livre."""
+    db = get_db()
+    fim_dia = data_fim + "T23:59:59"
+
+    # 1. Total de conversas que chegaram (todas, independente de processamento)
+    total_leads = 0
+    try:
+        resp = db.table("ia_conversations").select("id", count="exact").eq(
+            "account_id", account_id
+        ).gte("created_at", data_inicio).lte("created_at", fim_dia).execute()
+        total_leads = resp.count or 0
+    except Exception:
+        pass
+
+    # 2. Leads por status + coleta de objeções
+    status_counts = {"em_atendimento": 0, "convertido": 0, "inviavel": 0, "transferido": 0, "perdido": 0}
+    objecoes: dict[str, int] = {}
+    _alias = {"resolved": "perdido", "aguardando": "em_atendimento", "desqualificado": "inviavel"}
+    try:
+        page_size = 1000
+        offset = 0
+        while True:
+            resp = db.table("ia_leads").select("status,inviability_reason").eq(
+                "account_id", account_id
+            ).gte("created_at", data_inicio).lte("created_at", fim_dia).range(offset, offset + page_size - 1).execute()
+            for r in (resp.data or []):
+                s = _alias.get(r.get("status") or "em_atendimento", r.get("status") or "em_atendimento")
+                if s in status_counts:
+                    status_counts[s] += 1
+                if s == "inviavel":
+                    motivo = (r.get("inviability_reason") or "Não informado").strip() or "Não informado"
+                    objecoes[motivo] = objecoes.get(motivo, 0) + 1
+            if len(resp.data or []) < page_size:
+                break
+            offset += page_size
+    except Exception:
+        pass
+
+    # 3. Reuniões agendadas
+    reunioes = 0
+    try:
+        resp = db.table("ia_agendamentos").select("id", count="exact").eq(
+            "account_id", account_id
+        ).gte("created_at", data_inicio).lte("created_at", fim_dia).execute()
+        reunioes = resp.count or 0
+    except Exception:
+        pass
+
+    # Funil: qualificados = casos viáveis (convertido + transferido + em_atendimento)
+    qualificados = status_counts["convertido"] + status_counts["transferido"] + status_counts["em_atendimento"]
+
+    def _pct(num: int, den: int) -> float:
+        return round((num / den) * 100, 1) if den else 0.0
+
+    top_objecoes = sorted(objecoes.items(), key=lambda x: x[1], reverse=True)[:8]
+
+    return {
+        "periodo": {"de": data_inicio[:10], "ate": data_fim[:10]},
+        "funil": {
+            "leads_chegaram": total_leads,
+            "qualificados": qualificados,
+            "reunioes_agendadas": reunioes,
+            "contratos": status_counts["convertido"],
+            "inviavel": status_counts["inviavel"],
+            "em_atendimento": status_counts["em_atendimento"],
+            "transferidos": status_counts["transferido"],
+            "perdidos": status_counts["perdido"],
+        },
+        "taxas": {
+            "qualificacao": _pct(qualificados, total_leads),
+            "agendamento": _pct(reunioes, qualificados),
+            "conversao": _pct(status_counts["convertido"], total_leads),
+        },
+        "objecoes": [{"motivo": m, "qtd": q} for m, q in top_objecoes],
+    }
+
+
 # ── USO MENSAL ───────────────────────────────────────────────
 
 def registrar_uso_mensal(account_id: int, conversation_id: int, mes: str):

@@ -677,6 +677,27 @@ def relatorio_conta(account_id: int, user: dict = Depends(get_current_user)):
     }
 
 
+@app.get("/api/clientes/{account_id}/relatorio-marketing")
+def relatorio_marketing_conta(
+    account_id: int,
+    de: str = None,
+    ate: str = None,
+    user: dict = Depends(get_current_user),
+):
+    """Relatório de funil de marketing por período livre (de/ate = YYYY-MM-DD)."""
+    if user.get("role") != "super_admin":
+        contas_permitidas = get_contas_do_usuario(user["sub"])
+        if account_id not in contas_permitidas:
+            raise HTTPException(status_code=403, detail="Sem permissão")
+    from datetime import datetime as _dt, timedelta as _td
+    if not ate:
+        ate = _dt.now().strftime("%Y-%m-%d")
+    if not de:
+        de = (_dt.now() - _td(days=30)).strftime("%Y-%m-%d")
+    from db import relatorio_marketing
+    return relatorio_marketing(account_id, de, ate)
+
+
 @app.get("/api/planos")
 def listar_planos():
     return PLANOS
