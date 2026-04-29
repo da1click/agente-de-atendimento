@@ -3994,6 +3994,54 @@ async def atualizar_template_lembrete(account_id: int, request: Request):
     return {"ok": True, "account_id": account_id, "minutos": minutos, "template": template}
 
 
+@app.post("/api/admin/enviar-template")
+async def admin_enviar_template(request: Request):
+    """Envia template WhatsApp para uma conversa específica (uso administrativo/teste).
+
+    Body JSON:
+      { "account_id": 17, "conversation_id": 239, "template": "lembrete_consulta_v3",
+        "params": {"1": "Fulano", "2": "14:00"} }
+    """
+    body = await request.json()
+    account_id = body.get("account_id")
+    conversation_id = body.get("conversation_id")
+    template_name = (body.get("template") or "").strip()
+    processed_params = body.get("params") or {}
+
+    if not account_id or not conversation_id or not template_name:
+        raise HTTPException(status_code=400, detail="Informe account_id, conversation_id e template")
+
+    config = carregar_config_cliente(account_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+
+    chatwoot_url = config["chatwoot_url"].rstrip("/")
+    token = config["chatwoot_token"]
+    url = f"{chatwoot_url}/api/v1/accounts/{account_id}/conversations/{conversation_id}/messages"
+    payload = {
+        "message_type": "outgoing",
+        "private": False,
+        "template_params": {
+            "name": template_name,
+            "language": "pt_BR",
+            "processed_params": processed_params,
+        },
+    }
+    async with httpx.AsyncClient(timeout=15) as http:
+        resp = await http.post(url, headers={"api_access_token": token, "Content-Type": "application/json"}, json=payload)
+
+    try:
+        resp_json = resp.json()
+    except Exception:
+        resp_json = {"raw": resp.text}
+
+    return {
+        "ok": resp.is_success,
+        "status_code": resp.status_code,
+        "chatwoot_response": resp_json,
+    }
+
+
 @app.get("/api/admin/agenda/diagnostico/{account_id}")
 async def diagnostico_agenda(account_id: int):
     """Diagnóstico do fluxo de agendamento: verifica config, advogados e consulta slots reais."""
