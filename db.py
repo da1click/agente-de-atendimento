@@ -688,15 +688,23 @@ def relatorio_marketing(account_id: int, data_inicio: str, data_fim: str) -> dic
     db = get_db()
     fim_dia = data_fim + "T23:59:59"
 
-    # 1. Total de conversas que chegaram (todas, independente de processamento)
+    # 1. Total de conversas que chegaram — usa ia_mensagens (salva antes de qualquer filtro)
+    # para capturar TODOS os leads, inclusive os que chegaram fora da janela da IA.
     total_leads = 0
     try:
-        resp = db.table("ia_conversations").select("id", count="exact").eq(
+        resp = db.table("ia_mensagens").select("conversation_id").eq(
             "account_id", account_id
-        ).gte("created_at", data_inicio).lte("created_at", fim_dia).execute()
-        total_leads = resp.count or 0
+        ).eq("message_type", "incoming").gte("created_at", data_inicio).lte("created_at", fim_dia).execute()
+        total_leads = len({r["conversation_id"] for r in (resp.data or [])})
     except Exception:
-        pass
+        # Fallback: ia_conversations se ia_mensagens não disponível
+        try:
+            resp = db.table("ia_conversations").select("id", count="exact").eq(
+                "account_id", account_id
+            ).gte("created_at", data_inicio).lte("created_at", fim_dia).execute()
+            total_leads = resp.count or 0
+        except Exception:
+            pass
 
     # 2. Leads por status + coleta de objeções
     status_counts = {"em_atendimento": 0, "convertido": 0, "inviavel": 0, "transferido": 0, "perdido": 0}

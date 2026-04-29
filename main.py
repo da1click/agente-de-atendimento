@@ -4252,6 +4252,81 @@ async def admin_conversas_sem_resposta(account_id: int, inbox_id: int = 0, pagin
     }
 
 
+@app.get("/api/admin/diagnostico-leads/{account_id}")
+async def diagnostico_leads(account_id: int, de: str = None, ate: str = None):
+    """Compara contagens de leads entre todas as tabelas para diagnosticar subcontagem."""
+    from datetime import datetime as _dt, timedelta as _td
+    if not ate:
+        ate = _dt.now().strftime("%Y-%m-%d")
+    if not de:
+        de = (_dt.now() - _td(days=30)).strftime("%Y-%m-%d")
+    fim_dia = ate + "T23:59:59"
+
+    config = carregar_config_cliente(account_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+
+    db = get_db()
+    resultado = {
+        "account_id": account_id,
+        "periodo": {"de": de, "ate": ate},
+        "config": {
+            "modo_teste": config.get("modo_teste", False),
+            "ia_ativa": config.get("ia_ativa", True),
+            "inboxes_filtradas": config.get("inboxes", []),
+            "ia_agent_id": config.get("ia_agent_id"),
+        },
+        "contagens": {},
+        "explicacao": {},
+    }
+
+    # 1. ia_mensagens — todas as mensagens recebidas (incoming), antes de qualquer filtro
+    try:
+        resp = db.table("ia_mensagens").select("conversation_id").eq(
+            "account_id", account_id
+        ).eq("message_type", "incoming").gte("created_at", de).lte("created_at", fim_dia).execute()
+        conv_ids = {r["conversation_id"] for r in (resp.data or [])}
+        resultado["contagens"]["ia_mensagens_conversas_unicas"] = len(conv_ids)
+        resultado["explicacao"]["ia_mensagens"] = "Conversas únicas com ao menos 1 msg recebida — fonte mais completa"
+    except Exception as e:
+        resultado["contagens"]["ia_mensagens_conversas_unicas"] = f"erro: {e}"
+
+    # 2. ia_leads — registrado para msgs incoming que passaram pelo filtro de grupo/modo_teste
+    try:
+        resp = db.table("ia_leads").select("id", count="exact").eq(
+            "account_id", account_id
+        ).gte("created_at", de).lte("created_at", fim_dia).execute()
+        resultado["contagens"]["ia_leads"] = resp.count or 0
+        resultado["explicacao"]["ia_leads"] = "Leads registrados após filtros de grupo e modo_teste"
+    except Exception as e:
+        resultado["contagens"]["ia_leads"] = f"erro: {e}"
+
+    # 3. ia_conversations — conversas onde IA chegou a processar
+    try:
+        resp = db.table("ia_conversations").select("id", count="exact").eq(
+            "account_id", account_id
+        ).gte("created_at", de).lte("created_at", fim_dia).execute()
+        resultado["contagens"]["ia_conversations"] = resp.count or 0
+        resultado["explicacao"]["ia_conversations"] = "Conversas onde a IA processou e respondeu"
+    except Exception as e:
+        resultado["contagens"]["ia_conversations"] = f"erro: {e}"
+
+    # 4. ia_uso_mensal — para comparação com o relatório de cobrança
+    try:
+        from db import _ciclo_mes
+        dia_ciclo = config.get("dia_ciclo", 1)
+        ciclo_id, _, _ = _ciclo_mes(dia_ciclo)
+        resp = db.table("ia_uso_mensal").select("id", count="exact").eq(
+            "account_id", account_id
+        ).eq("mes", ciclo_id).execute()
+        resultado["contagens"]["ia_uso_mensal_ciclo_atual"] = resp.count or 0
+        resultado["explicacao"]["ia_uso_mensal"] = f"Contagem de cobrança do ciclo {ciclo_id} (dia_ciclo={dia_ciclo})"
+    except Exception as e:
+        resultado["contagens"]["ia_uso_mensal_ciclo_atual"] = f"erro: {e}"
+
+    return resultado
+
+
 @app.get("/api/admin/agenda/diagnostico/{account_id}")
 async def diagnostico_agenda(account_id: int):
     """Diagnóstico do fluxo de agendamento: verifica config, advogados e consulta slots reais."""
