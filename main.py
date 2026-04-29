@@ -1342,11 +1342,17 @@ async def chatwoot_webhook(request: Request):
 
     # conversation_updated: disparar IA quando conversa nova é atribuída ao agente IA
     if event == "conversation_updated":
-        import time as _time
-        conv_upd = payload.get("conversation", {})
-        account_id_upd = conv_upd.get("account_id") or payload.get("account_id")
-        conversation_id_upd = conv_upd.get("id")
-        inbox_id_upd = conv_upd.get("inbox_id")
+        # Chatwoot envia o objeto da conversa na RAIZ do payload (não em payload["conversation"])
+        # quando o evento é conversation_updated. id e inbox_id estão no topo.
+        conv_upd = payload.get("conversation") or {}
+        conversation_id_upd = conv_upd.get("id") or payload.get("id")
+        inbox_id_upd = conv_upd.get("inbox_id") or payload.get("inbox_id")
+        # account_id pode não vir no payload — tentar derivar depois via configs ativas
+        account_id_upd = (
+            conv_upd.get("account_id")
+            or payload.get("account_id")
+            or (payload.get("account") or {}).get("id")
+        )
 
         # Guard: só processar se changed_attributes indica mudança de assignee
         # NÃO usar conversa_nova como fallback — causa loop (IA responde → conversation_updated → IA responde...)
@@ -1357,13 +1363,33 @@ async def chatwoot_webhook(request: Request):
 
         logger.info(
             f"[conv-updated] event recebido — conv={conversation_id_upd} account={account_id_upd} "
-            f"assignee_mudou={assignee_mudou} changed={changed}"
+            f"inbox={inbox_id_upd} assignee_mudou={assignee_mudou} changed={changed}"
         )
 
         if not assignee_mudou:
             return {"status": "ignorado", "event": event, "motivo": "changed_attributes sem mudança de assignee"}
 
-        if not account_id_upd or not conversation_id_upd:
+        if not conversation_id_upd:
+            logger.warning("[conv-updated] conversation_id ausente no payload — ignorando")
+            return {"status": "ignorado", "event": event}
+
+        # Se account_id não veio no payload, procurar qual conta ativa tem esse inbox_id
+        if not account_id_upd and inbox_id_upd:
+            try:
+                from db import get_db as _get_db
+                _db = _get_db()
+                _rows = _db.table("ia_clientes_config").select("account_id,inboxes").eq("ativo", True).execute()
+                for _row in (_rows.data or []):
+                    _inboxes = _row.get("inboxes") or []
+                    if inbox_id_upd in _inboxes:
+                        account_id_upd = _row["account_id"]
+                        logger.info(f"[conv-updated] account_id derivado do inbox_id={inbox_id_upd} → account={account_id_upd}")
+                        break
+            except Exception as _e:
+                logger.warning(f"[conv-updated] Erro ao derivar account_id: {_e}")
+
+        if not account_id_upd:
+            logger.warning(f"[conv-updated] Não foi possível determinar account_id para conv={conversation_id_upd} inbox={inbox_id_upd}")
             return {"status": "ignorado", "event": event}
 
         config_upd = carregar_config_cliente(account_id_upd)
@@ -1391,12 +1417,14 @@ async def chatwoot_webhook(request: Request):
                 fresh_assignee = (fresh.get("meta") or {}).get("assignee") or {}
                 fresh_assignee_id = fresh_assignee.get("id")
                 fresh_status = fresh.get("status")
+                fresh_inbox_id = fresh.get("inbox_id") or inbox_id_upd
                 logger.info(
-                    f"[conv-updated] API retornou assignee_id={fresh_assignee_id} "
+                    f"[conv-updated] API: assignee_id={fresh_assignee_id} "
                     f"ia_agent_id={ia_agent_id_upd} status={fresh_status} conv={conversation_id_upd}"
                 )
                 if fresh_assignee_id == ia_agent_id_upd and fresh_status == "open":
-                    agendar_processamento(config_upd, account_id_upd, conversation_id_upd, inbox_id_upd)
+                    agendar_processamento(config_upd, account_id_upd, conversation_id_upd, fresh_inbox_id)
+                    logger.info(f"[conv-updated] ✅ Processamento agendado — conv={conversation_id_upd} account={account_id_upd}")
                     return {"status": "ok", "event": event}
         except Exception as e_upd:
             logger.warning(f"[conv-updated] Erro ao buscar assignee — conv={conversation_id_upd}: {e_upd}")
