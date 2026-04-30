@@ -1504,6 +1504,16 @@ async def chatwoot_webhook(request: Request):
 
         # Salvar mensagem no histórico (todas: incoming + outgoing)
         conteudo_msg = msg.get("content") or msg.get("body") or ""
+        # Fallback: buscar conteúdo em content_attributes (templates WhatsApp têm content=null)
+        if not conteudo_msg:
+            _attrs = msg.get("content_attributes") or {}
+            if isinstance(_attrs, dict):
+                conteudo_msg = (
+                    _attrs.get("body") or
+                    _attrs.get("text") or
+                    _attrs.get("message") or
+                    json.dumps(_attrs)
+                )
         try:
             from db import salvar_mensagem
             tipo_str = "incoming" if msg_type in (0, "incoming") else "outgoing"
@@ -6027,6 +6037,76 @@ async def api_reativar_followups(request: Request, user=Depends(get_current_user
 
     logger.info(f"[zapsign-reativar] account={account_id} reativados={reativados} ignorados(assinados)={ignorados}")
     return {"ok": True, "reativados": reativados, "ignorados_assinados": ignorados}
+
+
+@app.post("/api/zapsign/sincronizar-followups")
+async def api_sincronizar_followups(request: Request, user=Depends(get_current_user)):
+    """Varre o histórico de mensagens em busca de links ZapSign sem follow-up e cria os registros faltantes."""
+    body = await request.json()
+    account_id = body.get("account_id")
+    if not account_id:
+        raise HTTPException(400, "account_id obrigatório")
+
+    zapsign_cfg = get_zapsign_config(account_id)
+    if not zapsign_cfg or not zapsign_cfg.get("followup_ativo", False):
+        raise HTTPException(400, "Follow-up ZapSign não está ativo para esta conta")
+
+    from db import get_db
+    db_client = get_db()
+    from datetime import datetime, timezone, timedelta
+
+    estagios = zapsign_cfg.get("followup_estagios", [])
+    if isinstance(estagios, str):
+        import json as _json
+        estagios = _json.loads(estagios)
+    if not estagios:
+        raise HTTPException(400, "Nenhum estágio configurado")
+
+    horas_primeiro = estagios[0].get("horas", 2) if estagios else 2
+    proximo = (datetime.now(timezone.utc) + timedelta(hours=horas_primeiro)).isoformat()
+
+    # Buscar mensagens outgoing com "zapsign" no conteúdo (últimos 90 dias)
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=90)).isoformat()
+    resp = db_client.table("ia_mensagens").select(
+        "conversation_id, inbox_id, content"
+    ).eq("account_id", account_id).eq("message_type", "outgoing").ilike("content", "%zapsign%").gte("created_at", cutoff).execute()
+
+    msgs = resp.data or []
+    criados = 0
+    ja_existiam = 0
+
+    for m in msgs:
+        conv_id = m.get("conversation_id")
+        inbox_id_m = m.get("inbox_id")
+        conteudo = m.get("content") or ""
+        urls = _ZAPSIGN_URL_PATTERN.findall(conteudo)
+        if not urls:
+            continue
+
+        for url in urls:
+            url_limpa = url.rstrip('`_*>')
+            match = _ZAPSIGN_TOKEN_PATTERN.search(url_limpa)
+            doc_token = match.group(1) if match else url_limpa
+
+            # Verificar se já tem follow-up ativo pra essa conversa
+            ex = db_client.table("ia_zapsign_followup").select("id, ativo").eq(
+                "account_id", account_id
+            ).eq("conversation_id", conv_id).maybe_single().execute()
+
+            if ex.data and ex.data.get("ativo"):
+                ja_existiam += 1
+                continue
+
+            try:
+                from db import upsert_zapsign_followup
+                upsert_zapsign_followup(account_id, conv_id, inbox_id_m, doc_token, 1, proximo)
+                criados += 1
+                logger.info(f"[zapsign-sync] Follow-up criado — conv={conv_id} doc={doc_token}")
+            except Exception as e:
+                logger.warning(f"[zapsign-sync] Erro conv={conv_id}: {e}")
+
+    logger.info(f"[zapsign-sync] account={account_id} criados={criados} ja_existiam={ja_existiam}")
+    return {"ok": True, "criados": criados, "ja_existiam": ja_existiam}
 
 
 # ══════════════════════════════════════════════════════════════

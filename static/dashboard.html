@@ -6828,7 +6828,8 @@ function _renderZapSignPage() {
         ${_zapsignRenderEstagios()}
         <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;">
           <button class="btn btn-primary" onclick="_zapsignSalvarFollowup()">Salvar Follow-up</button>
-          <button class="btn btn-secondary" onclick="_zapsignReativarFollowups()" title="Reativa follow-ups desativados para conversas com contratos ainda não assinados">Reativar Follow-ups</button>
+          <button class="btn btn-secondary" onclick="_zapsignSincronizarFollowups()" title="Varre o histórico de mensagens buscando links ZapSign sem follow-up e cria os registros faltantes">Sincronizar do Histórico</button>
+          <button class="btn btn-secondary" onclick="_zapsignReativarFollowups()" title="Reativa follow-ups desativados para conversas com contratos ainda não assinados">Reativar Desativados</button>
         </div>
         <div id="zs-followup-msg" style="margin-top:10px;"></div>
       </div>
@@ -7038,6 +7039,31 @@ function _zapsignRenderEstagios() {
         placeholder="Mensagem do lembrete...">${e.mensagem || ''}</textarea>
     </div>
   `).join('');
+}
+
+async function _zapsignSincronizarFollowups() {
+  const msgEl = document.getElementById('zs-followup-msg');
+  msgEl.innerHTML = '<span style="color:var(--text-secondary);">Varrendo histórico de mensagens...</span>';
+  try {
+    const resp = await fetch('/api/zapsign/sincronizar-followups', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ account_id: clienteAtivo }),
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      const msg = data.criados > 0
+        ? `${data.criados} follow-up(s) criado(s) a partir do histórico. ${data.ja_existiam > 0 ? data.ja_existiam + ' já existiam.' : ''}`
+        : `Nenhum follow-up novo encontrado no histórico. ${data.ja_existiam > 0 ? data.ja_existiam + ' já existiam.' : ''}`;
+      msgEl.innerHTML = `<span style="color:var(--green);">${msg}</span>`;
+      if (data.criados > 0) await renderPageZapSign();
+    } else {
+      msgEl.innerHTML = `<span style="color:var(--red);">Erro: ${data.error || data.detail || 'Falha'}</span>`;
+    }
+  } catch(e) {
+    msgEl.innerHTML = `<span style="color:var(--red);">Erro: ${e.message}</span>`;
+  }
+  setTimeout(() => { const el = document.getElementById('zs-followup-msg'); if(el) el.innerHTML = ''; }, 6000);
 }
 
 async function _zapsignReativarFollowups() {
