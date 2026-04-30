@@ -642,12 +642,19 @@ def relatorio_conta(account_id: int, user: dict = Depends(get_current_user)):
     excedente = max(0, conversas_mes - limite)
     valor_excedente = round(excedente * plano["excedente_conversa"], 2)
 
-    # Histórico últimos 6 ciclos — usa campo 'mes' para evitar contaminação por backfills
+    # Histórico últimos 6 ciclos — subtrai mês a mês (não dias) para não pular meses curtos
     meses_hist = []
     dt = _dt.now()
     ciclos_vistos = set()
     for i in range(5, -1, -1):
-        d = dt - timedelta(days=i * 30)
+        # Subtrair i meses calendário de forma segura
+        mes_ref = dt.month - i
+        ano_ref = dt.year
+        while mes_ref <= 0:
+            mes_ref += 12
+            ano_ref -= 1
+        dia_ref = min(dt.day, 28)  # evita problemas com meses curtos
+        d = dt.replace(year=ano_ref, month=mes_ref, day=dia_ref)
         cid, _, _ = _ciclo_mes(dia_ciclo, d)
         if cid not in ciclos_vistos:
             ciclos_vistos.add(cid)
