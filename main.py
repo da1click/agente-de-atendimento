@@ -103,6 +103,8 @@ async def _recuperar_conversas_pos_deploy():
                 continue
 
             account_id = cfg["account_id"]
+            if account_id == 19:
+                continue  # IA desativada para conta 19
             base_url = (cfg.get("chatwoot_url") or "").rstrip("/")
             token = cfg.get("chatwoot_token", "")
             ia_agent_id = cfg["ia_agent_id"]
@@ -1422,6 +1424,11 @@ async def chatwoot_webhook(request: Request):
 
         if not account_id_upd:
             logger.warning(f"[conv-updated] Não foi possível determinar account_id para conv={conversation_id_upd} inbox={inbox_id_upd}")
+            return {"status": "ignorado", "event": event}
+
+        # Conta 19: IA desativada
+        if account_id_upd == 19:
+            logger.info(f"[conv-updated] Conta 19 — IA desativada (conv={conversation_id_upd})")
             return {"status": "ignorado", "event": event}
 
         config_upd = carregar_config_cliente(account_id_upd)
