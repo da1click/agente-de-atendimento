@@ -1694,6 +1694,13 @@ async def chatwoot_webhook(request: Request):
             logger.info(f"[modo-teste] Ignorando conv={conversation_id} — sem label 'ia-teste' (account={account_id})")
             continue
 
+        # IA nunca deve enviar mensagem em conversas com estas etiquetas
+        _LABELS_BLOQUEIO = {"remarketing", "desqualificado"}
+        labels_bloqueio_ativas = _LABELS_BLOQUEIO.intersection(set(conv_labels))
+        if labels_bloqueio_ativas:
+            logger.info(f"[ia] Bloqueado por etiqueta {labels_bloqueio_ativas} — conv={conversation_id} account={account_id}")
+            continue
+
         # Verificar se IA deve responder nesta conversa (antes de qualquer efeito colateral)
         # Modo teste com label "ia-teste": forçar IA ativa (não precisa de ia_ativa ligado na config)
         if modo_teste and "ia-teste" in conv_labels:

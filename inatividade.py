@@ -452,12 +452,21 @@ async def disparar_estagio(config_cliente: dict, row: dict):
         desativar_inatividade(account_id, conversation_id)
         return
 
+    _LABELS_BLOQUEIO_INATIV = {"remarketing", "desqualificado"}
+
     try:
         url_conv = f"{chatwoot_url}/api/v1/accounts/{account_id}/conversations/{conversation_id}"
         async with httpx.AsyncClient(timeout=10) as http:
             resp = await http.get(url_conv, headers={"api_access_token": token})
             if resp.is_success:
                 conv = resp.json()
+                # Bloquear disparo se conversa tem etiqueta de remarketing ou desqualificado
+                conv_labels_inativ = conv.get("labels", [])
+                labels_block = _LABELS_BLOQUEIO_INATIV.intersection(set(conv_labels_inativ))
+                if labels_block:
+                    logger.info(f"[inatividade] Bloqueado por etiqueta {labels_block} — conv={conversation_id} desativando monitoramento")
+                    desativar_inatividade(account_id, conversation_id)
+                    return
                 assignee = conv.get("meta", {}).get("assignee") or conv.get("assignee")
                 current_assignee_id = assignee.get("id") if isinstance(assignee, dict) else None
                 if current_assignee_id != ia_agent_id:
