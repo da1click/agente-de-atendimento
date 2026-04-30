@@ -1664,6 +1664,19 @@ async def chamar_agente(config: dict, fase: str, messages_openai: list, conversa
     prompt = carregar_prompt(config["account_id"], arquivo)
     prompt = prompt.replace("{data_hora_atual}", data_hora_atual())
 
+    # Modo remarketing: sobrescreve o comportamento padrão do agente
+    if context.get("modo_remarketing"):
+        instrucao_remarketing = (
+            "\n\n[INSTRUÇÃO ESPECIAL — MODO REMARKETING]\n"
+            "Este lead já foi atendido anteriormente e está em fase de remarketing. "
+            "Sua única função agora é responder dúvidas pontuais que ele fizer. "
+            "NÃO tente qualificá-lo novamente. NÃO faça perguntas de triagem. "
+            "NÃO peça dados como CPF, situação, vínculo empregatício etc. "
+            "Responda de forma breve, cordial e direta ao que ele perguntou. "
+            "Se ele demonstrar interesse em agendar ou contratar, transfira para um humano."
+        )
+        prompt = prompt + instrucao_remarketing
+
     client = OpenAI(api_key=config["openai_api_key"])
     msgs = [{"role": "system", "content": prompt}, *messages_openai]
 
@@ -1825,10 +1838,16 @@ async def processar_mensagem(config: dict, account_id: int, conversation_id: int
         labels_str = ", ".join(_labels_conversa)
         historico_texto = f"[TAGS DA CONVERSA: {labels_str}]\n\n" + historico_texto
 
+    # Modo remarketing: lead já foi contactado antes — só tira dúvidas, não qualifica
+    _modo_remarketing = "remarketing" in _labels_conversa
+
     # Cliente com contrato fechado: pular supervisor e transferir direto
     if "contrato-fechado" in _labels_conversa:
         logger.info(f"🏷️ Tag 'contrato-fechado' detectada — transferindo para humano sem qualificação (conv={conversation_id})")
         fase = "transferir_humano"
+    elif _modo_remarketing:
+        logger.info(f"🏷️ Tag 'remarketing' detectada — modo apenas tira-dúvidas, sem qualificação (conv={conversation_id})")
+        fase = "identificacao"
     else:
         fase = chamar_supervisor(config, historico_texto)
 
@@ -1926,6 +1945,7 @@ async def processar_mensagem(config: dict, account_id: int, conversation_id: int
         "historico_texto": historico_texto,
         "historico": historico,
         "is_reagendamento": _is_reagendamento,
+        "modo_remarketing": _modo_remarketing,
     }
 
     # Kanban: criar card "Novo Lead" ou mover para "Em Qualificação"
