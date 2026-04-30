@@ -5643,14 +5643,23 @@ async def api_list_zapsign_docs(account_id: int, user=Depends(get_current_user))
     docs_remote = []
 
     try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.get(
-                f"{ZAPSIGN_API_BASE}/docs/",
-                headers={"Authorization": f"Bearer {api_token}"},
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            docs_remote = data if isinstance(data, list) else data.get("results", [])
+        async with httpx.AsyncClient(timeout=30) as client:
+            next_url = f"{ZAPSIGN_API_BASE}/docs/"
+            paginas = 0
+            while next_url and paginas < 10:
+                resp = await client.get(
+                    next_url,
+                    headers={"Authorization": f"Bearer {api_token}"},
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                if isinstance(data, list):
+                    docs_remote.extend(data)
+                    break
+                else:
+                    docs_remote.extend(data.get("results", []))
+                    next_url = data.get("next")
+                paginas += 1
 
         # Salvar/atualizar docs localmente
         for doc in docs_remote:
@@ -5658,7 +5667,6 @@ async def api_list_zapsign_docs(account_id: int, user=Depends(get_current_user))
 
     except Exception as e:
         logger.warning(f"Erro ao buscar docs ZapSign conta {account_id}: {e}")
-        # Retorna docs locais como fallback
         docs_local = listar_zapsign_docs(account_id)
         return {"docs": docs_local, "error": str(e), "source": "cache"}
 
@@ -5951,6 +5959,74 @@ async def api_zapsign_followup_list(account_id: int, limit: int = 20, offset: in
 async def api_zapsign_followup_stats(account_id: int, user=Depends(get_current_user)):
     """Retorna métricas dos follow-ups ZapSign: enviados, assinados, pendentes, esgotados."""
     return get_zapsign_followup_stats(account_id)
+
+
+@app.post("/api/zapsign/reativar-followups")
+async def api_reativar_followups(request: Request, user=Depends(get_current_user)):
+    """Reativa follow-ups desativados da conta, verificando via API ZapSign se docs ainda não foram assinados."""
+    body = await request.json()
+    account_id = body.get("account_id")
+    if not account_id:
+        raise HTTPException(400, "account_id obrigatório")
+
+    zapsign_cfg = get_zapsign_config(account_id)
+    api_token = (zapsign_cfg or {}).get("api_token", "")
+
+    from db import get_db
+    db_client = get_db()
+    from datetime import datetime, timezone, timedelta
+
+    resp = db_client.table("ia_zapsign_followup").select("*").eq("account_id", account_id).eq("ativo", False).execute()
+    inativos = resp.data or []
+
+    reativados = 0
+    ignorados = 0
+
+    proximo = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+
+    for row in inativos:
+        doc_tokens = row.get("doc_tokens") or []
+        if isinstance(doc_tokens, str):
+            import json as _json
+            doc_tokens = _json.loads(doc_tokens)
+        if not doc_tokens:
+            doc_token = row.get("doc_token", "")
+            doc_tokens = [doc_token] if doc_token else []
+
+        # Verificar se todos os docs já estão assinados
+        todos_assinados = False
+        if api_token and doc_tokens:
+            todos_assinados = True
+            for dt in doc_tokens:
+                try:
+                    async with httpx.AsyncClient(timeout=10) as http:
+                        r = await http.get(
+                            f"https://api.zapsign.com.br/api/v1/docs/{dt}/",
+                            headers={"Authorization": f"Bearer {api_token}"}
+                        )
+                        if r.is_success:
+                            status_doc = r.json().get("status", "")
+                            if status_doc not in ("signed", "closed"):
+                                todos_assinados = False
+                        else:
+                            todos_assinados = False
+                except Exception:
+                    todos_assinados = False
+
+        if todos_assinados:
+            ignorados += 1
+            continue
+
+        db_client.table("ia_zapsign_followup").update({
+            "ativo": True,
+            "stagio": 1,
+            "proximo_disparo": proximo,
+            "updated_at": "now()",
+        }).eq("id", row["id"]).execute()
+        reativados += 1
+
+    logger.info(f"[zapsign-reativar] account={account_id} reativados={reativados} ignorados(assinados)={ignorados}")
+    return {"ok": True, "reativados": reativados, "ignorados_assinados": ignorados}
 
 
 # ══════════════════════════════════════════════════════════════

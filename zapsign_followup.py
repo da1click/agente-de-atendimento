@@ -195,7 +195,6 @@ async def processar_followups():
 
         zapsign_cfg = get_zapsign_config(account_id)
         if not zapsign_cfg or not zapsign_cfg.get("followup_ativo", False):
-            desativar_zapsign_followup_conversa(account_id, row["conversation_id"])
             continue
 
         try:

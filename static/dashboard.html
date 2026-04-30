@@ -6826,8 +6826,9 @@ function _renderZapSignPage() {
           Envia lembretes automáticos quando um contrato ZapSign é enviado e ainda não foi assinado.
         </p>
         ${_zapsignRenderEstagios()}
-        <div style="display:flex;gap:8px;margin-top:16px;">
+        <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;">
           <button class="btn btn-primary" onclick="_zapsignSalvarFollowup()">Salvar Follow-up</button>
+          <button class="btn btn-secondary" onclick="_zapsignReativarFollowups()" title="Reativa follow-ups desativados para conversas com contratos ainda não assinados">Reativar Follow-ups</button>
         </div>
         <div id="zs-followup-msg" style="margin-top:10px;"></div>
       </div>
@@ -7037,6 +7038,31 @@ function _zapsignRenderEstagios() {
         placeholder="Mensagem do lembrete...">${e.mensagem || ''}</textarea>
     </div>
   `).join('');
+}
+
+async function _zapsignReativarFollowups() {
+  const msgEl = document.getElementById('zs-followup-msg');
+  msgEl.innerHTML = '<span style="color:var(--text-secondary);">Verificando contratos...</span>';
+  try {
+    const resp = await fetch('/api/zapsign/reativar-followups', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ account_id: clienteAtivo }),
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      const msg = data.reativados > 0
+        ? `${data.reativados} follow-up(s) reativado(s). ${data.ignorados_assinados > 0 ? data.ignorados_assinados + ' já assinado(s) — ignorado(s).' : ''}`
+        : `Nenhum follow-up para reativar. ${data.ignorados_assinados > 0 ? data.ignorados_assinados + ' já assinado(s).' : ''}`;
+      msgEl.innerHTML = `<span style="color:var(--green);">${msg}</span>`;
+      if (data.reativados > 0) await renderPageZapSign();
+    } else {
+      msgEl.innerHTML = `<span style="color:var(--red);">Erro ao reativar.</span>`;
+    }
+  } catch(e) {
+    msgEl.innerHTML = `<span style="color:var(--red);">Erro: ${e.message}</span>`;
+  }
+  setTimeout(() => { const el = document.getElementById('zs-followup-msg'); if(el) el.innerHTML = ''; }, 5000);
 }
 
 async function _zapsignSalvarFollowup() {
