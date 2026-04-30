@@ -1,0 +1,7 @@
+{
+  "estagios": [
+    {"stagio": 1, "horas": 2, "mensagem": "Olá! Notei que o contrato ainda não foi assinado. Precisa de alguma ajuda?"},
+    {"stagio": 2, "horas": 6, "mensagem": "Oi! Só passando para lembrar sobre o contrato pendente. Posso ajudar com alguma dúvida?"},
+    {"stagio": 3, "horas": 12, "mensagem": "Olá! Este é nosso último lembrete sobre o contrato. Por favor, assine para darmos continuidade."}
+  ]
+}

@@ -1,0 +1,7 @@
+.env
+*.env
+envs/
+__pycache__/
+*.pyc
+.claude/
+clientes/**/config.json
