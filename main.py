@@ -1457,6 +1457,13 @@ async def chatwoot_webhook(request: Request):
                 if fresh_assignee_id == ia_agent_id_upd and fresh_status == "open":
                     agendar_processamento(config_upd, account_id_upd, conversation_id_upd, fresh_inbox_id)
                     logger.info(f"[conv-updated] ✅ Processamento agendado — conv={conversation_id_upd} account={account_id_upd}")
+                    try:
+                        dia_ciclo = config_upd.get("dia_ciclo", 1)
+                        ciclo_id, _, _ = _ciclo_mes(dia_ciclo)
+                        registrar_uso_mensal(account_id_upd, conversation_id_upd, ciclo_id)
+                        logger.info(f"[conv-updated] Uso mensal registrado — conv={conversation_id_upd} ciclo={ciclo_id}")
+                    except Exception as e_uso:
+                        logger.warning(f"[conv-updated] Erro ao registrar uso mensal: {e_uso}")
                     return {"status": "ok", "event": event}
         except Exception as e_upd:
             logger.warning(f"[conv-updated] Erro ao buscar assignee — conv={conversation_id_upd}: {e_upd}")
