@@ -683,6 +683,92 @@ def contar_transcricoes(account_id: int, data_inicio: str, data_fim: str) -> int
         return 0
 
 
+def relatorio_marketing(account_id: int, data_inicio: str, data_fim: str) -> dict:
+    """Relatório de funil de marketing por período livre."""
+    db = get_db()
+    fim_dia = data_fim + "T23:59:59"
+
+    # 1. Total de conversas que chegaram — usa ia_mensagens (salva antes de qualquer filtro)
+    # para capturar TODOS os leads, inclusive os que chegaram fora da janela da IA.
+    total_leads = 0
+    try:
+        resp = db.table("ia_mensagens").select("conversation_id").eq(
+            "account_id", account_id
+        ).eq("message_type", "incoming").gte("created_at", data_inicio).lte("created_at", fim_dia).execute()
+        total_leads = len({r["conversation_id"] for r in (resp.data or [])})
+    except Exception:
+        # Fallback: ia_conversations se ia_mensagens não disponível
+        try:
+            resp = db.table("ia_conversations").select("id", count="exact").eq(
+                "account_id", account_id
+            ).gte("created_at", data_inicio).lte("created_at", fim_dia).execute()
+            total_leads = resp.count or 0
+        except Exception:
+            pass
+
+    # 2. Leads por status + coleta de objeções
+    status_counts = {"em_atendimento": 0, "convertido": 0, "inviavel": 0, "transferido": 0, "perdido": 0}
+    objecoes: dict[str, int] = {}
+    _alias = {"resolved": "perdido", "aguardando": "em_atendimento", "desqualificado": "inviavel"}
+    try:
+        page_size = 1000
+        offset = 0
+        while True:
+            resp = db.table("ia_leads").select("status,inviability_reason").eq(
+                "account_id", account_id
+            ).gte("created_at", data_inicio).lte("created_at", fim_dia).range(offset, offset + page_size - 1).execute()
+            for r in (resp.data or []):
+                s = _alias.get(r.get("status") or "em_atendimento", r.get("status") or "em_atendimento")
+                if s in status_counts:
+                    status_counts[s] += 1
+                if s == "inviavel":
+                    motivo = (r.get("inviability_reason") or "Não informado").strip() or "Não informado"
+                    objecoes[motivo] = objecoes.get(motivo, 0) + 1
+            if len(resp.data or []) < page_size:
+                break
+            offset += page_size
+    except Exception:
+        pass
+
+    # 3. Reuniões agendadas
+    reunioes = 0
+    try:
+        resp = db.table("ia_agendamentos").select("id", count="exact").eq(
+            "account_id", account_id
+        ).gte("created_at", data_inicio).lte("created_at", fim_dia).execute()
+        reunioes = resp.count or 0
+    except Exception:
+        pass
+
+    # Funil: qualificados = casos viáveis (convertido + transferido + em_atendimento)
+    qualificados = status_counts["convertido"] + status_counts["transferido"] + status_counts["em_atendimento"]
+
+    def _pct(num: int, den: int) -> float:
+        return round((num / den) * 100, 1) if den else 0.0
+
+    top_objecoes = sorted(objecoes.items(), key=lambda x: x[1], reverse=True)[:8]
+
+    return {
+        "periodo": {"de": data_inicio[:10], "ate": data_fim[:10]},
+        "funil": {
+            "leads_chegaram": total_leads,
+            "qualificados": qualificados,
+            "reunioes_agendadas": reunioes,
+            "contratos": status_counts["convertido"],
+            "inviavel": status_counts["inviavel"],
+            "em_atendimento": status_counts["em_atendimento"],
+            "transferidos": status_counts["transferido"],
+            "perdidos": status_counts["perdido"],
+        },
+        "taxas": {
+            "qualificacao": _pct(qualificados, total_leads),
+            "agendamento": _pct(reunioes, qualificados),
+            "conversao": _pct(status_counts["convertido"], total_leads),
+        },
+        "objecoes": [{"motivo": m, "qtd": q} for m, q in top_objecoes],
+    }
+
+
 # ── USO MENSAL ───────────────────────────────────────────────
 
 def registrar_uso_mensal(account_id: int, conversation_id: int, mes: str):
@@ -1125,18 +1211,21 @@ def contar_envios_remarketing_hoje(campanha_id: int) -> int:
 
 
 def registrar_envio_remarketing(campanha_id: int, account_id: int, conversation_id: int, status: str = "enviado"):
+    from datetime import datetime, timezone
     db = get_db()
-    db.table("ia_remarketing_envios").insert({
+    db.table("ia_remarketing_envios").upsert({
         "campanha_id": campanha_id,
         "account_id": account_id,
         "conversation_id": conversation_id,
         "status": status,
-    }).execute()
+        "enviado_em": datetime.now(timezone.utc).isoformat(),
+    }, on_conflict="campanha_id,conversation_id").execute()
 
 
 def buscar_conversas_elegiveis_remarketing(account_id: int, campanha_id: int, dias_inatividade: int, limite: int, inbox_id: int = None) -> list:
     """
-    Busca leads inativos há X dias que ainda não foram contactados por esta campanha.
+    Busca leads inativos há X dias que não foram contactados por esta campanha
+    dentro da janela de reenvio (dias_inatividade * 2, mínimo 60 dias).
     Se inbox_id for fornecido, filtra apenas leads dessa inbox.
     Ordena do mais antigo para o mais recente.
     """
@@ -1144,14 +1233,29 @@ def buscar_conversas_elegiveis_remarketing(account_id: int, campanha_id: int, di
     from datetime import datetime, timezone, timedelta
     cutoff = (datetime.now(timezone.utc) - timedelta(days=dias_inatividade)).isoformat()
 
-    # Buscar todos os conversation_ids já contactados por esta campanha
-    envios_resp = (
-        db.table("ia_remarketing_envios")
-        .select("conversation_id")
-        .eq("campanha_id", campanha_id)
-        .execute()
-    )
-    ja_enviados = {e["conversation_id"] for e in (envios_resp.data or [])}
+    # Janela de reenvio: leads enviados fora dessa janela voltam a ser elegíveis
+    janela_reenvio = max(dias_inatividade * 2, 60)
+    cutoff_reenvio = (datetime.now(timezone.utc) - timedelta(days=janela_reenvio)).isoformat()
+
+    # Buscar conversation_ids já contactados dentro da janela de reenvio (paginado)
+    ja_enviados: set[int] = set()
+    _page_offset = 0
+    _page_size = 1000
+    while True:
+        envios_resp = (
+            db.table("ia_remarketing_envios")
+            .select("conversation_id")
+            .eq("campanha_id", campanha_id)
+            .gte("enviado_em", cutoff_reenvio)
+            .range(_page_offset, _page_offset + _page_size - 1)
+            .execute()
+        )
+        page_data = envios_resp.data or []
+        for e in page_data:
+            ja_enviados.add(e["conversation_id"])
+        if len(page_data) < _page_size:
+            break
+        _page_offset += _page_size
 
     # Buscar leads inativos em lotes até encontrar suficientes não-contactados
     _offset = 0

@@ -1647,6 +1647,22 @@ async function carregarFormConta(id) {
         </div>
       </div>
 
+      <!-- ── INBOXES MONITORADAS PELA IA ── -->
+      <div class="section-divider">Inboxes Monitoradas pela IA</div>
+      <div class="fields-grid">
+        <div class="field-group full">
+          <label>Caixas de entrada onde a IA atua ${_tag(inboxItems.length, 'inboxes')}</label>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+            <button type="button" class="btn btn-secondary" style="font-size:11px;padding:4px 10px;" onclick="_selectAllInboxes(true)">Selecionar todas</button>
+            <button type="button" class="btn btn-secondary" style="font-size:11px;padding:4px 10px;" onclick="_selectAllInboxes(false)">Desmarcar todas</button>
+          </div>
+          <div id="f-inboxes-list" style="max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:8px 10px;background:var(--bg-card);">
+            ${_buildInboxCheckboxes(inboxItems, v('inboxes', []))}
+          </div>
+          <span class="field-hint">Esta seção controla onde a IA atua. <strong>Kanban e Agenda herdam automaticamente</strong> — a agenda agendará leads que chegarem em qualquer inbox marcada aqui. Se nenhuma marcada, atua em todas (legacy).</span>
+        </div>
+      </div>
+
       <!-- ── OPENAI ── -->
       <div class="section-divider">OpenAI</div>
       <div class="fields-grid">
@@ -1662,11 +1678,6 @@ async function carregarFormConta(id) {
       <!-- ── AGENDA ── -->
       <div class="section-divider">Agenda</div>
       <div class="fields-grid">
-        <div class="field-group">
-          <label>Inbox ${_tag(inboxItems.length, 'inboxes')}</label>
-          ${_buildSelect('f-inbox-id', inboxItems, v('inbox_id'), 'Selecione a inbox')}
-          <span class="field-hint">Inbox usada para agendamentos</span>
-        </div>
         <div class="field-group">
           <label>Email da Agenda (Google Calendar)</label>
           <input type="text" id="f-email-agenda" value="${v('email_agenda')}" placeholder="agenda@empresa.com" />
@@ -1892,6 +1903,28 @@ function _buildSelect(id, items, currentVal, placeholder) {
   return `<select id="${id}">${opts}</select>`;
 }
 
+function _buildInboxCheckboxes(items, currentArr) {
+  if (!items || !items.length) {
+    return '<span style="font-size:12px;color:var(--text-muted);">Nenhuma inbox encontrada — preencha URL e Token acima e clique em Buscar Inboxes.</span>';
+  }
+  const checked = new Set((currentArr || []).map(x => Number(x)));
+  return items.map(it => {
+    const isChecked = checked.has(Number(it.id));
+    return `<label style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px;cursor:pointer;">
+      <input type="checkbox" class="f-inbox-chk" value="${it.id}" ${isChecked ? 'checked' : ''} />
+      <span>${it.label}</span>
+    </label>`;
+  }).join('');
+}
+
+function _selectAllInboxes(check) {
+  document.querySelectorAll('.f-inbox-chk').forEach(c => c.checked = !!check);
+}
+
+function _getInboxesSelected() {
+  return [...document.querySelectorAll('.f-inbox-chk:checked')].map(c => parseInt(c.value));
+}
+
 // ── SCHEDULE WIDGET ──────────────────────────────────────────
 const _DIAS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
@@ -1965,7 +1998,7 @@ async function salvarConta(id) {
     openai_api_key:             document.getElementById('f-openai-key').value.trim(),
     ia_agent_id:                _intOrNull(document.getElementById('f-ia-agent-id').value),
     team_id:                    _intOrNull(document.getElementById('f-team-id').value),
-    inbox_id:                   _intOrNull(document.getElementById('f-inbox-id').value),
+    inboxes:                    _getInboxesSelected(),
     email_agenda:               document.getElementById('f-email-agenda').value.trim(),
     quantidade_dias_a_buscar:   _intOrNull(document.getElementById('f-qtd-dias').value),
     especialidade:              document.getElementById('f-especialidade').value.trim(),
@@ -2826,21 +2859,11 @@ async function carregarTemplatesInatividade() {
 // ══════════════════════════════════════════════
 let _lembretesCfg = null;
 
-async function renderPageLembretes() {
+function _renderLembretesUI() {
   const el = document.getElementById('page-content');
-  if (!clienteAtivo) {
-    document.getElementById('topbar-sub').textContent = 'Selecione uma conta';
-    el.innerHTML = `<div class="empty-state"><p>Selecione uma conta no menu acima</p></div>`;
-    return;
-  }
-  document.getElementById('topbar-sub').textContent = `Lembretes de Consulta — Conta #${clienteAtivo}`;
-  el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:20px 0;">Carregando...</div>';
-
-  const res = await fetch(`/api/config/lembretes-consulta?account_id=${clienteAtivo}`);
-  _lembretesCfg = await res.json();
-
-  const lembretes = _lembretesCfg.lembretes || [];
-  const ativo = _lembretesCfg.ativo !== false;
+  if (!el) return;
+  const lembretes = _lembretesCfg?.lembretes || [];
+  const ativo = _lembretesCfg?.ativo !== false;
 
   const stageColors = ['#f0fdf4','#fffbeb','#fff1f2','#f5f3ff','#eff6ff'];
   const stageBorder = ['#bbf7d0','#fde68a','#fecdd3','#ddd6fe','#bfdbfe'];
@@ -2867,8 +2890,21 @@ async function renderPageLembretes() {
         <button onclick="removerLembrete(${i})" style="margin-left:auto;background:none;border:none;cursor:pointer;color:#ef4444;font-size:16px;" title="Remover">✕</button>
       </div>
       <div style="display:flex;flex-direction:column;gap:2px;">
-        <span style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;">Mensagem</span>
-        <textarea id="lembrete-msg-${i}" rows="2" style="padding:8px;font-size:12px;resize:vertical;border-radius:6px;border:1px solid var(--border);">${l.mensagem}</textarea>
+        <span style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;">Mensagem (texto livre / não-oficial)</span>
+        <textarea id="lembrete-msg-${i}" rows="2" style="padding:8px;font-size:12px;resize:vertical;border-radius:6px;border:1px solid var(--border);">${l.mensagem || ''}</textarea>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:2px;">
+        <span style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;">Template WhatsApp (API Oficial)</span>
+        ${_inativTemplates.length > 0
+          ? `<select id="lembrete-tpl-${i}" style="padding:6px 8px;font-size:12px;border-radius:6px;border:1px solid var(--border);">
+              <option value="">— nenhum (usar texto livre) —</option>
+              ${_inativTemplates.map(t => `<option value="${t.name}" ${t.name === (l.template_whatsapp||'') ? 'selected' : ''}>${t.name}</option>`).join('')}
+            </select>`
+          : `<input type="text" id="lembrete-tpl-${i}" value="${l.template_whatsapp || ''}"
+               placeholder="nome_do_template (deixe vazio se não usar API Oficial)"
+               style="padding:6px 8px;font-size:12px;border-radius:6px;border:1px solid var(--border);" />`
+        }
+        <span style="font-size:10px;color:var(--text-muted);">Variáveis do template: {{1}}=nome · {{2}}=horário · {{3}}=data · {{4}}=advogado(a)</span>
       </div>
     </div>
   `).join('');
@@ -2899,7 +2935,7 @@ async function renderPageLembretes() {
         </button>
 
         <div style="margin-top:16px;padding:12px;background:#f8f9fb;border-radius:8px;font-size:12px;color:var(--text-muted);line-height:1.7;">
-          <strong style="color:var(--text-secondary);">Variáveis disponíveis:</strong><br>
+          <strong style="color:var(--text-secondary);">Variáveis disponíveis (mensagem texto):</strong><br>
           <code style="background:#e8e8ee;padding:1px 5px;border-radius:3px;">{nome}</code> — Primeiro nome do cliente<br>
           <code style="background:#e8e8ee;padding:1px 5px;border-radius:3px;">{advogada}</code> — Nome do advogado(a)<br>
           <code style="background:#e8e8ee;padding:1px 5px;border-radius:3px;">{horario}</code> — Horário da consulta<br>
@@ -2920,19 +2956,48 @@ async function renderPageLembretes() {
   `;
 }
 
+async function renderPageLembretes() {
+  const el = document.getElementById('page-content');
+  if (!clienteAtivo) {
+    document.getElementById('topbar-sub').textContent = 'Selecione uma conta';
+    el.innerHTML = `<div class="empty-state"><p>Selecione uma conta no menu acima</p></div>`;
+    return;
+  }
+  document.getElementById('topbar-sub').textContent = `Lembretes de Consulta — Conta #${clienteAtivo}`;
+  el.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:20px 0;">Carregando...</div>';
+  // Carregar config e templates em paralelo
+  const [res] = await Promise.all([
+    fetch(`/api/config/lembretes-consulta?account_id=${clienteAtivo}`),
+    _inativTemplates.length === 0 ? fetch(`/api/clientes/${clienteAtivo}/templates`)
+      .then(r => r.ok ? r.json() : {})
+      .then(d => { _inativTemplates = (d.data || []).filter(t => t.status === 'APPROVED'); })
+      .catch(() => {}) : Promise.resolve(),
+  ]);
+  _lembretesCfg = await res.json();
+  _renderLembretesUI();
+}
+
 function adicionarLembrete() {
   if (!_lembretesCfg) _lembretesCfg = { ativo: true, lembretes: [] };
   _lembretesCfg.lembretes.push({
     minutos: 60,
-    mensagem: "{nome}, só passando para lembrar do seu atendimento com {advogada} às {horario}. Até já!"
+    mensagem: "{nome}, só passando para lembrar do seu atendimento com {advogada} às {horario}. Até já!",
+    template_whatsapp: "",
   });
-  renderPageLembretes();
+  _renderLembretesUI();
 }
 
 function removerLembrete(idx) {
   if (!_lembretesCfg || !_lembretesCfg.lembretes) return;
+  // Salvar valores atuais dos inputs antes de remover
+  _lembretesCfg.lembretes = _lembretesCfg.lembretes.map((l, i) => ({
+    ...l,
+    minutos: parseInt(document.getElementById(`lembrete-min-${i}`)?.value) || l.minutos,
+    mensagem: document.getElementById(`lembrete-msg-${i}`)?.value ?? l.mensagem,
+    template_whatsapp: document.getElementById(`lembrete-tpl-${i}`)?.value.trim() ?? l.template_whatsapp ?? '',
+  }));
   _lembretesCfg.lembretes.splice(idx, 1);
-  renderPageLembretes();
+  _renderLembretesUI();
 }
 
 async function salvarLembretes() {
@@ -2940,7 +3005,8 @@ async function salvarLembretes() {
   const ativo = document.getElementById('lembretes-ativo')?.checked ?? true;
   const lembretes = (_lembretesCfg.lembretes || []).map((l, i) => ({
     minutos: parseInt(document.getElementById(`lembrete-min-${i}`)?.value) || l.minutos,
-    mensagem: document.getElementById(`lembrete-msg-${i}`)?.value.trim() || l.mensagem,
+    mensagem: document.getElementById(`lembrete-msg-${i}`)?.value.trim() ?? l.mensagem,
+    template_whatsapp: document.getElementById(`lembrete-tpl-${i}`)?.value.trim() || '',
   }));
 
   // Ordenar por minutos (maior primeiro = envia primeiro)
@@ -4113,9 +4179,107 @@ async function renderPageRelatorios() {
           ${histBars}
         </div>
       </div>
+
+      <!-- Relatório de Marketing -->
+      <div class="card" id="mkt-card">
+        <div style="font-size:14px;font-weight:700;margin-bottom:16px;">Relatório de Marketing</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px;">
+          <div style="display:flex;flex-direction:column;gap:4px;">
+            <label style="font-size:11px;color:var(--text-muted);">De</label>
+            <input type="date" id="mkt-de" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:13px;" />
+          </div>
+          <div style="display:flex;flex-direction:column;gap:4px;">
+            <label style="font-size:11px;color:var(--text-muted);">Até</label>
+            <input type="date" id="mkt-ate" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:13px;" />
+          </div>
+          <button onclick="_mktCarregar()" style="padding:7px 18px;background:var(--purple);color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">Gerar Relatório</button>
+        </div>
+        <div id="mkt-resultado"></div>
+      </div>
     `;
+
+    // Preencher datas padrão (últimos 30 dias)
+    const _hoje = new Date();
+    const _30dias = new Date(_hoje); _30dias.setDate(_hoje.getDate() - 30);
+    const _fmt = d => d.toISOString().slice(0, 10);
+    const _deEl = document.getElementById('mkt-de');
+    const _ateEl = document.getElementById('mkt-ate');
+    if (_deEl) _deEl.value = _fmt(_30dias);
+    if (_ateEl) _ateEl.value = _fmt(_hoje);
+
   } catch (e) {
     el.innerHTML = `<div class="empty-state"><p>Erro ao carregar relatório</p><p class="empty-sub">${e.message}</p></div>`;
+  }
+}
+
+async function _mktCarregar() {
+  const de = document.getElementById('mkt-de')?.value;
+  const ate = document.getElementById('mkt-ate')?.value;
+  const res_el = document.getElementById('mkt-resultado');
+  if (!de || !ate) { if (res_el) res_el.innerHTML = '<p style="color:var(--red);font-size:13px;">Selecione as datas.</p>'; return; }
+  if (res_el) res_el.innerHTML = '<p style="color:var(--text-muted);font-size:13px;">Carregando...</p>';
+  try {
+    const res = await fetch(`/api/clientes/${clienteAtivo}/relatorio-marketing?de=${de}&ate=${ate}`);
+    if (!res.ok) throw new Error('Erro ao carregar');
+    const d = await res.json();
+    const f = d.funil;
+    const t = d.taxas;
+
+    // Funil visual
+    const _card = (label, valor, cor, sub) => `
+      <div style="background:var(--bg);border-radius:10px;padding:16px;text-align:center;position:relative;">
+        <div style="font-size:26px;font-weight:800;color:${cor};">${valor}</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">${label}</div>
+        ${sub ? `<div style="font-size:10px;color:var(--text-muted);margin-top:2px;">${sub}</div>` : ''}
+      </div>`;
+
+    const _arrow = pct => `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--text-muted);font-size:18px;">▼<span style="font-size:10px;margin-top:2px;">${pct}%</span></div>`;
+
+    // Objeções
+    let objecoesHtml = '';
+    if (d.objecoes && d.objecoes.length) {
+      const maxOb = d.objecoes[0].qtd || 1;
+      objecoesHtml = `
+        <div class="card" style="margin-top:16px;">
+          <div style="font-size:14px;font-weight:700;margin-bottom:12px;">Principais Objeções / Motivos de Inviabilidade</div>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            ${d.objecoes.map(o => {
+              const w = Math.round((o.qtd / maxOb) * 100);
+              return `<div>
+                <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px;">
+                  <span style="color:var(--text);">${o.motivo}</span>
+                  <span style="font-weight:700;color:var(--red);">${o.qtd}</span>
+                </div>
+                <div style="background:var(--bg);border-radius:4px;height:8px;overflow:hidden;">
+                  <div style="background:var(--red);height:100%;width:${w}%;border-radius:4px;opacity:0.7;"></div>
+                </div>
+              </div>`;
+            }).join('')}
+          </div>
+        </div>`;
+    }
+
+    res_el.innerHTML = `
+      <div style="font-size:11px;color:var(--text-muted);margin-bottom:12px;">Período: ${de.split('-').reverse().join('/')} a ${ate.split('-').reverse().join('/')}</div>
+      <div style="display:grid;grid-template-columns:1fr auto 1fr auto 1fr auto 1fr;gap:6px;align-items:center;margin-bottom:4px;">
+        ${_card('Leads chegaram', f.leads_chegaram, 'var(--purple)', '')}
+        ${_arrow(t.qualificacao)}
+        ${_card('Qualificados', f.qualificados, '#6366f1', 'caso viável')}
+        ${_arrow(t.agendamento)}
+        ${_card('Reuniões agendadas', f.reunioes_agendadas, '#0ea5e9', '')}
+        ${_arrow(t.conversao)}
+        ${_card('Contratos', f.contratos, 'var(--green)', 'consulta agendada')}
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-top:12px;">
+        ${_card('Inviáveis', f.inviavel, 'var(--red)', '')}
+        ${_card('Em atendimento', f.em_atendimento, 'var(--yellow)', '')}
+        ${_card('Transferidos', f.transferidos, '#f97316', '')}
+        ${_card('Perdidos', f.perdidos, '#9CA3AF', '')}
+      </div>
+      ${objecoesHtml}
+    `;
+  } catch(e) {
+    if (res_el) res_el.innerHTML = `<p style="color:var(--red);font-size:13px;">Erro: ${e.message}</p>`;
   }
 }
 

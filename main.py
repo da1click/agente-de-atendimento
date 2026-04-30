@@ -161,8 +161,8 @@ async def _recuperar_conversas_pos_deploy():
                                 agora = datetime.now(timezone.utc)
                                 diff_min = (agora - msg_time).total_seconds() / 60
 
-                                # Só reprocessar mensagens dos últimos 30 minutos (janela do deploy)
-                                if diff_min <= 30:
+                                # Só reprocessar mensagens dos últimos 60 minutos (janela do deploy)
+                                if diff_min <= 60:
                                     config_full = carregar_config_cliente(account_id)
                                     if config_full:
                                         from ia import agendar_processamento
@@ -675,6 +675,27 @@ def relatorio_conta(account_id: int, user: dict = Depends(get_current_user)):
         "transcricoes": transcricoes,
         "historico": historico,
     }
+
+
+@app.get("/api/clientes/{account_id}/relatorio-marketing")
+def relatorio_marketing_conta(
+    account_id: int,
+    de: str = None,
+    ate: str = None,
+    user: dict = Depends(get_current_user),
+):
+    """Relatório de funil de marketing por período livre (de/ate = YYYY-MM-DD)."""
+    if user.get("role") != "super_admin":
+        contas_permitidas = get_contas_do_usuario(user["sub"])
+        if account_id not in contas_permitidas:
+            raise HTTPException(status_code=403, detail="Sem permissão")
+    from datetime import datetime as _dt, timedelta as _td
+    if not ate:
+        ate = _dt.now().strftime("%Y-%m-%d")
+    if not de:
+        de = (_dt.now() - _td(days=30)).strftime("%Y-%m-%d")
+    from db import relatorio_marketing
+    return relatorio_marketing(account_id, de, ate)
 
 
 @app.get("/api/planos")
@@ -1340,6 +1361,96 @@ async def chatwoot_webhook(request: Request):
 
     logger.info(f"🔔 WEBHOOK RECEBIDO — event={event} | keys={list(payload.keys())}")
 
+    # conversation_updated: disparar IA quando conversa nova é atribuída ao agente IA
+    if event == "conversation_updated":
+        # Chatwoot envia o objeto da conversa na RAIZ do payload (não em payload["conversation"])
+        # quando o evento é conversation_updated. id e inbox_id estão no topo.
+        conv_upd = payload.get("conversation") or {}
+        conversation_id_upd = conv_upd.get("id") or payload.get("id")
+        inbox_id_upd = conv_upd.get("inbox_id") or payload.get("inbox_id")
+        # account_id pode não vir no payload — tentar derivar depois via configs ativas
+        account_id_upd = (
+            conv_upd.get("account_id")
+            or payload.get("account_id")
+            or (payload.get("account") or {}).get("id")
+        )
+
+        # Guard: só processar se changed_attributes indica mudança de assignee
+        # NÃO usar conversa_nova como fallback — causa loop (IA responde → conversation_updated → IA responde...)
+        changed = payload.get("changed_attributes") or []
+        assignee_mudou = any(
+            "assignee" in str(attr) for attr in changed
+        ) if changed else False
+
+        logger.info(
+            f"[conv-updated] event recebido — conv={conversation_id_upd} account={account_id_upd} "
+            f"inbox={inbox_id_upd} assignee_mudou={assignee_mudou} changed={changed}"
+        )
+
+        if not assignee_mudou:
+            return {"status": "ignorado", "event": event, "motivo": "changed_attributes sem mudança de assignee"}
+
+        if not conversation_id_upd:
+            logger.warning("[conv-updated] conversation_id ausente no payload — ignorando")
+            return {"status": "ignorado", "event": event}
+
+        # Se account_id não veio no payload, procurar qual conta ativa tem esse inbox_id
+        if not account_id_upd and inbox_id_upd:
+            try:
+                from db import get_db as _get_db
+                _db = _get_db()
+                _rows = _db.table("ia_clientes_config").select("account_id,inboxes").eq("ativo", True).execute()
+                for _row in (_rows.data or []):
+                    _inboxes = _row.get("inboxes") or []
+                    if inbox_id_upd in _inboxes:
+                        account_id_upd = _row["account_id"]
+                        logger.info(f"[conv-updated] account_id derivado do inbox_id={inbox_id_upd} → account={account_id_upd}")
+                        break
+            except Exception as _e:
+                logger.warning(f"[conv-updated] Erro ao derivar account_id: {_e}")
+
+        if not account_id_upd:
+            logger.warning(f"[conv-updated] Não foi possível determinar account_id para conv={conversation_id_upd} inbox={inbox_id_upd}")
+            return {"status": "ignorado", "event": event}
+
+        config_upd = carregar_config_cliente(account_id_upd)
+        if not config_upd or not config_upd.get("ia_ativa", True) or not config_upd.get("ia_agent_id"):
+            return {"status": "ignorado", "event": event}
+
+        ia_agent_id_upd = config_upd["ia_agent_id"]
+        inboxes_upd = config_upd.get("inboxes", [])
+        inbox_ok_upd = not inboxes_upd or inbox_id_upd in inboxes_upd
+        if not inbox_ok_upd:
+            return {"status": "ignorado", "event": event}
+
+        # Buscar assignee atual via API (payload pode estar desatualizado)
+        try:
+            chatwoot_url_upd = config_upd["chatwoot_url"].rstrip("/")
+            chatwoot_token_upd = config_upd["chatwoot_token"]
+            async with httpx.AsyncClient(timeout=10) as hc_upd:
+                r_upd = await hc_upd.get(
+                    f"{chatwoot_url_upd}/api/v1/accounts/{account_id_upd}/conversations/{conversation_id_upd}",
+                    headers={"api_access_token": chatwoot_token_upd},
+                )
+                if not r_upd.is_success:
+                    return {"status": "ignorado", "event": event}
+                fresh = r_upd.json()
+                fresh_assignee = (fresh.get("meta") or {}).get("assignee") or {}
+                fresh_assignee_id = fresh_assignee.get("id")
+                fresh_status = fresh.get("status")
+                fresh_inbox_id = fresh.get("inbox_id") or inbox_id_upd
+                logger.info(
+                    f"[conv-updated] API: assignee_id={fresh_assignee_id} "
+                    f"ia_agent_id={ia_agent_id_upd} status={fresh_status} conv={conversation_id_upd}"
+                )
+                if fresh_assignee_id == ia_agent_id_upd and fresh_status == "open":
+                    agendar_processamento(config_upd, account_id_upd, conversation_id_upd, fresh_inbox_id)
+                    logger.info(f"[conv-updated] ✅ Processamento agendado — conv={conversation_id_upd} account={account_id_upd}")
+                    return {"status": "ok", "event": event}
+        except Exception as e_upd:
+            logger.warning(f"[conv-updated] Erro ao buscar assignee — conv={conversation_id_upd}: {e_upd}")
+        return {"status": "ignorado", "event": event}
+
     if event not in ("automation_event.message_created", "message_created"):
         logger.info(f"🔔 WEBHOOK IGNORADO — event={event}")
         return {"status": "ignorado", "event": event}
@@ -1569,7 +1680,7 @@ async def chatwoot_webhook(request: Request):
             if assignee_id is None or assignee_id != ia_agent_id:
                 chatwoot_url_rc = config["chatwoot_url"].rstrip("/")
                 chatwoot_token_rc = config["chatwoot_token"]
-                for tentativa, espera in enumerate([3, 5], 1):
+                for tentativa, espera in enumerate([5, 10], 1):
                     try:
                         await asyncio.sleep(espera)
                         async with httpx.AsyncClient(timeout=10) as hc:
@@ -1827,11 +1938,10 @@ async def upload_media_template(account_id: int, file: UploadFile = File(...), w
     file_bytes = await file.read()
     file_name = file.filename or "upload"
 
-    # 1. Criar sessão de upload
+    # 1. Criar sessão de upload via WABA ID (token WhatsApp Business requer /{waba_id}/uploads)
     async with httpx.AsyncClient(timeout=60) as client:
-        # Upload via resumable upload API
         r = await client.post(
-            f"{META_GRAPH}/app/uploads",
+            f"{META_GRAPH}/{w_id}/uploads",
             headers=_meta_headers(tok),
             params={
                 "file_name": file_name,
@@ -2666,6 +2776,59 @@ async def buscar_inboxes_direto(request: Request):
     return data.get("payload", data)
 
 
+@app.post("/api/clientes/{account_id}/sync-inboxes")
+async def sync_inboxes_conta(account_id: int, exclude_pattern: str | None = None):
+    """Sincroniza o array `inboxes` da config da conta com TODAS as inboxes
+    ativas no Chatwoot. Util para contas que tinham apenas 1 inbox cadastrada
+    e ganharam mais depois (a IA so atuava na inbox antiga).
+
+    Query param opcional `exclude_pattern`: regex case-insensitive aplicado ao
+    nome da inbox para excluir (ex: "desabilitad|disabled|teste").
+    """
+    import re
+    config = carregar_config_cliente(account_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    chatwoot_url = (config.get("chatwoot_url") or "").strip().rstrip("/")
+    chatwoot_token = (config.get("chatwoot_token") or "").strip()
+    if not chatwoot_url or not chatwoot_token:
+        raise HTTPException(status_code=400, detail="chatwoot_url e chatwoot_token não configurados")
+
+    pattern = re.compile(exclude_pattern, re.IGNORECASE) if exclude_pattern else None
+    async with httpx.AsyncClient(timeout=15) as http:
+        r = await http.get(f"{chatwoot_url}/api/v1/accounts/{account_id}/inboxes",
+                           headers={"api_access_token": chatwoot_token})
+        if not r.is_success:
+            raise HTTPException(status_code=r.status_code, detail=f"Chatwoot retornou {r.status_code}")
+        payload = r.json().get("payload", r.json()) or []
+
+    detalhes = []
+    inboxes_novas = []
+    for ib in payload:
+        ib_id = ib.get("id")
+        nome = ib.get("name", "")
+        excluida = bool(pattern and pattern.search(nome))
+        detalhes.append({
+            "id": ib_id, "name": nome, "channel_type": ib.get("channel_type"),
+            "incluida": not excluida, "motivo_exclusao": "match exclude_pattern" if excluida else None,
+        })
+        if not excluida and ib_id is not None:
+            inboxes_novas.append(int(ib_id))
+
+    inboxes_antigas = [int(x) for x in (config.get("inboxes") or [])]
+    config["inboxes"] = inboxes_novas
+    salvar_config_cliente(account_id, config)
+    return {
+        "status": "ok",
+        "account_id": account_id,
+        "inboxes_anteriores": inboxes_antigas,
+        "inboxes_atuais": inboxes_novas,
+        "adicionadas": [i for i in inboxes_novas if i not in inboxes_antigas],
+        "removidas": [i for i in inboxes_antigas if i not in inboxes_novas],
+        "detalhes": detalhes,
+    }
+
+
 @app.post("/api/clientes/{account_id}/recriar-funis")
 async def recriar_funis_conta(account_id: int):
     """Recria os funis (kanban) padrão em uma conta existente."""
@@ -2777,6 +2940,32 @@ async def buscar_texto_em_cards(account_id: int, texto: str, limite: int = 200):
     return {"account_id": account_id, "texto_buscado": texto, "cards_checados": checados, "achados": achados}
 
 
+@app.post("/api/admin/processar-conversa/{account_id}/{conversation_id}")
+async def admin_processar_conversa(account_id: int, conversation_id: int):
+    """Dispara manualmente o processamento da IA para uma conversa específica."""
+    config = carregar_config_cliente(account_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    if not config.get("ia_ativa", True) or not config.get("ia_agent_id"):
+        raise HTTPException(status_code=400, detail="IA não configurada para esta conta")
+    # Buscar inbox_id da conversa
+    inbox_id = None
+    try:
+        base = config["chatwoot_url"].rstrip("/")
+        async with httpx.AsyncClient(timeout=10) as http:
+            rc = await http.get(
+                f"{base}/api/v1/accounts/{account_id}/conversations/{conversation_id}",
+                headers={"api_access_token": config["chatwoot_token"]},
+            )
+            if rc.is_success:
+                inbox_id = rc.json().get("inbox_id")
+    except Exception:
+        pass
+    agendar_processamento(config, account_id, conversation_id, inbox_id)
+    logger.info(f"[admin] Processamento manual disparado — conv={conversation_id} account={account_id}")
+    return {"status": "agendado", "conversation_id": conversation_id, "account_id": account_id}
+
+
 @app.get("/api/admin/debug-conv/{account_id}/{conversation_id}")
 async def debug_conversa(account_id: int, conversation_id: int):
     """Inspeciona uma conversa: detalhes + últimas 10 mensagens com sender e content.
@@ -2813,12 +3002,18 @@ async def debug_conversa(account_id: int, conversation_id: int):
         })
 
     meta = conv.get("meta", {})
+    assignee_obj = meta.get("assignee") or {}
+    config_debug = carregar_config_cliente(account_id)
+    ia_agent_id_debug = config_debug.get("ia_agent_id") if config_debug else None
+    assignee_id_debug = assignee_obj.get("id")
     return {
         "conv_account_id": conv.get("account_id"),
         "conv_inbox_id": conv.get("inbox_id"),
-        "conv_assignee": (meta.get("assignee") or {}).get("name"),
-        "conv_assignee_email": (meta.get("assignee") or {}).get("email"),
-        "conv_assignee_account_id": (meta.get("assignee") or {}).get("account_id"),
+        "conv_assignee": assignee_obj.get("name"),
+        "conv_assignee_id": assignee_id_debug,
+        "conv_assignee_email": assignee_obj.get("email"),
+        "ia_agent_id_config": ia_agent_id_debug,
+        "assignee_eh_ia": assignee_id_debug == ia_agent_id_debug,
         "conv_sender_name": (meta.get("sender") or {}).get("name"),
         "conv_labels": conv.get("labels", []),
         "conv_status": conv.get("status"),
@@ -3074,23 +3269,29 @@ async def reconciliar_kanban_por_label(account_id: int, dry_run: bool = True, mi
 
             try:
                 if item_existente and step_atual != step_id_alvo:
+                    # Sem wrapper conforme doc oficial advbrasil.ai.
                     rr = await http.put(
                         f"{base}/api/v1/accounts/{account_id}/funnels/{funnel_id}/funnel_steps/{step_atual}/funnel_items/{item_existente['id']}/update_step",
                         headers={"api_access_token": token, "Content-Type": "application/json"},
-                        json={"funnel_item": {"funnel_step_id": step_id_alvo}},
+                        json={"funnel_step_id": step_id_alvo},
                     )
                     item_plano["acao"] = "movido" if rr.is_success else f"erro_mover_{rr.status_code}"
                 elif item_existente:
                     item_plano["acao"] = "ja_na_etapa_correta"
                 else:
+                    # Criar via bulk_create — POST direto em /funnel_items
+                    # retorna 200 mas ignora dados (orfãos sem title/conv).
                     rc = await http.post(
-                        f"{base}/api/v1/accounts/{account_id}/funnels/{funnel_id}/funnel_steps/{step_id_alvo}/funnel_items",
+                        f"{base}/api/v1/accounts/{account_id}/funnels/{funnel_id}/funnel_steps/{step_id_alvo}/funnel_items/bulk_create",
                         headers={"api_access_token": token, "Content-Type": "application/json"},
                         json={
-                            "title": nome,
-                            "conversation_id": conv_id,
-                            "status": "active",
-                            "priority": "medium",
+                            "items": [
+                                {
+                                    "title": nome,
+                                    "conversation_id": conv_id,
+                                    "priority": "medium",
+                                }
+                            ]
                         },
                     )
                     item_plano["acao"] = "criado" if rc.is_success else f"erro_criar_{rc.status_code}"
@@ -3772,6 +3973,409 @@ async def diagnostico_cobranca_docs(account_id: int):
             "conversas_com_label": len(convs_com_label),
             "amostra": convs_com_label[:10],
             "erro": erro_chatwoot,
+        },
+    }
+
+
+@app.patch("/api/admin/lembrete/{account_id}")
+async def atualizar_template_lembrete(account_id: int, request: Request):
+    """Atualiza o template WhatsApp de um lembrete de consulta.
+
+    Body JSON:
+      { "minutos": 60, "template": "nome_do_template" }
+      { "minutos": 10, "template": "nome_do_template" }
+
+    Atualiza apenas o campo template_whatsapp do lembrete com o minutos informado.
+    """
+    config = carregar_config_cliente(account_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+
+    body = await request.json()
+    minutos = body.get("minutos")
+    template = (body.get("template") or "").strip()
+    if not minutos or not template:
+        raise HTTPException(status_code=400, detail="Informe 'minutos' e 'template'")
+
+    cfg = config.get("config_lembrete_consulta") or {}
+    lembretes = cfg.get("lembretes") or []
+    atualizado = False
+    for lembrete in lembretes:
+        if lembrete.get("minutos") == minutos:
+            lembrete["template_whatsapp"] = template
+            atualizado = True
+            break
+
+    if not atualizado:
+        raise HTTPException(status_code=404, detail=f"Lembrete de {minutos} minutos não encontrado na config")
+
+    cfg["lembretes"] = lembretes
+    from db import get_db as _get_db
+    _get_db().table("ia_clientes_config").update({"config_lembrete_consulta": cfg}).eq("account_id", account_id).execute()
+    return {"ok": True, "account_id": account_id, "minutos": minutos, "template": template}
+
+
+@app.post("/api/admin/enviar-template")
+async def admin_enviar_template(request: Request):
+    """Envia template WhatsApp para uma conversa específica (uso administrativo/teste).
+
+    Body JSON:
+      { "account_id": 17, "conversation_id": 239, "template": "lembrete_consulta_v3",
+        "params": {"1": "Fulano", "2": "14:00"} }
+    """
+    body = await request.json()
+    account_id = body.get("account_id")
+    conversation_id = body.get("conversation_id")
+    template_name = (body.get("template") or "").strip()
+    processed_params = body.get("params") or {}
+
+    if not account_id or not conversation_id or not template_name:
+        raise HTTPException(status_code=400, detail="Informe account_id, conversation_id e template")
+
+    config = carregar_config_cliente(account_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+
+    chatwoot_url = config["chatwoot_url"].rstrip("/")
+    token = config["chatwoot_token"]
+    url = f"{chatwoot_url}/api/v1/accounts/{account_id}/conversations/{conversation_id}/messages"
+    payload = {
+        "message_type": "outgoing",
+        "private": False,
+        "template_params": {
+            "name": template_name,
+            "language": "pt_BR",
+            "processed_params": processed_params,
+        },
+    }
+    async with httpx.AsyncClient(timeout=15) as http:
+        resp = await http.post(url, headers={"api_access_token": token, "Content-Type": "application/json"}, json=payload)
+
+    try:
+        resp_json = resp.json()
+    except Exception:
+        resp_json = {"raw": resp.text}
+
+    # Nota privada com conteúdo renderizado
+    nota_ok = False
+    if resp.is_success:
+        try:
+            from inatividade import _buscar_conteudo_template, _enviar_nota_privada
+            conteudo = await _buscar_conteudo_template(account_id, template_name)
+            if conteudo and processed_params:
+                for num, val in processed_params.items():
+                    conteudo = conteudo.replace(f"{{{{{num}}}}}", str(val))
+            nota = f"📎 Template enviado: *{template_name}*"
+            if conteudo:
+                nota += f"\n\n{conteudo}"
+            await _enviar_nota_privada(chatwoot_url, token, account_id, conversation_id, nota)
+            nota_ok = True
+        except Exception as e:
+            logger.warning(f"[admin-enviar-template] Falha ao postar nota privada: {e}")
+
+    return {
+        "ok": resp.is_success,
+        "status_code": resp.status_code,
+        "nota_privada": nota_ok,
+        "chatwoot_response": resp_json,
+    }
+
+
+@app.get("/api/admin/inboxes/{account_id}")
+async def admin_listar_inboxes(account_id: int):
+    """Lista todas as inboxes da conta com channel_type e templates disponíveis."""
+    config = carregar_config_cliente(account_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+
+    chatwoot_url = config["chatwoot_url"].rstrip("/")
+    token = config["chatwoot_token"]
+    async with httpx.AsyncClient(timeout=15) as http:
+        r = await http.get(
+            f"{chatwoot_url}/api/v1/accounts/{account_id}/inboxes",
+            headers={"api_access_token": token},
+        )
+    if not r.is_success:
+        raise HTTPException(status_code=r.status_code, detail=r.text)
+
+    inboxes = []
+    for inbox in r.json().get("payload", []):
+        templates = inbox.get("message_templates") or []
+        inboxes.append({
+            "id": inbox.get("id"),
+            "name": inbox.get("name"),
+            "channel_type": inbox.get("channel_type"),
+            "phone_number": inbox.get("phone_number"),
+            "templates_count": len(templates),
+            "templates": [t.get("name") for t in templates][:10],
+        })
+    return {"account_id": account_id, "total": len(inboxes), "inboxes": inboxes}
+
+
+@app.get("/api/admin/inbox-info/{account_id}/{inbox_id}")
+async def admin_inbox_info(account_id: int, inbox_id: int):
+    """Retorna detalhes do inbox (channel_type, templates disponíveis) para diagnóstico."""
+    config = carregar_config_cliente(account_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+
+    chatwoot_url = config["chatwoot_url"].rstrip("/")
+    token = config["chatwoot_token"]
+    async with httpx.AsyncClient(timeout=15) as http:
+        r = await http.get(
+            f"{chatwoot_url}/api/v1/accounts/{account_id}/inboxes",
+            headers={"api_access_token": token},
+        )
+    if not r.is_success:
+        raise HTTPException(status_code=r.status_code, detail=r.text)
+
+    target = None
+    for inbox in r.json().get("payload", []):
+        if inbox.get("id") == inbox_id:
+            target = inbox
+            break
+
+    return {
+        "found": target is not None,
+        "inbox": {
+            "id": target.get("id") if target else None,
+            "name": target.get("name") if target else None,
+            "channel_type": target.get("channel_type") if target else None,
+            "channel_id": target.get("channel_id") if target else None,
+            "phone_number": target.get("phone_number") if target else None,
+            "templates_count": len(target.get("message_templates") or []) if target else 0,
+            "templates": [t.get("name") for t in (target.get("message_templates") or [])][:20] if target else [],
+        } if target else None,
+    }
+
+
+@app.post("/api/admin/reprocessar")
+async def admin_reprocessar_conversa(request: Request):
+    """Força o reprocessamento de uma conversa específica.
+    Body: { "account_id": 17, "conversation_id": 1438 }
+    """
+    body = await request.json()
+    account_id = body.get("account_id")
+    conversation_id = body.get("conversation_id")
+    if not account_id or not conversation_id:
+        raise HTTPException(status_code=400, detail="Informe account_id e conversation_id")
+
+    config = carregar_config_cliente(account_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+
+    # Buscar inbox_id da conversa
+    chatwoot_url = config["chatwoot_url"].rstrip("/")
+    token = config["chatwoot_token"]
+    inbox_id = None
+    try:
+        async with httpx.AsyncClient(timeout=10) as http:
+            r = await http.get(
+                f"{chatwoot_url}/api/v1/accounts/{account_id}/conversations/{conversation_id}",
+                headers={"api_access_token": token},
+            )
+            if r.is_success:
+                inbox_id = r.json().get("inbox_id")
+    except Exception:
+        pass
+
+    from ia import agendar_processamento
+    agendar_processamento(config, account_id, conversation_id, inbox_id)
+    return {"ok": True, "account_id": account_id, "conversation_id": conversation_id, "inbox_id": inbox_id}
+
+
+@app.get("/api/admin/conversas-sem-resposta/{account_id}")
+async def admin_conversas_sem_resposta(account_id: int, inbox_id: int = 0, pagina: int = 1):
+    """Lista conversas abertas onde o cliente mandou a última mensagem (IA não respondeu).
+    Útil para diagnosticar conversas paradas."""
+    config = carregar_config_cliente(account_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+
+    chatwoot_url = config["chatwoot_url"].rstrip("/")
+    token = config["chatwoot_token"]
+    ia_agent_id = config.get("ia_agent_id")
+
+    params = {"status": "open", "page": pagina}
+    if inbox_id:
+        params["inbox_id"] = inbox_id
+
+    async with httpx.AsyncClient(timeout=20) as http:
+        r = await http.get(
+            f"{chatwoot_url}/api/v1/accounts/{account_id}/conversations",
+            headers={"api_access_token": token},
+            params=params,
+        )
+    if not r.is_success:
+        raise HTTPException(status_code=r.status_code, detail=r.text)
+
+    data = r.json()
+    convs = data.get("data", {}).get("payload", []) or data.get("payload", [])
+
+    resultado = []
+    for conv in convs:
+        meta = conv.get("meta") or {}
+        assignee = meta.get("assignee") or {}
+        assignee_id = assignee.get("id")
+        conv_inbox_id = conv.get("inbox_id")
+
+        # Filtrar por inbox se especificado
+        if inbox_id and conv_inbox_id != inbox_id:
+            continue
+
+        msgs = conv.get("messages") or []
+        ultima_msg = None
+        for m in reversed(msgs):
+            if not m.get("private"):
+                ultima_msg = m
+                break
+
+        ultima_eh_cliente = ultima_msg and ultima_msg.get("message_type") == 0
+        resultado.append({
+            "id": conv.get("id"),
+            "status": conv.get("status"),
+            "inbox_id": conv_inbox_id,
+            "assignee_id": assignee_id,
+            "assignee_nome": assignee.get("name"),
+            "ia_assignee": assignee_id == ia_agent_id,
+            "cliente": meta.get("sender", {}).get("name"),
+            "ultima_msg_tipo": "cliente" if ultima_eh_cliente else "ia/sistema",
+            "ultima_msg": (ultima_msg.get("content") or "")[:80] if ultima_msg else None,
+            "sem_resposta_ia": ultima_eh_cliente and assignee_id == ia_agent_id,
+        })
+
+    sem_resposta = [c for c in resultado if c["sem_resposta_ia"]]
+    return {
+        "total_abertas": len(resultado),
+        "sem_resposta_ia": len(sem_resposta),
+        "conversas": sem_resposta[:20],
+    }
+
+
+@app.get("/api/admin/diagnostico-leads/{account_id}")
+async def diagnostico_leads(account_id: int, de: str = None, ate: str = None):
+    """Compara contagens de leads entre todas as tabelas para diagnosticar subcontagem."""
+    from datetime import datetime as _dt, timedelta as _td
+    if not ate:
+        ate = _dt.now().strftime("%Y-%m-%d")
+    if not de:
+        de = (_dt.now() - _td(days=30)).strftime("%Y-%m-%d")
+    fim_dia = ate + "T23:59:59"
+
+    config = carregar_config_cliente(account_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+
+    from db import get_db
+    db = get_db()
+    resultado = {
+        "account_id": account_id,
+        "periodo": {"de": de, "ate": ate},
+        "config": {
+            "modo_teste": config.get("modo_teste", False),
+            "ia_ativa": config.get("ia_ativa", True),
+            "inboxes_filtradas": config.get("inboxes", []),
+            "ia_agent_id": config.get("ia_agent_id"),
+        },
+        "contagens": {},
+        "explicacao": {},
+    }
+
+    # 1. ia_mensagens — todas as mensagens recebidas (incoming), antes de qualquer filtro
+    try:
+        resp = db.table("ia_mensagens").select("conversation_id").eq(
+            "account_id", account_id
+        ).eq("message_type", "incoming").gte("created_at", de).lte("created_at", fim_dia).execute()
+        conv_ids = {r["conversation_id"] for r in (resp.data or [])}
+        resultado["contagens"]["ia_mensagens_conversas_unicas"] = len(conv_ids)
+        resultado["explicacao"]["ia_mensagens"] = "Conversas únicas com ao menos 1 msg recebida — fonte mais completa"
+    except Exception as e:
+        resultado["contagens"]["ia_mensagens_conversas_unicas"] = f"erro: {e}"
+
+    # 2. ia_leads — registrado para msgs incoming que passaram pelo filtro de grupo/modo_teste
+    try:
+        resp = db.table("ia_leads").select("id", count="exact").eq(
+            "account_id", account_id
+        ).gte("created_at", de).lte("created_at", fim_dia).execute()
+        resultado["contagens"]["ia_leads"] = resp.count or 0
+        resultado["explicacao"]["ia_leads"] = "Leads registrados após filtros de grupo e modo_teste"
+    except Exception as e:
+        resultado["contagens"]["ia_leads"] = f"erro: {e}"
+
+    # 3. ia_conversations — conversas onde IA chegou a processar
+    try:
+        resp = db.table("ia_conversations").select("id", count="exact").eq(
+            "account_id", account_id
+        ).gte("created_at", de).lte("created_at", fim_dia).execute()
+        resultado["contagens"]["ia_conversations"] = resp.count or 0
+        resultado["explicacao"]["ia_conversations"] = "Conversas onde a IA processou e respondeu"
+    except Exception as e:
+        resultado["contagens"]["ia_conversations"] = f"erro: {e}"
+
+    # 4. ia_uso_mensal — para comparação com o relatório de cobrança
+    try:
+        dia_ciclo = config.get("dia_ciclo", 1)
+        ciclo_id, _, _ = _ciclo_mes(dia_ciclo)
+        resp = db.table("ia_uso_mensal").select("id", count="exact").eq(
+            "account_id", account_id
+        ).eq("mes", ciclo_id).execute()
+        resultado["contagens"]["ia_uso_mensal_ciclo_atual"] = resp.count or 0
+        resultado["explicacao"]["ia_uso_mensal"] = f"Contagem de cobrança do ciclo {ciclo_id} (dia_ciclo={dia_ciclo})"
+    except Exception as e:
+        resultado["contagens"]["ia_uso_mensal_ciclo_atual"] = f"erro: {e}"
+
+    return resultado
+
+
+@app.get("/api/admin/agenda/diagnostico/{account_id}")
+async def diagnostico_agenda(account_id: int):
+    """Diagnóstico do fluxo de agendamento: verifica config, advogados e consulta slots reais."""
+    from ia import consultar_agenda_real
+    from db import listar_advogados_por_especialidade
+
+    config = carregar_config_cliente(account_id)
+    if not config:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+
+    email_agenda = config.get("email_agenda", "")
+    especialidade = config.get("especialidade", "")
+    advogados = listar_advogados_por_especialidade(account_id, especialidade) or listar_advogados_por_especialidade(account_id, "")
+
+    slots = []
+    erro_slots = None
+    if email_agenda:
+        try:
+            slots = await consultar_agenda_real(config, especialidade)
+        except Exception as e:
+            erro_slots = str(e)
+
+    return {
+        "account_id": account_id,
+        "nome": config.get("nome", ""),
+        "ia_ativa": config.get("ia_ativa", True),
+        "email_agenda": email_agenda or "(não configurado)",
+        "especialidade": especialidade or "(não configurada)",
+        "quantidade_dias_a_buscar": config.get("quantidade_dias_a_buscar", 14),
+        "advogados_ativos": [
+            {
+                "id": str(a.get("id")),
+                "nome": a.get("nome"),
+                "especialidade": a.get("especialidade"),
+                "duracao": a.get("duracao_agendamento"),
+                "disponibilidade_dias": [d for d, h in (a.get("disponibilidade") or {}).items() if h],
+            }
+            for a in advogados
+        ],
+        "slots": {
+            "erro": erro_slots,
+            "total_advogados_com_slots": len(slots),
+            "amostra": [
+                {
+                    "advogado": s.get("nome"),
+                    "primeiros_slots": (s.get("slots") or [])[:3],
+                }
+                for s in slots
+            ],
         },
     }
 

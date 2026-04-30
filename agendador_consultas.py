@@ -39,11 +39,13 @@ def _formatar_data_lembrete(date_str: str) -> str:
         return date_str
 
 
+_TEMPLATE_VARS_PADRAO = {"1": "[NOME]", "2": "[HORARIO]"}
+
+
 def _build_processed_params_lembrete(template_vars: dict, ctx: dict) -> dict:
     """Mapeia placeholders ([NOME], [HORARIO], etc.) para processed_params do template.
 
-    template_vars ex: {"1": "[NOME]", "2": "[HORARIO]"}
-    ctx contém os valores ja resolvidos: nome, advogada, horario, data, contact_name, etc.
+    Se template_vars não configurado, usa padrão: {{1}}=nome, {{2}}=horário.
     """
     placeholder_map = {
         "[NOME]": ctx.get("nome", "") or ctx.get("contact_name", ""),
@@ -52,8 +54,9 @@ def _build_processed_params_lembrete(template_vars: dict, ctx: dict) -> dict:
         "[HORARIO]": ctx.get("horario", ""),
         "[DATA]": _formatar_data_lembrete(ctx.get("data", "")),
     }
+    vars_usados = template_vars or _TEMPLATE_VARS_PADRAO
     params = {}
-    for num, placeholder in (template_vars or {}).items():
+    for num, placeholder in vars_usados.items():
         valor = placeholder_map.get(placeholder, "")
         params[str(num)] = valor or "-"
     return params
@@ -67,7 +70,7 @@ async def _enviar_template_lembrete(
     template_name: str,
     processed_params: dict,
 ) -> None:
-    """Envia template WhatsApp via Chatwoot com processed_params (variáveis do template)."""
+    """Envia template WhatsApp via Chatwoot e registra nota privada com conteúdo renderizado."""
     url = f"{chatwoot_url}/api/v1/accounts/{account_id}/conversations/{conversation_id}/messages"
     payload = {
         "message_type": "outgoing",
@@ -85,6 +88,20 @@ async def _enviar_template_lembrete(
             json=payload,
         )
         resp.raise_for_status()
+
+    # Nota privada com conteúdo renderizado para visibilidade interna
+    try:
+        from inatividade import _buscar_conteudo_template, _enviar_nota_privada
+        conteudo = await _buscar_conteudo_template(account_id, template_name)
+        if conteudo and processed_params:
+            for num, val in (processed_params or {}).items():
+                conteudo = conteudo.replace(f"{{{{{num}}}}}", str(val))
+        nota = f"📎 Template enviado: *{template_name}*"
+        if conteudo:
+            nota += f"\n\n{conteudo}"
+        await _enviar_nota_privada(chatwoot_url, token, account_id, conversation_id, nota)
+    except Exception as e:
+        logger.debug(f"[lembrete-consulta] Falha ao postar nota privada do template: {e}")
 
 
 async def _loop():

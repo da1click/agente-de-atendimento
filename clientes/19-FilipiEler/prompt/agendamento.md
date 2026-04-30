@@ -63,7 +63,7 @@ O atendimento e SEMPRE online/digital. NUNCA perguntar formato, numero ou confir
 
 ## REGRA DE TAMANHO
 
-Mensagens curtas, estilo WhatsApp. Maximo 2-3 frases (80 palavras). NUNCA paragrafos longos.
+Mensagens curtas, estilo WhatsApp. Maximo 200 caracteres por mensagem. NUNCA paragrafos longos.
 
 ---
 

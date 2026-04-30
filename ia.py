@@ -28,6 +28,11 @@ def _eh_payload_anuncio(texto: str) -> bool:
 # Debounce: conversation_id -> asyncio.Task
 _debounce_tasks: dict[int, asyncio.Task] = {}
 
+# Cache de conversas recentemente transferidas: conversation_id -> timestamp UTC
+# Impede que nova mensagem após transferência re-dispare processamento da IA
+_conversas_transferidas: dict[int, float] = {}
+_TRANSFERENCIA_TTL = 7200  # 2 horas
+
 # Lock serial por conversa: impede duas invocações paralelas de processar_mensagem
 # Sem isso, duas tasks de debounce podem disparar em paralelo e gerar propostas
 # duplicadas (ex: cliente manda "Sim" + msg do bot anterior ainda ecoando no webhook
@@ -239,6 +244,7 @@ def _gerar_resumo_caso(historico_texto: str, openai_api_key: str = None) -> str:
 _NOTIF_CHATWOOT_EXTERNO = {
     8: {"token": "xJq2E7owxv89RaMbippvSV5J", "account_id_externo": 4},
     11: {"token": "xJq2E7owxv89RaMbippvSV5J", "account_id_externo": 4},
+    16: {"token": "xJq2E7owxv89RaMbippvSV5J", "account_id_externo": 4},
 }
 
 
@@ -447,19 +453,53 @@ async def executar_tool(nome: str, args: dict, config: dict, conversation_id: in
                     "status": "bloqueado",
                     "motivo": "Qualificacao minima incompleta (menos de 5 mensagens do cliente). Continue perguntando sobre o caso, sequela, laudo e profissao. NAO acione TransferHuman sem confirmar os dados basicos."
                 })
-        # Roteamento especial conta 1 (Matsuda): advogado da reclamada / representante / dono
-        # Atribui direto para Dra. Fernanda (agente 6) e notifica o grupo de novos leads.
+        # Roteamento especial conta 1 (Matsuda)
         motivo_txt = (args.get("motivo", "") or "").lower()
-        routing_especial_conta1 = account_id == 1 and any(
+
+        # Dra. Christina Matias (agente 76) — andamento/acompanhamento processual
+        routing_christina = account_id == 1 and any(
+            chave in motivo_txt for chave in [
+                "andamento processual", "acompanhamento processual",
+                "consulta processual", "dra. christina", "dra christina",
+            ]
+        )
+
+        # Dra. Fernanda Matsuda (agente 6) — advogado da reclamada, acordo, empresa
+        routing_fernanda = account_id == 1 and not routing_christina and any(
             chave in motivo_txt for chave in [
                 "advogado da reclamada", "advogada da reclamada",
                 "representante da empresa", "representante legal",
                 "dono da empresa", "dona da empresa",
                 "socio da empresa", "sócia da empresa", "socia da empresa",
                 "preposto", "dra. fernanda", "dra fernanda",
+                "acordo", "adv reclamada",
             ]
         )
-        if routing_especial_conta1:
+
+        routing_especial_conta1 = routing_christina or routing_fernanda
+
+        if routing_christina:
+            await chatwoot_transferir_humano(
+                chatwoot_url, chatwoot_token, account_id, conversation_id,
+                motivo=f"tool:TransferHuman — {args.get('motivo','')}",
+                assignee_id=76,
+            )
+            try:
+                notif_conv_id = config.get("id_notificacao_convertido")
+                if notif_conv_id:
+                    msg_notif = (
+                        f"📂 ANDAMENTO PROCESSUAL\n\n"
+                        f"Nome: {contact_name}\n"
+                        f"Número: {contact_phone}\n"
+                        f"Motivo: {args.get('motivo','')}\n"
+                        f"Atribuído a: Dra. Christina Matias (agente 76)\n"
+                        f"Conversa: {conversation_id}"
+                    )
+                    await _enviar_notificacao(config, account_id, int(notif_conv_id), msg_notif)
+                    logger.info(f"[notificação] Andamento processual notificado no grupo — conv={conversation_id}")
+            except Exception as e:
+                logger.warning(f"[notificação] Erro ao notificar andamento processual — conv={conversation_id}: {e}")
+        elif routing_fernanda:
             await chatwoot_transferir_humano(
                 chatwoot_url, chatwoot_token, account_id, conversation_id,
                 motivo=f"tool:TransferHuman — {args.get('motivo','')}",
@@ -469,17 +509,17 @@ async def executar_tool(nome: str, args: dict, config: dict, conversation_id: in
                 notif_conv_id = config.get("id_notificacao_convertido")
                 if notif_conv_id:
                     msg_notif = (
-                        f"⚖️ ADVOGADO/REPRESENTANTE DA EMPRESA\n\n"
+                        f"⚖️ ADVOGADO/REPRESENTANTE/ACORDO\n\n"
                         f"Nome: {contact_name}\n"
                         f"Número: {contact_phone}\n"
                         f"Motivo: {args.get('motivo','')}\n"
-                        f"Atribuído a: Dra. Fernanda (agente 6)\n"
+                        f"Atribuído a: Dra. Fernanda Matsuda (agente 6)\n"
                         f"Conversa: {conversation_id}"
                     )
                     await _enviar_notificacao(config, account_id, int(notif_conv_id), msg_notif)
-                    logger.info(f"[notificação] Advogado/representante notificado no grupo novos leads — conv={conversation_id}")
+                    logger.info(f"[notificação] Advogado/representante/acordo notificado no grupo — conv={conversation_id}")
             except Exception as e:
-                logger.warning(f"[notificação] Erro ao notificar advogado/representante — conv={conversation_id}: {e}")
+                logger.warning(f"[notificação] Erro ao notificar advogado/representante/acordo — conv={conversation_id}: {e}")
         else:
             await chatwoot_transferir_humano(chatwoot_url, chatwoot_token, account_id, conversation_id, motivo=f"tool:TransferHuman — {args.get('motivo','')}")
         try:
@@ -714,15 +754,34 @@ async def chatwoot_atualizar_contato(url: str, token: str, account_id: int, conv
 
 
 async def chatwoot_transferir_humano(url: str, token: str, account_id: int, conversation_id: int, motivo: str = "", assignee_id: int | None = None):
+    import time as _time
     headers = {"api_access_token": token, "Content-Type": "application/json"}
-    assign_url = f"{url}/api/v1/accounts/{account_id}/conversations/{conversation_id}/assignments"
     async with httpx.AsyncClient() as http:
+        # 1. Atribuir (ou desatribuir) agente
+        assign_url = f"{url}/api/v1/accounts/{account_id}/conversations/{conversation_id}/assignments"
         await http.post(assign_url, headers=headers, json={"assignee_id": assignee_id}, timeout=10)
+        # 2. Quando desatribuindo (transferindo para fila), setar status "pending"
+        # para evitar que o Chatwoot auto-atribua o bot novamente ao receber nova mensagem.
+        if assignee_id is None:
+            status_url = f"{url}/api/v1/accounts/{account_id}/conversations/{conversation_id}"
+            try:
+                await http.patch(status_url, headers=headers, json={"status": "pending"}, timeout=10)
+            except Exception as e:
+                logger.warning(f"[transferir] Falha ao setar status pending conv={conversation_id}: {e}")
+
     # Log detalhado com stack trace para rastrear origem da atribuição/desatribuição
     import traceback
     caller = traceback.extract_stack()[-2]
-    acao = f"ATRIBUIÇÃO→agente={assignee_id}" if assignee_id else "DESATRIBUIÇÃO"
+    acao = f"ATRIBUIÇÃO→agente={assignee_id}" if assignee_id else "DESATRIBUIÇÃO+PENDING"
     logger.info(f"🔴 {acao} — conta={account_id} conv={conversation_id} motivo='{motivo}' chamado_de={caller.filename}:{caller.lineno} ({caller.name})")
+
+    # Registrar no cache de conversas transferidas (previne re-processamento em memória)
+    _conversas_transferidas[conversation_id] = _time.monotonic()
+    # Limpar entradas antigas do cache
+    now = _time.monotonic()
+    expiradas = [cid for cid, ts in _conversas_transferidas.items() if now - ts > _TRANSFERENCIA_TTL]
+    for cid in expiradas:
+        _conversas_transferidas.pop(cid, None)
 
     # Desativar inatividade (follow-up) ao transferir para humano
     try:
@@ -866,11 +925,12 @@ async def kanban_mover_card(url: str, token: str, account_id: int, conversation_
                         break
 
             if item_existente and step_atual != step_id:
-                # Mover card para nova etapa
+                # Mover card para nova etapa — formato sem wrapper conforme
+                # doc oficial advbrasil.ai (chatwoot-kanban-api-curls.txt).
                 resp_move = await http.put(
                     f"{url}/api/v1/accounts/{account_id}/funnels/{funnel_id}/funnel_steps/{step_atual}/funnel_items/{item_existente['id']}/update_step",
                     headers=headers,
-                    json={"funnel_item": {"funnel_step_id": step_id}},
+                    json={"funnel_step_id": step_id},
                     timeout=10
                 )
                 if resp_move.is_success:
@@ -881,16 +941,22 @@ async def kanban_mover_card(url: str, token: str, account_id: int, conversation_
                         f"HTTP {resp_move.status_code} body={resp_move.text[:300]}"
                     )
             elif not item_existente:
-                # Criar novo card. Formato conforme swagger oficial CRM Funnels
-                # (https://swagger.cwmkt.com.br/): campos no root, sem wrapper.
+                # Criar novo card via bulk_create — único endpoint POST que
+                # aceita title + conversation_id e os persiste corretamente
+                # (verificado em 2026-04-28 contra swagger.cwmkt.com.br/.../bulk_create).
+                # POST direto em /funnel_items retorna 200 mas IGNORA os dados
+                # silenciosamente, criando cards orfãos sem title/conversation.
                 resp_create = await http.post(
-                    f"{url}/api/v1/accounts/{account_id}/funnels/{funnel_id}/funnel_steps/{step_id}/funnel_items",
+                    f"{url}/api/v1/accounts/{account_id}/funnels/{funnel_id}/funnel_steps/{step_id}/funnel_items/bulk_create",
                     headers=headers,
                     json={
-                        "title": contact_name or f"Conversa #{conversation_id}",
-                        "conversation_id": conversation_id,
-                        "status": "active",
-                        "priority": "medium",
+                        "items": [
+                            {
+                                "title": contact_name or f"Conversa #{conversation_id}",
+                                "conversation_id": conversation_id,
+                                "priority": "medium",
+                            }
+                        ]
                     },
                     timeout=10
                 )
@@ -1628,7 +1694,25 @@ async def chamar_agente(config: dict, fase: str, messages_openai: list, conversa
                 "content": resultado,
             })
 
-    return None  # fallback se loop esgotar
+    # Loop esgotou sem gerar texto — forçar resposta final sem tools
+    logger.warning(f"🤖 Agente [{fase}]: loop de 5 rodadas esgotado sem resposta textual — forçando resposta final")
+    msgs.append({
+        "role": "user",
+        "content": "Responda agora com uma mensagem de texto para o cliente. Não acione nenhuma ferramenta.",
+    })
+    try:
+        resp_final = client.chat.completions.create(
+            model="gpt-5.2",
+            messages=msgs,
+            reasoning_effort="low",
+        )
+        resposta = (resp_final.choices[0].message.content or "").strip()
+        if resposta:
+            logger.info(f"🤖 Agente [{fase}] → resposta de fallback ({len(resposta)} chars)")
+            return resposta
+    except Exception as e_fallback:
+        logger.error(f"🤖 Agente [{fase}]: erro no fallback final: {e_fallback}")
+    return None  # esgotou todas as tentativas
 
 
 # ── DEBOUNCE ──────────────────────────────────────────────────
@@ -1665,6 +1749,13 @@ def agendar_processamento(config: dict, account_id: int, conversation_id: int, i
 # ── FLUXO PRINCIPAL ───────────────────────────────────────────
 
 async def processar_mensagem(config: dict, account_id: int, conversation_id: int, inbox_id: int | None = None):
+    import time as _time
+    # Verificar cache: conversa foi transferida recentemente → IA não deve responder
+    _ts = _conversas_transferidas.get(conversation_id)
+    if _ts is not None and (_time.monotonic() - _ts) < _TRANSFERENCIA_TTL:
+        logger.info(f"[transferência] Conv={conversation_id} foi transferida há {int(_time.monotonic()-_ts)}s — ignorando processamento")
+        return
+
     logger.info(f"═══ PROCESSANDO [{account_id}] conv={conversation_id} ═══")
 
 
@@ -1701,22 +1792,35 @@ async def processar_mensagem(config: dict, account_id: int, conversation_id: int
     ultimas = linhas[-5:] if len(linhas) > 5 else linhas
     logger.info(f"📜 Últimas mensagens:\n" + "\n".join(f"   {l}" for l in ultimas))
 
-    fase = chamar_supervisor(config, historico_texto)
+    # Verificar labels ANTES do supervisor para detectar clientes já convertidos
+    _labels_conversa: list[str] = []
+    try:
+        chatwoot_url = config["chatwoot_url"].rstrip("/")
+        labels_url = f"{chatwoot_url}/api/v1/accounts/{account_id}/conversations/{conversation_id}/labels"
+        async with httpx.AsyncClient() as http:
+            resp = await http.get(labels_url, headers={"api_access_token": config["chatwoot_token"]}, timeout=10)
+            _labels_conversa = resp.json().get("payload", []) if resp.is_success else []
+    except Exception as e:
+        logger.warning(f"Erro ao buscar labels: {e}")
+
+    # Injetar labels no topo do historico_texto para que supervisor e agentes as vejam
+    if _labels_conversa:
+        labels_str = ", ".join(_labels_conversa)
+        historico_texto = f"[TAGS DA CONVERSA: {labels_str}]\n\n" + historico_texto
+
+    # Cliente com contrato fechado: pular supervisor e transferir direto
+    if "contrato-fechado" in _labels_conversa:
+        logger.info(f"🏷️ Tag 'contrato-fechado' detectada — transferindo para humano sem qualificação (conv={conversation_id})")
+        fase = "transferir_humano"
+    else:
+        fase = chamar_supervisor(config, historico_texto)
 
     # Se já convertido e supervisor quer agendamento → tratar como reagendamento
     _is_reagendamento = False
     if fase == "agendamento":
-        try:
-            chatwoot_url = config["chatwoot_url"].rstrip("/")
-            labels_url = f"{chatwoot_url}/api/v1/accounts/{account_id}/conversations/{conversation_id}/labels"
-            async with httpx.AsyncClient() as http:
-                resp = await http.get(labels_url, headers={"api_access_token": config["chatwoot_token"]}, timeout=10)
-                labels = resp.json().get("payload", []) if resp.is_success else []
-            if "convertido" in labels:
-                _is_reagendamento = True
-                logger.info(f"🔄 Conversa já convertida — tratando como reagendamento (conv={conversation_id})")
-        except Exception as e:
-            logger.warning(f"Erro ao verificar labels: {e}")
+        if "convertido" in _labels_conversa:
+            _is_reagendamento = True
+            logger.info(f"🔄 Conversa já convertida — tratando como reagendamento (conv={conversation_id})")
 
     # Extrair dados do contato do histórico
     contact_name = ""
@@ -1729,8 +1833,9 @@ async def processar_mensagem(config: dict, account_id: int, conversation_id: int
             break
 
     # Proteção anti-desatribuição prematura: se supervisor quer transferir_humano
-    # mas o cliente teve poucas interações, forçar qualificação primeiro
-    if fase == "transferir_humano":
+    # mas o cliente teve poucas interações, forçar qualificação primeiro.
+    # Exceto clientes com contrato-fechado — esses transferem imediatamente.
+    if fase == "transferir_humano" and "contrato-fechado" not in _labels_conversa:
         msgs_cliente = [m for m in historico if m.get("message_type") == 0]
         msgs_ia = [m for m in historico if m.get("message_type") == 1]
         # Se o cliente mandou <= 3 mensagens e a IA mandou <= 2, é muito cedo pra transferir
