@@ -148,12 +148,16 @@ async def _recuperar_conversas_pos_deploy():
 
                             # Ordenar por created_at
                             msgs = sorted(msgs, key=lambda m: m.get("created_at", 0))
-                            ultima = msgs[-1]
 
-                            # Se a última mensagem é do CLIENTE (incoming) e foi nos últimos 15 min
-                            if ultima.get("message_type") == 0:
+                            # Buscar a última mensagem do CLIENTE (type=0), ignorando atividades e saídas
+                            ultima_cliente = next(
+                                (m for m in reversed(msgs) if m.get("message_type") == 0),
+                                None
+                            )
+
+                            if ultima_cliente:
                                 from datetime import datetime, timezone
-                                created = ultima.get("created_at", 0)
+                                created = ultima_cliente.get("created_at", 0)
                                 if isinstance(created, (int, float)):
                                     msg_time = datetime.fromtimestamp(created, tz=timezone.utc)
                                 else:
@@ -1680,7 +1684,7 @@ async def chatwoot_webhook(request: Request):
             if assignee_id is None or assignee_id != ia_agent_id:
                 chatwoot_url_rc = config["chatwoot_url"].rstrip("/")
                 chatwoot_token_rc = config["chatwoot_token"]
-                for tentativa, espera in enumerate([5, 10], 1):
+                for tentativa, espera in enumerate([5, 10, 20], 1):
                     try:
                         await asyncio.sleep(espera)
                         async with httpx.AsyncClient(timeout=10) as hc:
