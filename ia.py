@@ -567,25 +567,42 @@ async def executar_tool(nome: str, args: dict, config: dict, conversation_id: in
     if nome == "Agendar":
         is_reagendamento = context.get("is_reagendamento", False)
         # Proteção anti-duplicação: se já existe agendamento ativo pra esta conversa
-        # e não é reagendamento, bloquear nova criação.
+        # e não é reagendamento, verificar se é duplicata real ou remarcação.
         if not is_reagendamento:
             try:
                 existente = existe_agendamento_ativo(account_id, conversation_id)
                 if existente:
-                    logger.warning(
-                        f"🚫 [agenda] Agendar duplicado bloqueado — conv={conversation_id} "
-                        f"já tem agendamento em {existente.get('scheduled_date')} {existente.get('scheduled_time')} "
-                        f"com {existente.get('advogada')}"
-                    )
-                    return json.dumps({
-                        "STATUS": "JA_AGENDADO",
-                        "mensagem_sistema": (
-                            f"Ja existe agendamento ativo para esta conversa: "
-                            f"{existente.get('scheduled_date')} {existente.get('scheduled_time')} "
-                            f"com {existente.get('advogada')}. NAO agendar novamente — confirme ao cliente o horario ja reservado."
-                        ),
-                        "advogado": existente.get("advogada", ""),
-                    })
+                    # Extrair data/hora do novo pedido para comparar com o existente
+                    novo_start = args.get("start", "")
+                    novo_parts = novo_start.split(" ", 1) if novo_start else ["", ""]
+                    novo_date = novo_parts[0] if len(novo_parts) > 0 else ""
+                    novo_time = novo_parts[1][:5] if len(novo_parts) > 1 else ""  # HH:MM
+                    exist_time = str(existente.get("scheduled_time", ""))[:5]  # HH:MM
+                    exist_date = str(existente.get("scheduled_date", ""))
+
+                    # Se data/hora diferentes → é remarcação, tratar como reagendamento
+                    if novo_date != exist_date or novo_time != exist_time:
+                        is_reagendamento = True
+                        logger.info(
+                            f"🔄 [agenda] Remarcação detectada — conv={conversation_id} "
+                            f"de {exist_date} {exist_time} para {novo_date} {novo_time}"
+                        )
+                    else:
+                        # Mesmo horário → duplicata real, bloquear
+                        logger.warning(
+                            f"🚫 [agenda] Agendar duplicado bloqueado — conv={conversation_id} "
+                            f"já tem agendamento em {exist_date} {exist_time} "
+                            f"com {existente.get('advogada')}"
+                        )
+                        return json.dumps({
+                            "STATUS": "JA_AGENDADO",
+                            "mensagem_sistema": (
+                                f"Ja existe agendamento ativo para esta conversa: "
+                                f"{exist_date} {exist_time} "
+                                f"com {existente.get('advogada')}. NAO agendar novamente — confirme ao cliente o horario ja reservado."
+                            ),
+                            "advogado": existente.get("advogada", ""),
+                        })
             except Exception as e:
                 logger.warning(f"[agenda] Erro ao checar agendamento existente: {e}")
         try:
