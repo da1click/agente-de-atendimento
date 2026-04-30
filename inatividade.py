@@ -524,12 +524,17 @@ async def disparar_estagio(config_cliente: dict, row: dict):
             f"envio pulado conv={conversation_id} estágio={stagio}"
         )
     else:
-        # Inbox normal OU dentro da janela 24h → texto gerado pela IA
-        try:
-            mensagem = _gerar_mensagem(config_cliente, historico_texto, stagio, nome_ia)
-        except Exception as e:
-            logger.warning(f"[inatividade] Erro ao gerar mensagem conv={conversation_id}: {e}")
-            mensagem = None
+        # Inbox normal OU dentro da janela 24h → mensagem customizada ou IA
+        mensagem_custom = (info.get("mensagem_custom") or "").strip()
+        if mensagem_custom:
+            mensagem = mensagem_custom
+            logger.info(f"[inatividade] Usando mensagem customizada estágio {stagio} — conv={conversation_id}")
+        else:
+            try:
+                mensagem = _gerar_mensagem(config_cliente, historico_texto, stagio, nome_ia)
+            except Exception as e:
+                logger.warning(f"[inatividade] Erro ao gerar mensagem conv={conversation_id}: {e}")
+                mensagem = None
 
         if mensagem:
             try:

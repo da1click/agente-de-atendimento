@@ -3045,45 +3045,58 @@ async function renderPageInatividade(opts = {}) {
 
   const stagesHtml = _inativCfg.estagios.map(e => {
     const hasTemplate = !!e.template_whatsapp;
+    const msgCustom = (e.mensagem_custom || '').replace(/"/g, '&quot;');
     return `
-      <div style="display:flex;align-items:center;gap:10px;padding:11px 14px;border-radius:10px;
+      <div style="display:flex;flex-direction:column;gap:8px;padding:12px 14px;border-radius:10px;
                   margin-bottom:8px;background:${stageColors[e.stagio]||'#fafafa'};
                   border:1.5px solid ${stageBorder[e.stagio]||'var(--border)'};">
 
-        <div style="width:26px;height:26px;border-radius:7px;background:var(--purple);color:#fff;
-                    font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-          ${e.stagio}
-        </div>
-
-        <div style="display:flex;flex-direction:column;gap:2px;flex:0 0 80px;">
-          <span style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;">Horas</span>
-          <div style="display:flex;align-items:center;gap:4px;">
-            <input type="number" id="inativ-horas-${e.stagio}" value="${e.horas}" min="1"
-                   style="width:60px;padding:5px 8px;font-size:13px;" />
-            <span style="font-size:11px;color:var(--text-muted);">h</span>
+        <!-- Linha 1: número + horas + label + template -->
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="width:26px;height:26px;border-radius:7px;background:var(--purple);color:#fff;
+                      font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            ${e.stagio}
           </div>
-        </div>
 
-        <div style="display:flex;flex-direction:column;gap:2px;flex:1;min-width:0;">
-          <span style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;">Label</span>
-          <input type="text" id="inativ-label-${e.stagio}" value="${e.label}"
-                 style="padding:5px 8px;font-size:12px;" />
-        </div>
-
-        <div style="display:flex;flex-direction:column;gap:4px;flex:0 0 auto;">
-          <span style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;">WhatsApp Oficial</span>
-          <div style="display:flex;align-items:center;gap:8px;">
-            <label class="toggle" style="flex-shrink:0;">
-              <input type="checkbox" id="inativ-wpp-${e.stagio}" ${hasTemplate ? 'checked' : ''}
-                     onchange="toggleInativTemplate(${e.stagio})" />
-              <span class="toggle-slider"></span>
-            </label>
-            <div id="inativ-tpl-wrap-${e.stagio}" style="${hasTemplate ? '' : 'display:none;'}flex-direction:column;gap:2px;">
-              ${_renderTemplateSelector(e.stagio, e.template_whatsapp || '')}
-              <div style="font-size:10px;color:var(--text-muted);">selecione ou digite o nome do template</div>
+          <div style="display:flex;flex-direction:column;gap:2px;flex:0 0 80px;">
+            <span style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;">Horas</span>
+            <div style="display:flex;align-items:center;gap:4px;">
+              <input type="number" id="inativ-horas-${e.stagio}" value="${e.horas}" min="1"
+                     style="width:60px;padding:5px 8px;font-size:13px;" />
+              <span style="font-size:11px;color:var(--text-muted);">h</span>
             </div>
-            <span id="inativ-tpl-off-${e.stagio}" style="${hasTemplate ? 'display:none;' : ''}font-size:11px;color:var(--text-muted);font-style:italic;">IA gera texto</span>
           </div>
+
+          <div style="display:flex;flex-direction:column;gap:2px;flex:1;min-width:0;">
+            <span style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;">Label</span>
+            <input type="text" id="inativ-label-${e.stagio}" value="${e.label}"
+                   style="padding:5px 8px;font-size:12px;" />
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:4px;flex:0 0 auto;">
+            <span style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;">Template WPP Oficial</span>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <label class="toggle" style="flex-shrink:0;">
+                <input type="checkbox" id="inativ-wpp-${e.stagio}" ${hasTemplate ? 'checked' : ''}
+                       onchange="toggleInativTemplate(${e.stagio})" />
+                <span class="toggle-slider"></span>
+              </label>
+              <div id="inativ-tpl-wrap-${e.stagio}" style="${hasTemplate ? '' : 'display:none;'}flex-direction:column;gap:2px;">
+                ${_renderTemplateSelector(e.stagio, e.template_whatsapp || '')}
+                <div style="font-size:10px;color:var(--text-muted);">para quando janela 24h expirar</div>
+              </div>
+              <span id="inativ-tpl-off-${e.stagio}" style="${hasTemplate ? 'display:none;' : ''}font-size:11px;color:var(--text-muted);font-style:italic;">não configurado</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Linha 2: mensagem customizada -->
+        <div style="display:flex;flex-direction:column;gap:3px;padding-left:36px;">
+          <span style="font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.6px;">Mensagem enviada neste estágio</span>
+          <textarea id="inativ-msg-${e.stagio}" rows="2"
+                    placeholder="Digite a mensagem exata a enviar neste estágio..."
+                    style="padding:7px 10px;font-size:12px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);resize:vertical;font-family:inherit;line-height:1.4;">${msgCustom}</textarea>
+          <span style="font-size:10px;color:var(--text-muted);">Deixe em branco para a IA gerar automaticamente pelo prompt</span>
         </div>
       </div>`;
   }).join('');
@@ -3205,11 +3218,13 @@ function ajustarEstagiosInativ(novoLimiteStr) {
     const l = document.getElementById(`inativ-label-${e.stagio}`)?.value.trim();
     const usaTpl = document.getElementById(`inativ-wpp-${e.stagio}`)?.checked;
     const tpl = usaTpl ? (document.getElementById(`inativ-tpl-${e.stagio}`)?.value.trim() || null) : null;
+    const msg = document.getElementById(`inativ-msg-${e.stagio}`)?.value.trim() || null;
     return {
       ...e,
       horas: Number.isFinite(h) ? h : e.horas,
       label: l || e.label,
       template_whatsapp: tpl,
+      mensagem_custom: msg,
     };
   });
   const ativoAtual = document.getElementById('inativ-ativo')?.checked;
@@ -3241,7 +3256,8 @@ async function salvarInatividade() {
     const label = document.getElementById(`inativ-label-${e.stagio}`)?.value.trim() || e.label;
     const usaTpl = document.getElementById(`inativ-wpp-${e.stagio}`)?.checked;
     const tpl = usaTpl ? (document.getElementById(`inativ-tpl-${e.stagio}`)?.value.trim() || null) : null;
-    return { ...e, horas, label, template_whatsapp: tpl };
+    const msg = document.getElementById(`inativ-msg-${e.stagio}`)?.value.trim() || null;
+    return { ...e, horas, label, template_whatsapp: tpl, mensagem_custom: msg };
   });
 
   const limite = parseInt(document.getElementById('inativ-limite')?.value) || 3;
