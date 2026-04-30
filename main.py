@@ -4266,6 +4266,7 @@ async def diagnostico_leads(account_id: int, de: str = None, ate: str = None):
     if not config:
         raise HTTPException(status_code=404, detail="Cliente não encontrado")
 
+    from db import get_db
     db = get_db()
     resultado = {
         "account_id": account_id,
