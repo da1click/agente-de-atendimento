@@ -1798,6 +1798,36 @@ async def processar_mensagem(config: dict, account_id: int, conversation_id: int
         logger.info(f"[transferência] Conv={conversation_id} foi transferida há {int(_time.monotonic()-_ts)}s — ignorando processamento")
         return
 
+    # Re-verificar assignee via API antes de processar (evita race-condition onde
+    # conversation_updated agendou processamento mas a conversa foi reatribuída a humano)
+    _ia_agent_id = config.get("ia_agent_id")
+    if _ia_agent_id is not None:
+        try:
+            _cw_url = config["chatwoot_url"].rstrip("/")
+            async with httpx.AsyncClient(timeout=10) as _hc:
+                _resp = await _hc.get(
+                    f"{_cw_url}/api/v1/accounts/{account_id}/conversations/{conversation_id}",
+                    headers={"api_access_token": config["chatwoot_token"]},
+                )
+                if _resp.is_success:
+                    _conv = _resp.json()
+                    _cur_assignee = (_conv.get("meta") or {}).get("assignee") or {}
+                    _cur_assignee_id = _cur_assignee.get("id") if isinstance(_cur_assignee, dict) else None
+                    _cur_status = _conv.get("status")
+                    if _cur_assignee_id != _ia_agent_id:
+                        logger.info(
+                            f"[assignee-check] Conv={conversation_id} atribuída a agente={_cur_assignee_id} "
+                            f"(ia_agent={_ia_agent_id}) — abortando processamento"
+                        )
+                        return
+                    if _cur_status != "open":
+                        logger.info(
+                            f"[assignee-check] Conv={conversation_id} status='{_cur_status}' (esperado 'open') — abortando"
+                        )
+                        return
+        except Exception as _e:
+            logger.warning(f"[assignee-check] Erro ao verificar assignee conv={conversation_id}: {_e}")
+
     logger.info(f"═══ PROCESSANDO [{account_id}] conv={conversation_id} ═══")
 
 
