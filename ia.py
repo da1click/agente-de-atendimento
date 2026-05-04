@@ -1751,15 +1751,27 @@ async def _executar_com_debounce(config: dict, account_id: int, conversation_id:
     await asyncio.sleep(15)
     _debounce_tasks.pop(conversation_id, None)
     lock = _processing_locks.setdefault(conversation_id, asyncio.Lock())
-    if lock.locked():
-        logger.info(f"[debounce] Já há processamento em andamento para conv={conversation_id} — pulando esta task (a próxima mensagem reagendará)")
+
+    # Se lock ocupado: aguardar liberação (não descartar — causa IA parar após áudio)
+    ocupado = lock.locked()
+    if ocupado:
+        logger.info(f"[debounce] Lock ocupado para conv={conversation_id} — aguardando liberação (máx 60s)")
+
+    try:
+        await asyncio.wait_for(lock.acquire(), timeout=60 if ocupado else 30)
+    except asyncio.TimeoutError:
+        logger.warning(f"[debounce] Timeout ao adquirir lock para conv={conversation_id} — abandonando")
         return
-    async with lock:
+
+    try:
         logger.info(f"[debounce] Processando conversa {conversation_id} (account={account_id})")
         try:
             await processar_mensagem(config, account_id, conversation_id, inbox_id)
         except Exception as e:
             logger.error(f"[debounce] ERRO FATAL ao processar conv={conversation_id} account={account_id}: {e}", exc_info=True)
+    finally:
+        lock.release()
+
     # Limpar locks antigos para não vazar memória (mantém só conversas recentes)
     if len(_processing_locks) > 2000:
         for cid in list(_processing_locks.keys())[:500]:
