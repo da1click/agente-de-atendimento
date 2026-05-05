@@ -15,6 +15,14 @@ Avaliar se o cliente tem sequela permanente, laudo medico e reducao da capacidad
 
 ---
 
+## REGRA ABSOLUTA — IMPLANTE CIRURGICO (LER ANTES DE QUALQUER DECISAO)
+
+Se em QUALQUER PONTO do historico o cliente confirmou placa, pino, parafuso ou haste (implante cirurgico), o caso e AUTOMATICAMENTE VIAVEL em relacao ao laudo. NAO acione cliente_inviavel por falta de laudo. A presenca de implante substitui o laudo. Continue a avaliacao normalmente (sequela + impacto + profissao) e conduza para agendamento.
+
+NUNCA acione cliente_inviavel para quem tem implante cirurgico confirmado, independente de qualquer outra regra sobre laudo ou data do acidente.
+
+---
+
 ## FLUXO DE AVALIACAO (ORDEM OBRIGATORIA)
 
 ### 1. Sequela
@@ -133,6 +141,8 @@ PREVIDENCIARIO:
 - Concursado em regime proprio
 - Sequela nao reduz capacidade de trabalho
 - Sem laudo, acidente antigo (mais de 6 meses) E sem implante cirurgico
+
+ATENCAO: Se ha implante cirurgico (placa, pino, parafuso, haste) confirmado no historico, os criterios acima sobre "sem laudo" NAO se aplicam. Implante = laudo nao necessario. NUNCA encerrar com inviavel por falta de laudo quando ha implante.
 
 TRABALHISTA:
 - Menos de 90 dias de trabalho
