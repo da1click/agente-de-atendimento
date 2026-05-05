@@ -783,6 +783,15 @@ async def processar_inatividades():
 
     for row in pendentes:
         account_id = row["account_id"]
+
+        # Conta 18: follow-up só no horário noturno da IA (20h–08h BRT)
+        if account_id == 18:
+            import datetime as _dt, zoneinfo as _zi
+            _hora18 = _dt.datetime.now(_zi.ZoneInfo("America/Sao_Paulo")).hour
+            if not (_hora18 >= 20 or _hora18 < 8):
+                logger.info(f"[inatividade] Conta 18 fora do horário noturno ({_hora18}h) — follow-up adiado conv={row['conversation_id']}")
+                continue
+
         config_cliente = carregar_config_cliente(account_id)
 
         if not config_cliente or not config_cliente.get("ativo", True):
