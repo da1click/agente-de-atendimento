@@ -66,6 +66,7 @@ from inatividade import registrar_atividade, iniciar_monitoramento
 from remarketing import iniciar_remarketing
 from campanhas import iniciar_campanhas
 import asyncio
+import datetime
 import httpx
 import json
 import logging
@@ -74,6 +75,7 @@ import random
 import re
 import secrets
 import string
+import zoneinfo as _zoneinfo
 from collections import OrderedDict
 
 logging.basicConfig(level=logging.INFO)
@@ -105,6 +107,8 @@ async def _recuperar_conversas_pos_deploy():
             account_id = cfg["account_id"]
             if account_id == 19:
                 continue  # IA desativada para conta 19
+            if account_id == 18 and not _conta18_horario_ativo():
+                continue  # Conta 18: IA noturna — fora do horário
             base_url = (cfg.get("chatwoot_url") or "").rstrip("/")
             token = cfg.get("chatwoot_token", "")
             ia_agent_id = cfg["ia_agent_id"]
@@ -190,6 +194,66 @@ async def _recuperar_conversas_pos_deploy():
         logger.error(f"[pos-deploy] Erro geral: {e}")
 
 
+# ── CONTA 18: IA NOTURNA ─────────────────────────────────────
+# IA ativa das 20h às 07h59 BRT; às 08h transfere conversas para humano.
+
+_CONTA18_IA_HORA_INICIO = 20  # 20:00 BRT
+_CONTA18_IA_HORA_FIM    = 8   # 08:00 BRT (exclusive)
+
+
+def _conta18_horario_ativo() -> bool:
+    hora = datetime.datetime.now(_zoneinfo.ZoneInfo("America/Sao_Paulo")).hour
+    return hora >= _CONTA18_IA_HORA_INICIO or hora < _CONTA18_IA_HORA_FIM
+
+
+async def _transferencia_matinal_conta18():
+    """Às 08h00 BRT, transfere para humano as conversas abertas atribuídas à IA (conta 18)."""
+    from ia import chatwoot_transferir_humano as _cth
+    from db import carregar_config_cliente as _cc
+    ultimo_dia: datetime.date | None = None
+    while True:
+        await asyncio.sleep(60)
+        try:
+            agora = datetime.datetime.now(_zoneinfo.ZoneInfo("America/Sao_Paulo"))
+            if agora.hour != 8 or agora.minute > 5 or agora.date() == ultimo_dia:
+                continue
+            ultimo_dia = agora.date()
+            logger.info("[conta18-matinal] Iniciando transferência matinal das conversas noturnas...")
+            config18 = _cc(18)
+            if not config18 or not config18.get("ia_agent_id"):
+                logger.warning("[conta18-matinal] Config não encontrada ou sem ia_agent_id")
+                continue
+            cw_url      = config18["chatwoot_url"].rstrip("/")
+            cw_token    = config18["chatwoot_token"]
+            ia_agent_id = config18["ia_agent_id"]
+            transferidas = 0
+            async with httpx.AsyncClient(timeout=15) as http:
+                for page in range(1, 10):
+                    resp = await http.get(
+                        f"{cw_url}/api/v1/accounts/18/conversations",
+                        headers={"api_access_token": cw_token},
+                        params={"status": "open", "assignee_type": "assigned", "page": page},
+                    )
+                    if not resp.is_success:
+                        break
+                    convs = (resp.json().get("data") or {}).get("payload") or []
+                    if not convs:
+                        break
+                    for conv in convs:
+                        assignee = (conv.get("meta") or {}).get("assignee") or {}
+                        if assignee.get("id") == ia_agent_id:
+                            conv_id = conv["id"]
+                            try:
+                                await _cth(cw_url, cw_token, 18, conv_id, motivo="conta18:transferencia_matinal")
+                                transferidas += 1
+                                logger.info(f"[conta18-matinal] Conv={conv_id} transferida para humano")
+                            except Exception as _e:
+                                logger.warning(f"[conta18-matinal] Erro conv={conv_id}: {_e}")
+            logger.info(f"[conta18-matinal] Concluído — {transferidas} conversa(s) transferida(s)")
+        except Exception as _e:
+            logger.error(f"[conta18-matinal] ERRO: {_e}", exc_info=True)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     iniciar_monitoramento()
@@ -205,6 +269,8 @@ async def lifespan(app: FastAPI):
     iniciar_cobranca_docs()
     # Recuperar conversas perdidas durante deploy
     asyncio.create_task(_recuperar_conversas_pos_deploy())
+    # Conta 18: transferência matinal (08h BRT)
+    asyncio.create_task(_transferencia_matinal_conta18())
     # Cria super_admin inicial se não existir
     try:
         if not super_admin_existe():
@@ -1441,6 +1507,11 @@ async def chatwoot_webhook(request: Request):
         if not inbox_ok_upd:
             return {"status": "ignorado", "event": event}
 
+        # Conta 18: IA opera apenas no horário noturno (20h–08h BRT)
+        if account_id_upd == 18 and not _conta18_horario_ativo():
+            logger.info(f"[conta18-horario] Fora do horário noturno — conv-updated ignorado conv={conversation_id_upd}")
+            return {"status": "ignorado", "event": event}
+
         # Buscar assignee atual via API (payload pode estar desatualizado)
         try:
             chatwoot_url_upd = config_upd["chatwoot_url"].rstrip("/")
@@ -1818,6 +1889,11 @@ async def chatwoot_webhook(request: Request):
             if tracking_event_existe(account_id, conversation_id):
                 logger.info(f"[conta18] Re-clique em anúncio detectado — IA não responde (conv={conversation_id})")
                 continue
+
+        # Conta 18: IA opera apenas no horário noturno (20h–08h BRT)
+        if account_id == 18 and ia_ativa and not _conta18_horario_ativo():
+            logger.info(f"[conta18-horario] Fora do horário noturno — IA não responde conv={conversation_id}")
+            continue
 
         if ia_ativa:
             logger.info(f"[{account_id}] IA ativa — agendando processamento de {nome}: {texto or '[áudio]'}")
