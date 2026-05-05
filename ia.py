@@ -1811,7 +1811,7 @@ async def processar_mensagem(config: dict, account_id: int, conversation_id: int
                 )
                 if _resp.is_success:
                     _conv = _resp.json()
-                    _cur_assignee = (_conv.get("meta") or {}).get("assignee") or {}
+                    _cur_assignee = (_conv.get("meta") or {}).get("assignee") or _conv.get("assignee") or {}
                     _cur_assignee_id = _cur_assignee.get("id") if isinstance(_cur_assignee, dict) else None
                     _cur_status = _conv.get("status")
                     if _cur_assignee_id != _ia_agent_id:
