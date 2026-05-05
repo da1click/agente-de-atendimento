@@ -262,6 +262,8 @@ def cancelar_agendamentos_anteriores(account_id: int, conversation_id: int) -> i
     Usar antes de inserir um reagendamento para impedir lembretes duplicados
     do horário antigo. Retorna quantos foram cancelados.
     """
+    import logging as _logging
+    _log = _logging.getLogger(__name__)
     db = get_db()
     try:
         resp = (
@@ -272,8 +274,12 @@ def cancelar_agendamentos_anteriores(account_id: int, conversation_id: int) -> i
             .eq("status", "agendado")
             .execute()
         )
-        return len(resp.data or [])
-    except Exception:
+        cancelados = len(resp.data or [])
+        if cancelados:
+            _log.info(f"[cancelar-agendamentos] {cancelados} cancelado(s) — account={account_id} conv={conversation_id}")
+        return cancelados
+    except Exception as _e:
+        _log.error(f"[cancelar-agendamentos] FALHA — account={account_id} conv={conversation_id}: {_e}")
         return 0
 
 

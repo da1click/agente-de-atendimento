@@ -136,18 +136,30 @@ async def processar_lembretes():
     if not agendamentos:
         return
 
-    # Dedupe: se houver múltiplos agendamentos ativos para (conv, data, hora),
-    # mantém só o mais recente (maior id). Evita lembrete duplicado quando o mesmo
-    # horário foi inserido mais de uma vez na mesma conversa.
+    # Dedupe nível 1: (conv, data, hora) — mesmo horário inserido mais de uma vez.
     _dedup: dict[tuple, dict] = {}
     for _ag in agendamentos:
         _key = (_ag.get("conversation_id"), _ag.get("scheduled_date"), (_ag.get("scheduled_time", "") or "")[:5])
         _prev = _dedup.get(_key)
         if _prev is None or (_ag.get("id") or 0) > (_prev.get("id") or 0):
             _dedup[_key] = _ag
-    if len(_dedup) < len(agendamentos):
-        logger.info(f"[lembrete-consulta] Dedupe: {len(agendamentos)} → {len(_dedup)} agendamento(s) únicos")
     agendamentos = list(_dedup.values())
+
+    # Dedupe nível 2: por conversation_id — mantém apenas o agendamento mais recente
+    # por conversa. Proteção contra reagendamentos onde o cancelamento do anterior falhou
+    # no DB: impede que o horário antigo (ainda "agendado") receba lembrete.
+    _dedup_conv: dict[int, dict] = {}
+    for _ag in agendamentos:
+        _cid = _ag.get("conversation_id")
+        _prev = _dedup_conv.get(_cid)
+        if _prev is None or (_ag.get("id") or 0) > (_prev.get("id") or 0):
+            _dedup_conv[_cid] = _ag
+    if len(_dedup_conv) < len(agendamentos):
+        logger.info(
+            f"[lembrete-consulta] Dedupe reagendamento: {len(agendamentos)} → {len(_dedup_conv)} "
+            f"agendamento(s) (ignorados horários anteriores não cancelados no DB)"
+        )
+    agendamentos = list(_dedup_conv.values())
 
     now = datetime.now(BR_TZ)
     config_cache: dict[int, dict | None] = {}
