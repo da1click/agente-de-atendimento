@@ -1891,7 +1891,11 @@ async def processar_mensagem(config: dict, account_id: int, conversation_id: int
         logger.info(f"🏷️ Tag 'remarketing' detectada — modo apenas tira-dúvidas, sem qualificação (conv={conversation_id})")
         fase = "identificacao"
     else:
-        fase = chamar_supervisor(config, historico_texto)
+        try:
+            fase = chamar_supervisor(config, historico_texto)
+        except Exception as _e_sup:
+            logger.error(f"[supervisor] Falha ao chamar supervisor conv={conversation_id}: {_e_sup}", exc_info=True)
+            fase = "coleta_caso"  # fallback seguro: continua coletando ao invés de silenciar
 
     # Se já convertido e supervisor quer agendamento → tratar como reagendamento
     _is_reagendamento = False
@@ -2003,7 +2007,11 @@ async def processar_mensagem(config: dict, account_id: int, conversation_id: int
     except Exception as e:
         logger.warning(f"Supabase erro (upsert_conversation): {e}")
 
-    resposta = await chamar_agente(config, fase, historico_openai, conversation_id, context)
+    try:
+        resposta = await chamar_agente(config, fase, historico_openai, conversation_id, context)
+    except Exception as _e_ag:
+        logger.error(f"[agente] Falha ao chamar agente [{fase}] conv={conversation_id}: {_e_ag}", exc_info=True)
+        resposta = None
 
     if resposta:
         await enviar_resposta_chatwoot(
