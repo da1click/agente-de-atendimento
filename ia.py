@@ -773,13 +773,17 @@ async def chatwoot_atualizar_contato(url: str, token: str, account_id: int, conv
 async def chatwoot_transferir_humano(url: str, token: str, account_id: int, conversation_id: int, motivo: str = "", assignee_id: int | None = None):
     import time as _time
     headers = {"api_access_token": token, "Content-Type": "application/json"}
+    _assign_ok = False
     async with httpx.AsyncClient() as http:
         # 1. Atribuir (ou desatribuir) agente
         assign_url = f"{url}/api/v1/accounts/{account_id}/conversations/{conversation_id}/assignments"
-        await http.post(assign_url, headers=headers, json={"assignee_id": assignee_id}, timeout=10)
+        _resp_assign = await http.post(assign_url, headers=headers, json={"assignee_id": assignee_id}, timeout=10)
+        _assign_ok = _resp_assign.is_success
+        if not _assign_ok:
+            logger.warning(f"[transferir] API assignments retornou {_resp_assign.status_code} — conv={conversation_id} assignee={assignee_id}")
         # 2. Quando desatribuindo (transferindo para fila), setar status "pending"
         # para evitar que o Chatwoot auto-atribua o bot novamente ao receber nova mensagem.
-        if assignee_id is None:
+        if assignee_id is None and _assign_ok:
             status_url = f"{url}/api/v1/accounts/{account_id}/conversations/{conversation_id}"
             try:
                 await http.patch(status_url, headers=headers, json={"status": "pending"}, timeout=10)
@@ -790,10 +794,12 @@ async def chatwoot_transferir_humano(url: str, token: str, account_id: int, conv
     import traceback
     caller = traceback.extract_stack()[-2]
     acao = f"ATRIBUIÇÃO→agente={assignee_id}" if assignee_id else "DESATRIBUIÇÃO+PENDING"
-    logger.info(f"🔴 {acao} — conta={account_id} conv={conversation_id} motivo='{motivo}' chamado_de={caller.filename}:{caller.lineno} ({caller.name})")
+    logger.info(f"🔴 {acao} (api_ok={_assign_ok}) — conta={account_id} conv={conversation_id} motivo='{motivo}' chamado_de={caller.filename}:{caller.lineno} ({caller.name})")
 
-    # Registrar no cache de conversas transferidas (previne re-processamento em memória)
-    _conversas_transferidas[conversation_id] = _time.monotonic()
+    # Registrar no cache de conversas transferidas APENAS se a API confirmou a mudança.
+    # Se a API falhou silenciosamente, não bloquear: a IA ainda está atribuída e deve continuar.
+    if _assign_ok:
+        _conversas_transferidas[conversation_id] = _time.monotonic()
     # Limpar entradas antigas do cache
     now = _time.monotonic()
     expiradas = [cid for cid, ts in _conversas_transferidas.items() if now - ts > _TRANSFERENCIA_TTL]
