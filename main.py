@@ -3,7 +3,7 @@ from fastapi import FastAPI, Request, HTTPException, Depends, UploadFile, File, 
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from openai import OpenAI
-from ia import agendar_processamento, processar_mensagem, transcrever_audio, enviar_nota_privada, _eh_payload_anuncio
+from ia import agendar_processamento, processar_mensagem, transcrever_audio, enviar_nota_privada, _eh_payload_anuncio, _conversas_transferidas
 from db import upsert_lead, salvar_transcricao, deletar_dados_conta
 from db import (
     super_admin_existe, criar_usuario, get_usuario_por_email, get_usuario_por_id,
@@ -1533,6 +1533,10 @@ async def chatwoot_webhook(request: Request):
                     f"ia_agent_id={ia_agent_id_upd} status={fresh_status} conv={conversation_id_upd}"
                 )
                 if fresh_assignee_id == ia_agent_id_upd and fresh_status == "open":
+                    # Limpar cache de transferência: se um humano re-atribuiu à IA, deve poder processar
+                    if conversation_id_upd in _conversas_transferidas:
+                        _conversas_transferidas.pop(conversation_id_upd, None)
+                        logger.info(f"[conv-updated] 🔓 Cache de transferência limpo — conv={conversation_id_upd} re-atribuída à IA")
                     agendar_processamento(config_upd, account_id_upd, conversation_id_upd, fresh_inbox_id)
                     logger.info(f"[conv-updated] ✅ Processamento agendado — conv={conversation_id_upd} account={account_id_upd}")
                     try:
