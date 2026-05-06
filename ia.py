@@ -1761,13 +1761,19 @@ async def _executar_com_debounce(config: dict, account_id: int, conversation_id:
     # Se lock ocupado: aguardar liberação (não descartar — causa IA parar após áudio)
     ocupado = lock.locked()
     if ocupado:
-        logger.info(f"[debounce] Lock ocupado para conv={conversation_id} — aguardando liberação (máx 60s)")
+        logger.info(f"[debounce] Lock ocupado para conv={conversation_id} — aguardando liberação (máx 90s)")
 
     try:
-        await asyncio.wait_for(lock.acquire(), timeout=60 if ocupado else 30)
+        await asyncio.wait_for(lock.acquire(), timeout=90 if ocupado else 30)
     except asyncio.TimeoutError:
-        logger.warning(f"[debounce] Timeout ao adquirir lock para conv={conversation_id} — abandonando")
-        return
+        # Processamento anterior ainda em andamento (LLM lento com histórico longo).
+        # Segunda tentativa: aguarda mais 5 min em vez de abandonar a mensagem.
+        logger.warning(f"[debounce] Timeout ao adquirir lock para conv={conversation_id} — aguardando mais (máx 5min)")
+        try:
+            await asyncio.wait_for(lock.acquire(), timeout=300)
+        except asyncio.TimeoutError:
+            logger.warning(f"[debounce] Lock preso por >6min para conv={conversation_id} — abandonando")
+            return
 
     try:
         logger.info(f"[debounce] Processando conversa {conversation_id} (account={account_id})")
