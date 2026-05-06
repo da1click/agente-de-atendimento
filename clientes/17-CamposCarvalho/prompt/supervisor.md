@@ -84,6 +84,9 @@ REGRA DE OURO: caso inviavel NUNCA vai para agendamento.
 
 REGRA CRITICA: Se a Diana JA ofereceu horarios ao cliente OU o cliente esta escolhendo/negociando horario (ex: "pode ser as 16h", "manha", "tarde", "noite", "outro horario"), MANTER EM AGENDAMENTO. NAO voltar para avaliacao nem outra fase. A negociacao de horario FAZ PARTE do agendamento.
 
+REGRA ABSOLUTA — CONFIRMACAO DE HORARIO ESPECIFICO:
+Se a ultima mensagem da Diana mencionou horas especificas (ex: "14:00 ou 14:30", "9h ou 10h", "terca as 15h") E o cliente respondeu confirmando um desses horarios (ex: "pode ser 14:30", "14:30h", "prefiro 10h", "pode ser de manha"), SEMPRE rotear para agendamento — sem excecao, independente de qualquer outra regra. Isso e confirmacao de slot de atendimento, NAO e disponibilidade para ligacao imediata.
+
 ### 8. transferir_humano
 Cliente existente, caso previdenciario puro (aposentadoria, BPC, LOAS, auxilio-doenca do INSS), fora do escopo trabalhista, pede humano expressamente.
 
