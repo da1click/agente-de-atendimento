@@ -126,7 +126,6 @@ async def processar_lembretes():
         listar_agendamentos_pendentes,
         marcar_lembrete_enviado,
         carregar_config_cliente,
-        houve_reagendamento_na_conversa,
         cancelar_agendamento_por_id,
     )
     from ia import enviar_parte_chatwoot, confirmar_evento_no_calendar
@@ -264,31 +263,28 @@ async def processar_lembretes():
                     continue
 
                 # Antes de enviar, confirmar que o agendamento ainda existe na agenda.
-                # Pulamos a confirmação se houve reagendamento na conversa: o evento antigo
-                # permanece no Google Calendar (n8n nao deleta), entao consultar daria
-                # falso-positivo. Confiamos no DB nesse caso.
+                # Verificamos sempre pela data/hora exata do agendamento atual — o evento
+                # antigo (de um reagendamento anterior) tem data/hora diferente, portanto
+                # nao interfere na busca e nao gera falso-positivo.
                 if confirmacao_calendar is None:
-                    if houve_reagendamento_na_conversa(account_id, conversation_id):
-                        confirmacao_calendar = True
-                    else:
-                        try:
-                            confirmado = await confirmar_evento_no_calendar(
-                                config, date_str, time_str, advogada, ag.get("contact_name", "")
-                            )
-                        except Exception as e:
-                            logger.warning(f"[lembrete-consulta] Erro inesperado em confirmar_evento_no_calendar (ag {ag_id}): {e}")
-                            confirmado = None
-                        if confirmado is False:
-                            logger.info(
-                                f"[lembrete-consulta] Agendamento {ag_id} nao localizado no calendar "
-                                f"({date_str} {time_str} — {advogada}) — marcando cancelado e pulando lembretes"
-                            )
-                            cancelar_agendamento_por_id(ag_id)
-                            agendamento_cancelado_por_calendar = True
-                            confirmacao_calendar = False
-                            break  # sai do for lembrete
-                        # True ou None (fail-open): segue o envio
-                        confirmacao_calendar = True
+                    try:
+                        confirmado = await confirmar_evento_no_calendar(
+                            config, date_str, time_str, advogada, ag.get("contact_name", "")
+                        )
+                    except Exception as e:
+                        logger.warning(f"[lembrete-consulta] Erro inesperado em confirmar_evento_no_calendar (ag {ag_id}): {e}")
+                        confirmado = None
+                    if confirmado is False:
+                        logger.info(
+                            f"[lembrete-consulta] Agendamento {ag_id} nao localizado no calendar "
+                            f"({date_str} {time_str} — {advogada}) — marcando cancelado e pulando lembretes"
+                        )
+                        cancelar_agendamento_por_id(ag_id)
+                        agendamento_cancelado_por_calendar = True
+                        confirmacao_calendar = False
+                        break  # sai do for lembrete
+                    # True ou None (fail-open): segue o envio
+                    confirmacao_calendar = True
 
                 if confirmacao_calendar is False:
                     break
