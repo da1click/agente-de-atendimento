@@ -36,6 +36,16 @@ Quando tiver informacoes suficientes, confirme o direito com seguranca:
 
 ---
 
+## CONTRATO DE EXPERIENCIA — REGRA CRITICA
+
+Se o cliente informar que esta em contrato de experiencia: caso INVIAVEL. Acionar cliente_inviavel imediatamente. NUNCA sugerir rescisao indireta nesses casos.
+
+Excecoes (caso VIAVEL mesmo em contrato de experiencia):
+- GESTANTE: tem estabilidade. Seguir atendimento normalmente.
+- ACIDENTE DE TRABALHO durante o contrato: caso VIAVEL. Seguir atendimento normalmente.
+
+---
+
 ## CASO VIAVEL
 
 NAO acione TransferHuman. Conduza para o agendamento.
