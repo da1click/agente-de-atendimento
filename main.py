@@ -194,6 +194,126 @@ async def _recuperar_conversas_pos_deploy():
         logger.error(f"[pos-deploy] Erro geral: {e}")
 
 
+# ── WATCHDOG: RECUPERAÇÃO DE MENSAGENS PERDIDAS ───────────────
+# Roda a cada 5 minutos. Detecta conversas onde waiting_since > 3min
+# e a IA está atribuída mas não processou (webhook não entregue pelo Chatwoot).
+
+async def _recuperar_mensagens_perdidas():
+    """Verifica todas as contas e reprocessa conversas com mensagem pendente > 3min."""
+    from datetime import datetime, timezone
+    from db import get_db
+    from ia import agendar_processamento, _processing_locks, _debounce_tasks
+
+    db = get_db()
+    configs = db.table("ia_clientes_config").select(
+        "account_id,chatwoot_url,chatwoot_token,ia_agent_id,ia_ativa,inboxes"
+    ).eq("ativo", True).execute()
+
+    agora = datetime.now(timezone.utc)
+    recuperadas = 0
+
+    for cfg in (configs.data or []):
+        if not cfg.get("ia_ativa", True) or not cfg.get("ia_agent_id"):
+            continue
+
+        account_id = cfg["account_id"]
+        if account_id == 19:
+            continue
+        if account_id == 18 and not _conta18_horario_ativo():
+            continue
+
+        base_url = (cfg.get("chatwoot_url") or "").rstrip("/")
+        token = cfg.get("chatwoot_token", "")
+        ia_agent_id = cfg["ia_agent_id"]
+        inboxes_permitidos = cfg.get("inboxes") or []
+
+        if not base_url or not token:
+            continue
+
+        try:
+            async with httpx.AsyncClient(timeout=15) as http:
+                convs = []
+                for page in range(1, 4):
+                    url = f"{base_url}/api/v1/accounts/{account_id}/conversations"
+                    resp = await http.get(url, headers={"api_access_token": token}, params={
+                        "status": "open", "assignee_type": "assigned", "page": page,
+                    })
+                    if not resp.is_success:
+                        break
+                    page_convs = resp.json().get("data", {}).get("payload", [])
+                    convs.extend(page_convs)
+                    if len(page_convs) < 25:
+                        break
+
+                for conv in convs:
+                    try:
+                        assignee = conv.get("meta", {}).get("assignee") or {}
+                        if assignee.get("id") != ia_agent_id:
+                            continue
+
+                        conv_id = conv.get("id")
+                        inbox_id = conv.get("inbox_id")
+
+                        if inboxes_permitidos and inbox_id not in inboxes_permitidos:
+                            continue
+
+                        waiting_since_raw = conv.get("waiting_since")
+                        if not waiting_since_raw:
+                            continue
+
+                        if isinstance(waiting_since_raw, (int, float)):
+                            wait_time = datetime.fromtimestamp(waiting_since_raw, tz=timezone.utc)
+                        elif isinstance(waiting_since_raw, str):
+                            wait_time = datetime.fromisoformat(waiting_since_raw.replace("Z", "+00:00"))
+                        else:
+                            continue
+
+                        diff_min = (agora - wait_time).total_seconds() / 60
+
+                        # Só recuperar se esperando entre 3 e 720 minutos (3min–12h)
+                        if diff_min < 3 or diff_min > 720:
+                            continue
+
+                        # Pular se lock ativo (já está sendo processado)
+                        lock = _processing_locks.get(conv_id)
+                        if lock and lock.locked():
+                            continue
+
+                        # Pular se debounce ativo (webhook chegou, está aguardando disparo)
+                        task = _debounce_tasks.get(conv_id)
+                        if task and not task.done():
+                            continue
+
+                        config_full = carregar_config_cliente(account_id)
+                        if config_full:
+                            agendar_processamento(config_full, account_id, conv_id, inbox_id)
+                            recuperadas += 1
+                            logger.warning(
+                                f"[watchdog] Mensagem perdida recuperada — "
+                                f"conv={conv_id} account={account_id} esperando ha {diff_min:.0f}min"
+                            )
+
+                    except Exception as e:
+                        logger.warning(f"[watchdog] Erro ao verificar conv={conv.get('id')}: {e}")
+
+        except Exception as e:
+            logger.warning(f"[watchdog] Erro conta {account_id}: {e}")
+
+    if recuperadas:
+        logger.info(f"[watchdog] Total recuperadas neste ciclo: {recuperadas}")
+
+
+async def _watchdog_mensagens_perdidas():
+    """Loop do watchdog — roda a cada 5 minutos após 2min de warm-up."""
+    await asyncio.sleep(120)
+    while True:
+        try:
+            await _recuperar_mensagens_perdidas()
+        except Exception as e:
+            logger.error(f"[watchdog] Erro inesperado no loop: {e}")
+        await asyncio.sleep(300)
+
+
 # ── CONTA 18: IA NOTURNA ─────────────────────────────────────
 # IA ativa das 20h às 07h59 BRT; às 08h transfere conversas para humano.
 
@@ -269,6 +389,8 @@ async def lifespan(app: FastAPI):
     iniciar_cobranca_docs()
     # Recuperar conversas perdidas durante deploy
     asyncio.create_task(_recuperar_conversas_pos_deploy())
+    # Watchdog: recupera mensagens que o Chatwoot não entregou via webhook
+    asyncio.create_task(_watchdog_mensagens_perdidas())
     # Conta 18: transferência matinal (08h BRT)
     asyncio.create_task(_transferencia_matinal_conta18())
     # Cria super_admin inicial se não existir
