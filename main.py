@@ -271,7 +271,7 @@ async def _recuperar_mensagens_perdidas():
                         diff_min = (agora - wait_time).total_seconds() / 60
 
                         # Só recuperar se esperando entre 3 e 720 minutos (3min–12h)
-                        if diff_min < 3 or diff_min > 720:
+                        if diff_min < 1 or diff_min > 720:
                             continue
 
                         # Pular se lock ativo (já está sendo processado)
@@ -304,14 +304,14 @@ async def _recuperar_mensagens_perdidas():
 
 
 async def _watchdog_mensagens_perdidas():
-    """Loop do watchdog — roda a cada 5 minutos após 2min de warm-up."""
+    """Loop do watchdog — roda a cada 1 minuto após 2min de warm-up."""
     await asyncio.sleep(120)
     while True:
         try:
             await _recuperar_mensagens_perdidas()
         except Exception as e:
             logger.error(f"[watchdog] Erro inesperado no loop: {e}")
-        await asyncio.sleep(300)
+        await asyncio.sleep(60)
 
 
 # ── CONTA 18: IA NOTURNA ─────────────────────────────────────
