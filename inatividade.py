@@ -460,6 +460,12 @@ async def disparar_estagio(config_cliente: dict, row: dict):
             resp = await http.get(url_conv, headers={"api_access_token": token})
             if resp.is_success:
                 conv = resp.json()
+                # Conversa resolvida: não disparar follow-up, desativar monitoramento
+                conv_status = conv.get("status", "open")
+                if conv_status in ("resolved", "pending"):
+                    logger.info(f"[inatividade] Conversa {conv_status} — desativando monitoramento conv={conversation_id}")
+                    desativar_inatividade(account_id, conversation_id)
+                    return
                 # Bloquear disparo se conversa tem etiqueta de remarketing ou desqualificado
                 conv_labels_inativ = conv.get("labels", [])
                 labels_block = _LABELS_BLOQUEIO_INATIV.intersection(set(conv_labels_inativ))
