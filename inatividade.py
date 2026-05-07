@@ -339,6 +339,10 @@ def _gerar_mensagem(config_cliente: dict, historico_texto: str, stagio: int, nom
         .replace("{nome_ia}", nome_ia)
     )
 
+    # Instrução explícita para o LLM saber qual estágio usar.
+    # Sem isso, o LLM tende a sempre retornar a mensagem do estágio 1.
+    prompt += f"\n\n---\n\nINSTRUCAO: Responda APENAS com a mensagem do ESTAGIO {stagio}. Nao adicione explicacoes, saudacoes extras ou qualquer outro texto — somente a mensagem deste estagio."
+
     client = OpenAI(api_key=config_cliente["openai_api_key"])
     resp = client.chat.completions.create(
         model="gpt-5.2",
