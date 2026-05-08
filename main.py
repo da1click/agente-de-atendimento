@@ -1868,6 +1868,7 @@ async def chatwoot_webhook(request: Request):
                     transcricao = await transcrever_audio(
                         url_audio=audio["data_url"],
                         openai_api_key=config["openai_api_key"],
+                        chatwoot_token=config.get("chatwoot_token"),
                     )
                     logger.info(f"[{account_id}] Transcrição: {transcricao}")
                     nota = f"🎙️ Transcrição de áudio de {nome}:\n\n{transcricao}"
@@ -1890,6 +1891,7 @@ async def chatwoot_webhook(request: Request):
                         logger.warning(f"Erro ao salvar transcrição no Supabase: {e}")
                 except Exception as e:
                     logger.error(f"Erro ao transcrever áudio: {e}")
+                    _transcricoes_processadas.discard(msg_id_audio)
 
         # Modo teste: se ativo, IA só responde conversas com label "ia-teste"
         modo_teste = config.get("modo_teste", False)

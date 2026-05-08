@@ -2042,9 +2042,12 @@ async def processar_mensagem(config: dict, account_id: int, conversation_id: int
 
 # ── TRANSCRIÇÃO DE ÁUDIO ──────────────────────────────────────
 
-async def transcrever_audio(url_audio: str, openai_api_key: str) -> str:
+async def transcrever_audio(url_audio: str, openai_api_key: str, chatwoot_token: str = None) -> str:
+    headers = {}
+    if chatwoot_token:
+        headers["api_access_token"] = chatwoot_token
     async with httpx.AsyncClient() as http:
-        resp = await http.get(url_audio, follow_redirects=True, timeout=30)
+        resp = await http.get(url_audio, headers=headers, follow_redirects=True, timeout=30)
         resp.raise_for_status()
         audio_bytes = resp.content
 
