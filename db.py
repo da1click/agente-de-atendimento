@@ -148,7 +148,7 @@ def contar_tracking_por_origem(account_id: int) -> dict:
 
 # ── LEADS ─────────────────────────────────────────────────────
 
-def upsert_lead(account_id: int, inbox_id: int, conversation_id: int, contact_name: str, contact_phone: str, status: str = "em_atendimento", inviability_reason: str = None, qualification_data: dict = None):
+def upsert_lead(account_id: int, inbox_id: int, conversation_id: int, contact_name: str, contact_phone: str, status: str = "em_atendimento", inviability_reason: str = None, qualification_data: dict = None, origem: str = None):
     db = get_db()
     payload = {
         "account_id": account_id,
@@ -163,6 +163,8 @@ def upsert_lead(account_id: int, inbox_id: int, conversation_id: int, contact_na
         payload["inviability_reason"] = inviability_reason
     if qualification_data is not None:
         payload["qualification_data"] = qualification_data
+    if origem is not None:
+        payload["origem"] = origem
 
     db.table("ia_leads").upsert(payload, on_conflict="account_id,conversation_id").execute()
 
@@ -707,15 +709,16 @@ def relatorio_marketing(account_id: int, data_inicio: str, data_fim: str) -> dic
     except Exception:
         pass
 
-    # 2. Leads por status + coleta de objeções
+    # 2. Leads por status + coleta de objeções + origem
     status_counts = {"em_atendimento": 0, "convertido": 0, "inviavel": 0, "transferido": 0, "perdido": 0}
     objecoes: dict[str, int] = {}
+    origens: dict[str, int] = {}
     _alias = {"resolved": "perdido", "aguardando": "em_atendimento", "desqualificado": "inviavel"}
     try:
         page_size = 1000
         offset = 0
         while True:
-            resp = db.table("ia_leads").select("status,inviability_reason").eq(
+            resp = db.table("ia_leads").select("status,inviability_reason,origem").eq(
                 "account_id", account_id
             ).gte("created_at", data_inicio).lte("created_at", fim_dia).range(offset, offset + page_size - 1).execute()
             for r in (resp.data or []):
@@ -725,6 +728,8 @@ def relatorio_marketing(account_id: int, data_inicio: str, data_fim: str) -> dic
                 if s == "inviavel":
                     motivo = (r.get("inviability_reason") or "Não informado").strip() or "Não informado"
                     objecoes[motivo] = objecoes.get(motivo, 0) + 1
+                orig = r.get("origem") or "direto"
+                origens[orig] = origens.get(orig, 0) + 1
             if len(resp.data or []) < page_size:
                 break
             offset += page_size
@@ -767,6 +772,7 @@ def relatorio_marketing(account_id: int, data_inicio: str, data_fim: str) -> dic
             "conversao": _pct(status_counts["convertido"], total_leads),
         },
         "objecoes": [{"motivo": m, "qtd": q} for m, q in top_objecoes],
+        "origens": origens,
     }
 
 

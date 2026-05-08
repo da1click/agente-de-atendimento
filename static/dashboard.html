@@ -4208,7 +4208,44 @@ async function renderPageRelatorios() {
           ${histBars}
         </div>
       </div>
+
+      <!-- Origens (placeholder; preenchido abaixo) -->
+      <div id="card-origens"></div>
     `;
+
+    // Carregar origens (relatorio-marketing do ciclo atual)
+    try {
+      const rMkt = await fetch(`/api/clientes/${clienteAtivo}/relatorio-marketing?de=${r.periodo.inicio}&ate=${r.periodo.fim}`);
+      if (rMkt.ok) {
+        const mkt = await rMkt.json();
+        const origens = mkt.origens || {};
+        const _origemLabel = { facebook_ads: 'Facebook Ads', instagram_ads: 'Instagram Ads', outro_anuncio: 'Outro Anúncio', direto: 'Direto / Orgânico' };
+        const _origemCor   = { facebook_ads: '#1877f2', instagram_ads: '#e1306c', outro_anuncio: '#f59e0b', direto: '#10b981' };
+        const totalOrigem = Object.values(origens).reduce((a, b) => a + b, 0) || 1;
+        const itens = Object.entries(origens).sort((a, b) => b[1] - a[1]);
+        const barrasOrigem = itens.map(([key, qtd]) => {
+          const label = _origemLabel[key] || key;
+          const cor   = _origemCor[key] || '#9ca3af';
+          const pctBar = Math.round(qtd / totalOrigem * 100);
+          const tx = mkt.funil?.leads_chegaram > 0 ? Math.round(qtd / mkt.funil.leads_chegaram * 100) : 0;
+          return `
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+              <div style="width:110px;font-size:12px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${label}</div>
+              <div style="flex:1;background:var(--bg);border-radius:6px;height:20px;overflow:hidden;">
+                <div style="background:${cor};height:100%;width:${pctBar}%;border-radius:6px;transition:width 0.4s;"></div>
+              </div>
+              <div style="width:32px;text-align:right;font-size:13px;font-weight:700;color:${cor};">${qtd}</div>
+              <div style="width:36px;text-align:right;font-size:11px;color:var(--text-muted);">${tx}%</div>
+            </div>`;
+        }).join('');
+        document.getElementById('card-origens').innerHTML = itens.length ? `
+          <div class="card">
+            <div style="font-size:14px;font-weight:700;margin-bottom:16px;">Origem dos Leads</div>
+            ${barrasOrigem}
+            <div style="font-size:11px;color:var(--text-muted);margin-top:8px;">Leads sem anúncio detectado são contados como Direto / Orgânico.</div>
+          </div>` : '';
+      }
+    } catch (_) {}
 
   } catch (e) {
     el.innerHTML = `<div class="empty-state"><p>Erro ao carregar relatório</p><p class="empty-sub">${e.message}</p></div>`;

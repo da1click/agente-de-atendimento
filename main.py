@@ -416,6 +416,22 @@ CLIENTES_DIR = os.path.join(BASE_DIR, "clientes")
 # Set para deduplicação de transcrições de áudio (evita loop)
 _transcricoes_processadas: set[int] = set()
 
+
+def _detectar_origem(texto: str) -> str | None:
+    """Detecta a origem de um lead a partir do conteúdo da primeira mensagem.
+    Retorna 'facebook_ads', 'instagram_ads', 'outro_anuncio' ou None (direto).
+    None = não salva no upsert, fica NULL no banco (tratado como 'direto' nos relatórios).
+    """
+    if not texto:
+        return None
+    if "Mensagem de Anuncio" in texto:
+        if "fb.me" in texto or "facebook.com" in texto:
+            return "facebook_ads"
+        if "instagram.com" in texto:
+            return "instagram_ads"
+        return "outro_anuncio"
+    return None
+
 app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
 
 
@@ -1970,7 +1986,8 @@ async def chatwoot_webhook(request: Request):
 
         # Registrar lead no Supabase (sempre — independente da IA)
         try:
-            upsert_lead(account_id, inbox_id, conversation_id, nome, telefone)
+            origem_lead = _detectar_origem(texto)
+            upsert_lead(account_id, inbox_id, conversation_id, nome, telefone, origem=origem_lead)
         except Exception as e:
             logger.warning(f"Erro ao registrar lead no Supabase: {e}")
 
