@@ -1576,20 +1576,23 @@ async def chatwoot_webhook(request: Request):
             or (payload.get("account") or {}).get("id")
         )
 
-        # Guard: só processar se changed_attributes indica mudança de assignee
+        # Guard: só processar se changed_attributes indica mudança de assignee ou de label relevante
         # NÃO usar conversa_nova como fallback — causa loop (IA responde → conversation_updated → IA responde...)
         changed = payload.get("changed_attributes") or []
         assignee_mudou = any(
             "assignee" in str(attr) for attr in changed
         ) if changed else False
+        label_mudou = any("label" in str(attr) for attr in changed) if changed else False
+        labels_atuais = conv_upd.get("labels") or []
+        financeiro_adicionado = label_mudou and "financeiro" in labels_atuais
 
         logger.info(
             f"[conv-updated] event recebido — conv={conversation_id_upd} account={account_id_upd} "
-            f"inbox={inbox_id_upd} assignee_mudou={assignee_mudou} changed={changed}"
+            f"inbox={inbox_id_upd} assignee_mudou={assignee_mudou} financeiro_adicionado={financeiro_adicionado} changed={changed}"
         )
 
-        if not assignee_mudou:
-            return {"status": "ignorado", "event": event, "motivo": "changed_attributes sem mudança de assignee"}
+        if not assignee_mudou and not financeiro_adicionado:
+            return {"status": "ignorado", "event": event, "motivo": "changed_attributes sem mudança de assignee ou label financeiro"}
 
         if not conversation_id_upd:
             logger.warning("[conv-updated] conversation_id ausente no payload — ignorando")
@@ -1613,6 +1616,27 @@ async def chatwoot_webhook(request: Request):
         if not account_id_upd:
             logger.warning(f"[conv-updated] Não foi possível determinar account_id para conv={conversation_id_upd} inbox={inbox_id_upd}")
             return {"status": "ignorado", "event": event}
+
+        # Conta 1: etiqueta "financeiro" → atribuir ao agente 12
+        if financeiro_adicionado and account_id_upd == 1:
+            config_fn = carregar_config_cliente(1)
+            if config_fn:
+                try:
+                    cw_url_fn = config_fn["chatwoot_url"].rstrip("/")
+                    cw_token_fn = config_fn["chatwoot_token"]
+                    async with httpx.AsyncClient(timeout=10) as hc_fn:
+                        r_fn = await hc_fn.post(
+                            f"{cw_url_fn}/api/v1/accounts/1/conversations/{conversation_id_upd}/assignments",
+                            headers={"api_access_token": cw_token_fn, "Content-Type": "application/json"},
+                            json={"assignee_id": 12},
+                        )
+                        if r_fn.is_success:
+                            logger.info(f"[label-financeiro] Conv={conversation_id_upd} atribuída ao agente 12")
+                        else:
+                            logger.warning(f"[label-financeiro] Falha ao atribuir agente 12: {r_fn.status_code} {r_fn.text}")
+                except Exception as e_fn:
+                    logger.warning(f"[label-financeiro] Erro: {e_fn}")
+            return {"status": "ok", "event": event, "motivo": "label-financeiro"}
 
         # Conta 19: IA desativada
         if account_id_upd == 19:
