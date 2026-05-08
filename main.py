@@ -315,10 +315,10 @@ async def _watchdog_mensagens_perdidas():
 
 
 # ── CONTA 18: IA NOTURNA ─────────────────────────────────────
-# IA ativa das 20h às 07h59 BRT; às 08h transfere conversas para humano.
+# IA ativa das 18h às 08h59 BRT; às 09h transfere conversas para humano.
 
-_CONTA18_IA_HORA_INICIO = 20  # 20:00 BRT
-_CONTA18_IA_HORA_FIM    = 8   # 08:00 BRT (exclusive)
+_CONTA18_IA_HORA_INICIO = 18  # 18:00 BRT
+_CONTA18_IA_HORA_FIM    = 9   # 09:00 BRT (exclusive)
 
 
 def _conta18_horario_ativo() -> bool:
@@ -327,7 +327,7 @@ def _conta18_horario_ativo() -> bool:
 
 
 async def _transferencia_matinal_conta18():
-    """Às 08h00 BRT, transfere para humano as conversas abertas atribuídas à IA (conta 18)."""
+    """Às 09h00 BRT, transfere para humano as conversas abertas atribuídas à IA (conta 18)."""
     from ia import chatwoot_transferir_humano as _cth
     from db import carregar_config_cliente as _cc
     ultimo_dia: datetime.date | None = None
@@ -335,7 +335,7 @@ async def _transferencia_matinal_conta18():
         await asyncio.sleep(60)
         try:
             agora = datetime.datetime.now(_zoneinfo.ZoneInfo("America/Sao_Paulo"))
-            if agora.hour != 8 or agora.minute > 5 or agora.date() == ultimo_dia:
+            if agora.hour != 9 or agora.minute > 5 or agora.date() == ultimo_dia:
                 continue
             ultimo_dia = agora.date()
             logger.info("[conta18-matinal] Iniciando transferência matinal das conversas noturnas...")
